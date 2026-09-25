@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow">
+<title>Prisma · Centro de Custos do Marketing (demo)</title>
+<link rel="icon" href="brand/favicon.png" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --azul:#0072ce; --azul-esc:#005ba6; --ambar:#de8d13; --cinza:#777777;
+    --bg:#f4f6f9; --card:#ffffff; --texto:#1f2733; --muted:#6b7683;
+    --borda:#e4e8ee; --verde:#1a9e5f; --vermelho:#d4433a;
+    --sombra:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --sombra-md:0 4px 16px rgba(16,24,40,.08);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--texto); line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--azul)}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 20px 64px}
+  header.top{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:16px 0 20px;border-bottom:1px solid var(--borda);margin-bottom:24px;
+  }
+  header.top img{height:34px;width:auto}
+  .title h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .title p{margin:2px 0 0;color:var(--muted);font-size:13px}
+  .spacer{flex:1}
+  /* flex-end: o botão não tem label acima, então alinhar pelo centro o
+     empurraria pro meio do bloco label+select do campo "Mês" ao lado. */
+  .ctrls{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+  select,button,input,textarea{font-family:inherit;font-size:14px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600}
+  select.yr,input,textarea{
+    background:var(--card);color:var(--texto);border:1px solid var(--borda);
+    border-radius:9px;padding:8px 11px;outline:none;
+  }
+  select.yr:focus,input:focus,textarea:focus{border-color:var(--azul);box-shadow:0 0 0 3px rgba(0,114,206,.15)}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;
+    background:var(--azul);color:#fff;border-radius:9px;padding:9px 15px;
+    font-weight:600;cursor:pointer;transition:background .15s,transform .05s;
+  }
+  .btn:hover{background:var(--azul-esc)} .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.55;cursor:default}
+  .btn.ghost{background:transparent;color:var(--texto);border-color:var(--borda)}
+  .btn.ghost:hover{background:rgba(0,114,206,.07)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .btn.danger{background:var(--vermelho)} .btn.danger:hover{filter:brightness(.92)}
+  .btn.drag-over{box-shadow:0 0 0 3px rgba(0,114,206,.35);background:var(--azul-esc)}
+  /* ---- KPIs ---- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+  .kpi{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--sombra);position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--azul)}
+  .kpi.amber::before{background:var(--ambar)} .kpi.green::before{background:var(--verde)} .kpi.gray::before{background:var(--cinza)} .kpi.red::before{background:var(--vermelho)}
+  .kpi .lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .val{font-size:26px;font-weight:750;margin-top:6px;letter-spacing:-.5px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  /* ---- Cards ---- */
+  .card{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);padding:18px;box-shadow:var(--sombra);margin-bottom:18px}
+  .card h2{font-size:15px;margin:0 0 4px;font-weight:700}
+  .card .hint{font-size:12px;color:var(--muted);margin:0 0 14px}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .card-head h2{margin:0} .card-head .hint{margin:2px 0 0}
+  /* ---- Tabelas ---- */
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+  th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--borda)}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+  thead th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--borda)}
+  tbody tr:hover td{background:rgba(0,114,206,.05)}
+  tbody tr:hover td:first-child{background:rgba(0,114,206,.05)}
+  tbody tr.revisao td{background:rgba(212,67,58,.06)}
+  tbody tr.revisao td:first-child{background:rgba(212,67,58,.06)}
+  td.num{font-variant-numeric:tabular-nums}
+  tr.total-row td{font-weight:700;border-top:2px solid var(--borda);background:rgba(0,114,206,.04)}
+  tr.total-row td:first-child{background:rgba(0,114,206,.04)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.meta{background:rgba(0,114,206,.15);color:var(--azul-esc)}
+  .pill.linkedin{background:rgba(10,102,194,.15);color:#0a66c2}
+  .pill.google{background:rgba(219,68,55,.15);color:#c5382b}
+  .pill.confirmado{background:rgba(26,158,95,.15);color:var(--verde)}
+  .pill.revisao{background:rgba(212,67,58,.15);color:var(--vermelho)}
+  .row-actions{display:flex;gap:6px;justify-content:flex-end}
+  .icon-btn{border:1px solid var(--borda);background:var(--card);color:var(--muted);border-radius:7px;padding:5px 8px;cursor:pointer;font-size:12px}
+  .icon-btn:hover{color:var(--azul);border-color:var(--azul)}
+  .icon-btn.del:hover{color:var(--vermelho);border-color:var(--vermelho)}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .filters input,.filters select{padding:7px 10px}
+  .muted{color:var(--muted)} .empty{padding:28px;text-align:center;color:var(--muted)}
+  /* ---- Modal ---- */
+  .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.55);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--card);border-radius:16px;box-shadow:var(--sombra-md);width:100%;max-width:560px;max-height:92vh;overflow:auto}
+  .modal-head{padding:18px 20px;border-bottom:1px solid var(--borda);display:flex;justify-content:space-between;align-items:center}
+  .modal-head h3{margin:0;font-size:16px}
+  .modal-body{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .modal-body .full{grid-column:1/-1}
+  .modal-body label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
+  .modal-body input,.modal-body textarea,.modal-body select{width:100%}
+  .modal-foot{padding:16px 20px;border-top:1px solid var(--borda);display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .err{color:var(--vermelho);font-size:13px;min-height:18px}
+  .avisos{grid-column:1/-1;background:rgba(212,67,58,.08);border:1px solid rgba(212,67,58,.25);border-radius:9px;padding:10px 12px;font-size:12.5px;color:#8a2c25}
+  .avisos ul{margin:4px 0 0;padding-left:18px}
+  .close-x{border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1}
+  .fila-badge{font-size:12px;color:var(--muted)}
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--texto);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:60}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--vermelho);color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--azul)">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--azul);color:#fff;font-size:15px;font-weight:800">P</span>
+      prisma
+    </div>
+    <div class="title">
+      <h1>Centro de Custos do Marketing</h1>
+      <p>Recibos de mídia paga (Meta, LinkedIn, Google Ads), por mês</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="ctrls">
+      <button class="btn" id="btn-add" title="PDF (Meta, LinkedIn) ou screenshot PNG/JPG (Google Ads) — também aceita arrastar o arquivo até aqui">
+        + Adicionar recibo
+      </button>
+      <input type="file" id="file-input" accept="application/pdf,image/png,image/jpeg" multiple style="display:none"/>
+      <div class="field">
+        <label for="mes">Mês</label>
+        <select id="mes" class="yr"></select>
+      </div>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Recibos do mês</h2><p class="hint" id="tbl-hint">Regime de caixa: cada recibo entra no mês da data de pagamento.</p></div>
+      <span class="fila-badge" id="fila-badge"></span>
+    </div>
+    <div class="filters">
+      <input id="busca" placeholder="Buscar cliente, conta ou nº do documento…" style="min-width:260px"/>
+      <select id="ffornecedor" class="yr">
+        <option value="">Todos os fornecedores</option>
+        <option value="meta">Meta</option>
+        <option value="linkedin">LinkedIn</option>
+        <option value="google">Google Ads</option>
+      </select>
+      <select id="fstatus" class="yr">
+        <option value="">Todos os status</option>
+        <option value="confirmado">Confirmados</option>
+        <option value="revisao">Em revisão</option>
+      </select>
+      <span class="muted" id="cont-count" style="margin-left:auto;font-size:13px"></span>
+    </div>
+    <div class="tbl-scroll"><table id="recibos"></table></div>
+  </div>
+</div>
+
+<!-- Modal de conferência (novo recibo lido do PDF, ou edição manual) -->
+<div class="modal-bg" id="modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3 id="modal-title">Conferir recibo</h3>
+      <button class="close-x" id="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="full avisos" id="modal-avisos" style="display:none"></div>
+      <div>
+        <label for="f-fornecedor">Fornecedor</label>
+        <select id="f-fornecedor" class="yr">
+          <option value="meta">Meta</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="google">Google Ads</option>
+        </select>
+      </div>
+      <div>
+        <label for="f-cliente">Cliente</label>
+        <select id="f-cliente" class="yr"><option value="">— detectar pela conta —</option></select>
+      </div>
+      <div class="full">
+        <label for="f-conta">Conta (como veio no recibo)</label>
+        <input id="f-conta" placeholder="nome/id da conta de anúncio" />
+      </div>
+      <div>
+        <label for="f-doc">Nº do documento</label>
+        <input id="f-doc" placeholder="fatura / transação"/>
+      </div>
+      <div>
+        <label for="f-data">Data de pagamento</label>
+        <input id="f-data" type="date"/>
+      </div>
+      <div>
+        <label for="f-valor">Valor pago (R$)</label>
+        <input id="f-valor" type="number" min="0" step="0.01"/>
+      </div>
+      <div>
+        <label for="f-anuncios">Gasto com anúncios (R$)</label>
+        <input id="f-anuncios" type="number" min="0" step="0.01" placeholder="opcional"/>
+      </div>
+      <div class="full">
+        <label for="f-obs">Observação (opcional)</label>
+        <textarea id="f-obs" rows="2"></textarea>
+      </div>
+      <div class="full err" id="modal-err"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger sm" id="modal-del" style="visibility:hidden">Excluir</button>
+      <div style="display:flex;gap:10px;margin-left:auto">
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn" id="modal-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="mock-api.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+</script>
+<script>
+(function(){
+  "use strict";
+  const API = "/api/centro-custos/recibos";
+  const API_CLIENTES = "/api/centro-custos/clientes";
+  const API_MESES = "/api/centro-custos/meses";
+  const MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const MES_EN = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  const MES_PT = {jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+  const brl = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});
+  const fmt = v => brl.format(v||0);
+  const now = new Date();
+  const $ = s => document.querySelector(s);
+  const el = (t,cls,html)=>{const e=document.createElement(t);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;};
+  const esc = s => String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+  function toast(msg, isErr){
+    const t=$("#toast"); t.textContent=msg; t.className="show"+(isErr?" err":"");
+    setTimeout(()=>t.className=t.className.replace("show",""),2800);
+  }
+
+  // ============================================================
+  // Reconhecimento de recibo (arquivo -> campos), 100% no navegador.
+  // Meta e LinkedIn saem em PDF com camada de texto (pdf.js extrai direto).
+  // Google Ads não gera PDF nesse fluxo — só screenshot (OCR via Tesseract.js,
+  // ver extrairItensImagem) —, então esse caminho carrega uma incerteza a mais
+  // (erro de leitura de imagem) que os outros dois não têm; daí o aviso de
+  // confiança do OCR em reconhecerArquivo. Todos os três parsers convergem no
+  // mesmo formato de item {s,x,y,w} e nos mesmos helpers abaixoDe/direitaDe.
+  // ============================================================
+
+  async function extrairItens(arrayBuffer){
+    const doc = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    const out = [];
+    for(let p=1;p<=doc.numPages;p++){
+      const page = await doc.getPage(p);
+      const {items} = await page.getTextContent();
+      for(const it of items){
+        const s=(it.str||"").trim();
+        if(!s) continue;
+        out.push({s, x:it.transform[4], y:it.transform[5], w:it.width||0, p});
+      }
+    }
+    return out;
+  }
+  const plano = its => its.map(i=>i.s).join("\n");
+
+  function sobrepoeX(a,b,folga){
+    const a1=a.x, a2=a.x+(a.w||0), b1=b.x, b2=b.x+(b.w||0);
+    return a1-folga<=b2 && b1-folga<=a2;
+  }
+  // Valor logo ABAIXO de um rótulo, na mesma coluna — funciona para colunas
+  // alinhadas à esquerda (LinkedIn) e à direita (o "Pago" da Meta).
+  function abaixoDe(its, rotulo, {maxDy=40, folga=8}={}){
+    const lab = its.find(i=>i.s.replace(/\s+/g," ").startsWith(rotulo));
+    if(!lab) return null;
+    const cand = its.filter(i=>i!==lab && i.p===lab.p && i.y<lab.y && lab.y-i.y<=maxDy)
+      .filter(i=>sobrepoeX(lab,i,folga)).sort((a,b)=>b.y-a.y);
+    return cand.length? cand[0].s : null;
+  }
+  function direitaDe(its, rotulo, {tolY=3, maxDx=400}={}){
+    const lab = its.find(i=>i.s.replace(/\s+/g," ").startsWith(rotulo));
+    if(!lab) return null;
+    const cand = its.filter(i=>i!==lab && i.p===lab.p && Math.abs(i.y-lab.y)<=tolY)
+      .filter(i=>i.x>lab.x && i.x-lab.x<=maxDx).sort((a,b)=>a.x-b.x);
+    return cand.length? cand[0].s : null;
+  }
+
+  const brlPtBr = s => { const n=String(s).replace(/[^\d,.]/g,"").replace(/\./g,"").replace(",","."); return Math.round(parseFloat(n)*100)/100; };
+  const brlEn   = s => { const n=String(s).replace(/[^\d,.]/g,"").replace(/,/g,"");                    return Math.round(parseFloat(n)*100)/100; };
+  const iso = (a,m,d) => `${a}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+  function detectarFornecedor(t){
+    if(/Meta an[úu]ncios|FACEBOOK SERVICOS ONLINE/.test(t)) return "meta";
+    if(/LinkedIn Ireland/.test(t)) return "linkedin";
+    if(/Payment Receipt|Google Brasil Internet/.test(t)) return "google";
+    return null;
+  }
+
+  function parseMeta(its){
+    const t = plano(its);
+    const r = {fornecedor:"meta"};
+    r.conta_nome = (t.match(/Recibo para (.+)/)||[])[1]?.trim() || null;
+    // ATENÇÃO: em JS \w NÃO cobre acento — precisa de classe explícita.
+    r.conta_id = (t.match(/identifica[\wçãáéíóôõ]* da conta:\s*(\d+)/i)||[])[1] || null;
+    r.doc_id = (t.match(/\b(\d{15,}-\d{15,})\b/)||[])[1] || null;
+    r.nota = (t.match(/fatura\s+(FBADS-[\d-]+)/)||[])[1] || null;
+
+    const dp = abaixoDe(its, "Data de pagamento");
+    const md = dp && dp.match(/(\d{1,2}) de (\w{3})\w* de (\d{4})/);
+    r.data_pagamento = md ? iso(md[3], MES_PT[md[2].toLowerCase().slice(0,3)], md[1]) : null;
+
+    // "Pago" fica alinhado à DIREITA do valor — precisa de folga maior de X.
+    const pago = abaixoDe(its, "Pago", {maxDy:60, folga:60});
+    r.valor_pago = /R\$/.test(pago||"") ? brlPtBr(pago) : null;
+
+    const sub = t.match(/Subtotal:\s*(R\$[\d.,]+)/);
+    r.valor_anuncios = sub ? brlPtBr(sub[1]) : null;
+
+    r.impostos = {};
+    for(const m of t.matchAll(/(COFINS|PIS|ISS):\s*([\d.,]+)\s*BRL/g)) r.impostos[m[1]]=brlPtBr(m[2]);
+
+    const mc = t.match(/De (\d{1,2}) de (\w{3})\w* de (\d{4}).*? a (\d{1,2}) de (\w{3})\w* de (\d{4})/);
+    if(mc){
+      r.competencia_inicio = iso(mc[3], MES_PT[mc[2].toLowerCase().slice(0,3)], mc[1]);
+      r.competencia_fim    = iso(mc[6], MES_PT[mc[5].toLowerCase().slice(0,3)], mc[4]);
+    }
+    return r;
+  }
+
+  function parseLinkedin(its){
+    const t = plano(its);
+    const r = {fornecedor:"linkedin"};
+    r.doc_id     = abaixoDe(its, "Número da fatura");
+    r.conta_id   = abaixoDe(its, "Código da conta de anúncios");
+    r.conta_nome = abaixoDe(its, "Conta de anúncios");
+
+    const dt = abaixoDe(its, "Data da transação");
+    const md = dt && dt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    r.data_pagamento = md ? `${md[3]}-${md[2]}-${md[1]}` : null;
+
+    const per = abaixoDe(its, "Período de cobrança");
+    const mp = per && per.match(/(\d{2})\/(\d{2})\/(\d{4}) a (\d{2})\/(\d{2})\/(\d{4})/);
+    if(mp){
+      r.competencia_inicio = `${mp[3]}-${mp[2]}-${mp[1]}`;
+      r.competencia_fim    = `${mp[6]}-${mp[5]}-${mp[4]}`;
+    }
+
+    const vc = abaixoDe(its, "Valor cobrado");
+    r.valor_pago = /BRL/.test(vc||"") ? brlPtBr(vc) : null;
+
+    const sub = t.match(/Subtotal\s*:?\s*BRL([\d.,]+)/);
+    r.valor_anuncios = sub ? brlPtBr(sub[1]) : r.valor_pago;
+    const iva = t.match(/IVA\s*:\s*(\d+)%/);
+    r.impostos = {IVA: iva? Number(iva[1]) : 0};
+    return r;
+  }
+
+  function parseGoogle(its){
+    // Recibo do Google Ads não sai em PDF com camada de texto no fluxo comum de
+    // pagamento — chega como SCREENSHOT (imagem). Este parser roda tanto sobre
+    // itens do pdf.js (se algum dia surgir um PDF de verdade) quanto sobre
+    // palavras do OCR (ver extrairItensImagem) — mesma forma {s,x,y,w}.
+    const t = plano(its);
+    const r = {fornecedor:"google"};
+    // OCR às vezes gruda um caractere de ruído antes do código (ex.: aspas) —
+    // o código real é sempre letra+dígitos, sem pontuação.
+    const docBruto = direitaDe(its,"Payment number") || abaixoDe(its,"Payment number") ||
+               (t.match(/Payment number\s*\n?\s*([A-Z0-9]{10,})/)||[])[1] || null;
+    r.doc_id = (docBruto && (docBruto.match(/[A-Z0-9]{8,}/)||[])[0]) || docBruto;
+    r.conta_id = direitaDe(its,"Billing ID") || abaixoDe(its,"Billing ID") ||
+                 (t.match(/Billing ID\s*\n?\s*([\d-]{10,})/)||[])[1] || null;
+    const dp = direitaDe(its,"Payment date") || abaixoDe(its,"Payment date");
+    const md = String(dp||t).match(/(\w{3})\w*\s+(\d{1,2}),?\s+(\d{4})/);
+    r.data_pagamento = (md && MES_EN[md[1].toLowerCase()]) ? iso(md[3], MES_EN[md[1].toLowerCase()], md[2]) : null;
+    const va = direitaDe(its,"Payment amount") || abaixoDe(its,"Payment amount") ||
+               (t.match(/Payment amount\s*\n?\s*(R\$[\d,.]+)/)||[])[1];
+    r.valor_pago = va ? brlEn(va) : null;
+    r.valor_anuncios = r.valor_pago;
+    r.impostos = {};
+    // A "conta" no recibo do Google é o nome do cliente na 2ª linha do bloco
+    // "Cobrar de" (ex.: "Lumina"), logo abaixo da razão social Prisma —
+    // é a única pista de cliente que o recibo carrega.
+    // "I?NTELIDATA": OCR frequentemente come o "I" inicial (kerning apertado).
+    // Só existe linha de apelido quando a conta é GERENCIADA para um terceiro
+    // (ex.: "Lumina", "Zenith oficial"). Na conta da própria Prisma o
+    // endereço vem direto depois da razão social — achado auditando recibo
+    // real (capturava "R. 25 de Agosto, 15..." como se fosse nome de cliente).
+    // Descarta quando "parece" começo de endereço.
+    const contaCandidata = (t.match(/I?NTELIDATA\s+INFORMATICA\s+LTDA\s*\n?\s*([^\n]+)/i)||[])[1]?.trim() || null;
+    r.conta_nome = (contaCandidata && !/^(R\.?|Av\.?|Rua|Avenida)\s/i.test(contaCandidata)) ? contaCandidata : null;
+    // o recibo do Google não informa período de veiculação.
+    return r;
+  }
+
+  const PARSERS = {meta:parseMeta, linkedin:parseLinkedin, google:parseGoogle};
+
+  // ---------- OCR (screenshot do recibo do Google, sem camada de texto) ----------
+  let _ocrWorker = null;
+  async function ocrWorker(){
+    if(_ocrWorker) return _ocrWorker;
+    _ocrWorker = await Tesseract.createWorker("eng");
+    // O modo padrão do Tesseract.js NÃO enxerga a linha "Payment amount" numa
+    // tabela com borda (auditoria em lote: 0 de 6 recibos reais achavam o
+    // valor). SPARSE_TEXT — pensado para texto espalhado/isolado na página —
+    // resolveu 5 de 6. Testado, não teórico.
+    await _ocrWorker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT });
+    return _ocrWorker;
+  }
+
+  /**
+   * Extrai palavras de uma IMAGEM via OCR e devolve no MESMO formato
+   * {s,x,y,w,p} que extrairItens() tira do PDF — troca o motor, não o
+   * contrato, então parseGoogle/abaixoDe/direitaDe funcionam sem saber a
+   * origem. O eixo Y da imagem cresce para BAIXO (0 no topo); o do PDF cresce
+   * para CIMA. Negar bbox.y0 unifica os dois: "maior valor = mais alto".
+   *
+   * ★ O Tesseract devolve PALAVRA POR PALAVRA ("Payment", "Receipt" soltos),
+   * mas os rótulos que procuramos são frases ("Payment date") e abaixoDe/
+   * direitaDe casam por `startsWith` no item inteiro — palavra solta nunca
+   * bate. Por isso reagrupamos em "runs": palavras da mesma linha e PERTO
+   * uma da outra (espaço de palavra, poucos px) viram um item só; um vão
+   * largo (a lacuna entre a coluna do rótulo e a do valor) é o corte —
+   * juntar tudo apagaria a fronteira que direitaDe precisa para achar o valor.
+   */
+  async function extrairItensImagem(file){
+    const worker = await ocrWorker();
+    const { data } = await worker.recognize(file);
+    const words = (data.words || []).filter(w=>w.text && w.text.trim());
+    const confMedia = words.length ? words.reduce((s,w)=>s+(w.confidence||0),0)/words.length : 0;
+
+    const ALTURA_LINHA = 12;  // tolerância de y pra considerar "mesma linha"
+    const LACUNA_COLUNA = 22; // gap horizontal a partir do qual é outra coluna
+
+    const linhas = [];
+    for(const w of [...words].sort((a,b)=>a.bbox.y0-b.bbox.y0 || a.bbox.x0-b.bbox.x0)){
+      let linha = linhas.find(l=>Math.abs(l.y-w.bbox.y0)<=ALTURA_LINHA);
+      if(!linha){ linha = {y:w.bbox.y0, palavras:[]}; linhas.push(linha); }
+      linha.palavras.push(w);
+    }
+
+    const items = [];
+    for(const linha of linhas){
+      let run = null;
+      for(const w of linha.palavras.sort((a,b)=>a.bbox.x0-b.bbox.x0)){
+        if(run && (w.bbox.x0-run.fimX)<=LACUNA_COLUNA){
+          run.texto += " "+w.text; run.fimX = w.bbox.x1;
+        }else{
+          if(run) items.push(run);
+          run = {texto:w.text, x0:w.bbox.x0, y0:w.bbox.y0, fimX:w.bbox.x1};
+        }
+      }
+      if(run) items.push(run);
+    }
+
+    const its = items.map(r=>({ s:r.texto, x:r.x0, y:-r.y0, w:r.fimX-r.x0, p:1 }));
+    return { items: its, confMedia };
+  }
+
+  async function reconhecerArquivo(file){
+    const ehPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    const ehImagem = /^image\//.test(file.type) || /\.(png|jpe?g)$/i.test(file.name);
+    if(!ehPdf && !ehImagem){
+      return {_erro:"Formato não suportado — envie um PDF ou um PNG/JPG (screenshot) do recibo."};
+    }
+
+    let its, confMedia = null;
+    if(ehPdf){
+      its = await extrairItens(await file.arrayBuffer());
+    } else {
+      const ocr = await extrairItensImagem(file);
+      its = ocr.items; confMedia = ocr.confMedia;
+    }
+
+    const fornecedor = detectarFornecedor(plano(its));
+    if(!fornecedor) return {_erro:"Fornecedor não reconhecido (não é um recibo de Meta, LinkedIn ou Google que eu conheça)."};
+    if(ehImagem && fornecedor !== "google"){
+      return {_erro:"Screenshot reconhecido, mas só o recibo do Google Ads é lido por imagem hoje — para Meta/LinkedIn envie o PDF."};
+    }
+    const r = PARSERS[fornecedor](its);
+    r.mes_competencia = r.data_pagamento ? r.data_pagamento.slice(0,7) : null;
+    r.arquivo_nome = file.name;
+
+    const problemas = [];
+    if(!r.valor_pago || r.valor_pago<=0) problemas.push("Valor pago não encontrado — confira manualmente.");
+    if(!r.data_pagamento) problemas.push("Data de pagamento não encontrada.");
+    if(!r.doc_id) problemas.push("Nº do documento não encontrado (sem chave de duplicidade).");
+    if(!r.conta_id && !r.conta_nome) problemas.push("Conta de anúncio não identificada.");
+    // Achado em auditoria real: OCR já trocou 2026 por 2028 (um dígito) numa
+    // data de pagamento — sem isso o recibo gravaria 2 anos no futuro calado.
+    if(r.data_pagamento){
+      const ano = +r.data_pagamento.slice(0,4);
+      if(ano < now.getFullYear()-1 || ano > now.getFullYear()+1){
+        problemas.push(`Ano da data de pagamento parece errado (${ano}) — confira se a leitura não trocou um dígito.`);
+      }
+    }
+    if(confMedia!=null && confMedia<80){
+      problemas.push(`Leitura da imagem com confiança baixa (${confMedia.toFixed(0)}%) — confira todos os campos.`);
+    }
+
+    if(r.valor_pago && r.valor_anuncios!=null){
+      const somaImpostos = Object.entries(r.impostos||{}).filter(([k])=>k!=="IVA").reduce((a,[,v])=>a+v,0);
+      const esperado = Math.round((r.valor_anuncios+somaImpostos)*100)/100;
+      if(Math.abs(esperado-r.valor_pago)>0.02){
+        problemas.push(`A soma não fecheu: anúncios + impostos = ${fmt(esperado)}, mas o pago foi ${fmt(r.valor_pago)}.`);
+      }
+    }
+    r._problemas = problemas;
+    return r;
+  }
+
+  // ============================================================
+  // Estado / carregamento
+  // ============================================================
+  let recibos = [];
+  let clientes = [];
+  let mes = null; // resolvido em carregarMeses(), a partir dos meses com recibo
+  let editId = null;
+  let fila = []; // arquivos pendentes de conferência (upload em lote)
+
+  async function carregarClientes(){
+    try{
+      const r = await fetch(API_CLIENTES,{headers:{Accept:"application/json"}});
+      const j = await r.json();
+      clientes = j.clientes || [];
+    }catch(e){ clientes=[]; }
+    const sel = $("#f-cliente");
+    sel.innerHTML = '<option value="">— detectar pela conta —</option>' +
+      clientes.map(c=>`<option value="${esc(c.key)}">${esc(c.nome)}</option>`).join("");
+  }
+
+  async function carregar(){
+    try{
+      const r = await fetch(`${API}?mes=${encodeURIComponent(mes)}`,{headers:{Accept:"application/json"}});
+      const j = await r.json();
+      recibos = (j.recibos||[]).map(x=>({...x, valor_pago:Number(x.valor_pago), valor_anuncios:x.valor_anuncios==null?null:Number(x.valor_anuncios)}));
+    }catch(e){ recibos=[]; toast("Falha ao carregar recibos",true); }
+    render();
+  }
+
+  /**
+   * Popula o seletor de mês só com períodos que TÊM recibo — sem intervalo
+   * fixo tipo "últimos 12 meses". `preferido` (opcional) força a seleção
+   * para esse mês mesmo que ele acabe de aparecer na lista (upload novo).
+   */
+  async function carregarMeses(preferido){
+    let meses = [];
+    try{
+      const r = await fetch(API_MESES,{headers:{Accept:"application/json"}});
+      const j = await r.json();
+      meses = j.meses || [];
+    }catch(e){ meses = []; }
+
+    const atual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+    if(!meses.length) meses = [atual]; // ainda sem nenhum recibo: abre no mês corrente p/ dar pra lançar o 1º
+
+    if(preferido && !meses.includes(preferido)) meses = [preferido, ...meses].sort().reverse();
+    mes = preferido && meses.includes(preferido) ? preferido
+        : (mes && meses.includes(mes)) ? mes
+        : (meses.includes(atual) ? atual : meses[0]);
+
+    const sel = $("#mes"); sel.innerHTML="";
+    meses.forEach(mk=>{
+      const [y,m] = mk.split("-");
+      const o = el("option"); o.value=mk; o.textContent=`${MESES[+m-1]}/${y}`;
+      if(mk===mes) o.selected=true;
+      sel.appendChild(o);
+    });
+  }
+
+  function nomeCliente(key){
+    const c = clientes.find(x=>x.key===key);
+    return c ? c.nome : (key || null);
+  }
+
+  function render(){
+    // KPIs
+    const total = recibos.reduce((s,r)=>s+r.valor_pago,0);
+    const porFornecedor = {};
+    recibos.forEach(r=>{ porFornecedor[r.fornecedor]=(porFornecedor[r.fornecedor]||0)+r.valor_pago; });
+    const revisao = recibos.filter(r=>r.status==="revisao").length;
+
+    $("#kpis").innerHTML="";
+    const kpi=(cls,lbl,val,sub)=>{const k=el("div","kpi "+cls);k.innerHTML=`<div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub||""}</div>`;$("#kpis").appendChild(k);};
+    kpi("","Total do mês", fmt(total), `${recibos.length} recibo(s)`);
+    kpi("","Meta", fmt(porFornecedor.meta||0));
+    kpi("","LinkedIn", fmt(porFornecedor.linkedin||0));
+    kpi("amber","Google Ads", fmt(porFornecedor.google||0));
+    if(revisao) kpi("red","Em revisão", revisao, "recibos precisam de conferência");
+
+    renderTabela();
+  }
+
+  function renderTabela(){
+    const busca = ($("#busca").value||"").toLowerCase().trim();
+    const ff = $("#ffornecedor").value;
+    const fs = $("#fstatus").value;
+    let list = recibos.slice();
+    if(busca) list = list.filter(r=>`${nomeCliente(r.cliente)} ${r.conta_nome||""} ${r.doc_id||""}`.toLowerCase().includes(busca));
+    if(ff) list = list.filter(r=>r.fornecedor===ff);
+    if(fs) list = list.filter(r=>r.status===fs);
+    list.sort((a,b)=>b.data_pagamento.localeCompare(a.data_pagamento));
+
+    const t = $("#recibos"); t.innerHTML="";
+    t.innerHTML = '<thead><tr><th>Data</th><th>Fornecedor</th><th>Cliente</th><th>Conta</th><th>Documento</th><th>Valor pago</th><th>Status</th><th></th></tr></thead>';
+    const tb = el("tbody");
+    if(!list.length){ tb.innerHTML='<tr><td colspan="8" class="empty">Nenhum recibo neste mês.</td></tr>'; }
+    let soma=0;
+    list.forEach(r=>{
+      soma+=r.valor_pago;
+      const tr = el("tr", r.status==="revisao"?"revisao":"");
+      const dataFmt = (()=>{const [y,m,d]=r.data_pagamento.split("-"); return `${d}/${m}/${y.slice(2)}`;})();
+      tr.innerHTML = `<td class="num">${dataFmt}</td>
+        <td><span class="pill ${r.fornecedor}">${r.fornecedor}</span></td>
+        <td>${esc(nomeCliente(r.cliente)) || '<span class="muted">—</span>'}</td>
+        <td>${esc(r.conta_nome || r.conta_id || "—")}</td>
+        <td>${esc(r.doc_id || "—")}</td>
+        <td class="num">${fmt(r.valor_pago)}</td>
+        <td><span class="pill ${r.status}">${r.status==="revisao"?"revisão":"ok"}</span></td>
+        <td><div class="row-actions">
+          <button class="icon-btn" data-edit="${r.id}">Editar</button>
+          <button class="icon-btn del" data-del="${r.id}">Excluir</button>
+        </div></td>`;
+      tb.appendChild(tr);
+    });
+    if(list.length){
+      const tr = el("tr","total-row");
+      tr.innerHTML = `<td colspan="5">Total (${list.length})</td><td class="num">${fmt(soma)}</td><td></td><td></td>`;
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb);
+    $("#cont-count").textContent = `${list.length} de ${recibos.length} recibo(s)`;
+    tb.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>abrirModalEdicao(+b.dataset.edit));
+    tb.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>excluir(+b.dataset.del));
+  }
+
+  // ============================================================
+  // Modal (conferência de upload OU edição manual de um recibo existente)
+  // ============================================================
+  function preencherModal(r){
+    $("#f-fornecedor").value = r.fornecedor || "meta";
+    $("#f-cliente").value = r.cliente || "";
+    $("#f-conta").value = r.conta_nome || r.conta_id || "";
+    $("#f-doc").value = r.doc_id || "";
+    $("#f-data").value = r.data_pagamento || "";
+    $("#f-valor").value = r.valor_pago != null ? r.valor_pago : "";
+    $("#f-anuncios").value = r.valor_anuncios != null ? r.valor_anuncios : "";
+    $("#f-obs").value = r.obs || "";
+    const av = $("#modal-avisos");
+    if(r._problemas && r._problemas.length){
+      av.style.display="block";
+      av.innerHTML = "<strong>Confira antes de salvar:</strong><ul>"+r._problemas.map(p=>`<li>${esc(p)}</li>`).join("")+"</ul>";
+    } else {
+      av.style.display="none"; av.innerHTML="";
+    }
+  }
+
+  function abrirModalUpload(dados){
+    editId = null;
+    $("#modal-title").textContent = `Conferir recibo${dados.arquivo_nome? " — "+esc(dados.arquivo_nome):""}`;
+    $("#modal-err").textContent = "";
+    $("#modal-del").style.visibility = "hidden";
+    preencherModal(dados);
+    modal._pendente = dados; // guarda o resto (impostos, competência, arquivo_nome) p/ o POST
+    $("#modal").classList.add("open");
+  }
+
+  function abrirModalEdicao(id){
+    editId = id;
+    const r = recibos.find(x=>x.id===id);
+    if(!r) return;
+    $("#modal-title").textContent = "Editar recibo";
+    $("#modal-err").textContent = "";
+    $("#modal-del").style.visibility = "visible";
+    preencherModal({...r, _problemas: r.status==="revisao" ? (r.problemas||["Marcado para revisão."]) : []});
+    $("#modal")._pendente = null;
+    $("#modal").classList.add("open");
+  }
+
+  const modal = $("#modal");
+  function fecharModal(){
+    modal.classList.remove("open");
+    editId = null; modal._pendente = null;
+    processarProximoDaFila();
+  }
+
+  async function salvarModal(){
+    const body = {
+      fornecedor: $("#f-fornecedor").value,
+      cliente: $("#f-cliente").value || null,
+      conta_nome: $("#f-conta").value.trim() || null,
+      doc_id: $("#f-doc").value.trim(),
+      data_pagamento: $("#f-data").value,
+      valor_pago: $("#f-valor").value,
+      valor_anuncios: $("#f-anuncios").value === "" ? null : $("#f-anuncios").value,
+      obs: $("#f-obs").value.trim(),
+    };
+    if(!body.doc_id){ $("#modal-err").textContent="Informe o nº do documento."; return; }
+    if(!body.data_pagamento){ $("#modal-err").textContent="Informe a data de pagamento."; return; }
+    if(!(Number(body.valor_pago)>0)){ $("#modal-err").textContent="Valor pago inválido."; return; }
+
+    const pend = modal._pendente;
+    if(pend && !editId){
+      // dados extras que só existem na conferência de upload (não editáveis na tela)
+      body.conta_id = pend.conta_id || null;
+      body.competencia_inicio = pend.competencia_inicio || null;
+      body.competencia_fim = pend.competencia_fim || null;
+      body.nota = pend.nota || null;
+      body.impostos = pend.impostos || null;
+      body.arquivo_nome = pend.arquivo_nome || null;
+      body.status = (pend._problemas && pend._problemas.length) ? "revisao" : "confirmado";
+      body.problemas = pend._problemas || null;
+    }
+
+    $("#modal-save").disabled = true;
+    try{
+      const url = editId ? `${API}/${editId}` : API;
+      const r = await fetch(url,{method:editId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j = await r.json();
+      if(!r.ok || !j.ok){ throw new Error(j.error || ("HTTP "+r.status)); }
+      fecharModal();
+      // O mês pode ser novo (1º recibo daquele período) — atualiza o seletor
+      // e pula pra ele, senão o recibo recém-salvo "some" da tela.
+      const mesDoRecibo = (j.recibo && j.recibo.mes_competencia) || body.data_pagamento.slice(0,7);
+      await carregarMeses(mesDoRecibo);
+      await carregar();
+      toast(editId ? "Recibo atualizado" : "Recibo lançado");
+    }catch(e){
+      $("#modal-err").textContent = String(e.message||e);
+    }finally{
+      $("#modal-save").disabled = false;
+    }
+  }
+
+  async function excluir(id){
+    const r = recibos.find(x=>x.id===id);
+    if(!confirm(`Excluir o recibo de ${nomeCliente(r&&r.cliente)||"?"} (${r?fmt(r.valor_pago):""})?`)) return;
+    try{
+      const res = await fetch(`${API}/${id}`,{method:"DELETE",headers:{Accept:"application/json"}});
+      const j = await res.json();
+      if(!res.ok || !j.ok) throw new Error(j.error || ("HTTP "+res.status));
+      // Se era o único recibo do mês, o mês some do histórico — recalcula o
+      // seletor e cai num mês que ainda exista.
+      await carregarMeses();
+      await carregar();
+      toast("Recibo excluído");
+    }catch(e){ toast(String(e.message||e), true); }
+  }
+
+  // ============================================================
+  // Upload em lote: extrai cada arquivo (PDF ou screenshot), enfileira e
+  // abre um modal de conferência por vez.
+  // ============================================================
+  const ARQUIVO_ACEITO_RE = /\.(pdf|png|jpe?g)$/i;
+  async function processarArquivos(files){
+    const lista = Array.from(files).filter(f=>
+      f.type==="application/pdf" || /^image\//.test(f.type) || ARQUIVO_ACEITO_RE.test(f.name));
+    if(!lista.length){ toast("Nenhum PDF ou imagem selecionada", true); return; }
+    toast(`Lendo ${lista.length} recibo(s)…`);
+    for(const file of lista){
+      try{
+        const dados = await reconhecerArquivo(file);
+        if(dados._erro){ fila.push({_erro:dados._erro, arquivo_nome:file.name}); continue; }
+        fila.push(dados);
+      }catch(e){
+        fila.push({_erro:`Falha ao ler o arquivo: ${String(e.message||e)}`, arquivo_nome:file.name});
+      }
+    }
+    atualizarBadgeFila();
+    processarProximoDaFila();
+  }
+
+  function atualizarBadgeFila(){
+    $("#fila-badge").textContent = fila.length ? `${fila.length} recibo(s) na fila de conferência` : "";
+  }
+
+  function processarProximoDaFila(){
+    if(modal.classList.contains("open")) return; // já tem um modal aberto
+    while(fila.length && fila[0]._erro){
+      const ruim = fila.shift();
+      toast(`${ruim.arquivo_nome}: ${ruim._erro}`, true);
+    }
+    atualizarBadgeFila();
+    if(!fila.length) return;
+    const dados = fila.shift();
+    atualizarBadgeFila();
+    abrirModalUpload(dados);
+  }
+
+  // ---------- botão "Adicionar recibo": clique abre o seletor, e também aceita arrastar o arquivo até ele ----------
+  const btnAdd = $("#btn-add");
+  const fileInput = $("#file-input");
+  btnAdd.addEventListener("click", ()=>fileInput.click());
+  fileInput.addEventListener("change", e=>{ processarArquivos(e.target.files); fileInput.value=""; });
+  ["dragenter","dragover"].forEach(ev=>btnAdd.addEventListener(ev, e=>{ e.preventDefault(); btnAdd.classList.add("drag-over"); }));
+  ["dragleave","drop"].forEach(ev=>btnAdd.addEventListener(ev, e=>{ e.preventDefault(); btnAdd.classList.remove("drag-over"); }));
+  btnAdd.addEventListener("drop", e=>{ if(e.dataTransfer && e.dataTransfer.files) processarArquivos(e.dataTransfer.files); });
+
+  // ---------- eventos ----------
+  $("#mes").onchange = ()=>{ mes = $("#mes").value; carregar(); };
+  $("#busca").oninput = renderTabela;
+  $("#ffornecedor").onchange = renderTabela;
+  $("#fstatus").onchange = renderTabela;
+  $("#modal-close").onclick = fecharModal;
+  $("#modal-cancel").onclick = fecharModal;
+  $("#modal-save").onclick = salvarModal;
+  $("#modal-del").onclick = ()=>{ if(editId){ const id=editId; fecharModal(); excluir(id); } };
+  $("#modal").onclick = e=>{ if(e.target===modal) fecharModal(); };
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape") fecharModal(); });
+
+  Promise.all([carregarMeses(), carregarClientes()]).then(carregar);
+})();
+</script>
+</body>
+</html>

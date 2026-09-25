@@ -1,0 +1,2436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Calendário de Clientes · Agenda Inteligente · Vetor (demo)</title>
+<link rel="icon" href="brand/favicon.png" />
+<script src="agenda/nucleo.js"></script>
+<script src="mock-api.js"></script>
+<style>
+  :root{
+    --azul:#0f9d6e; --azul-esc:#0b7a56; --ambar:#de8d13; --cinza:#777777;
+    --bg:#f4f6f9; --card:#ffffff; --texto:#1f2733; --muted:#6b7683;
+    --borda:#e4e8ee; --verde:#1a9e5f; --vermelho:#d4433a; --roxo:#7c3aed;
+    --sombra:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --sombra-md:0 4px 16px rgba(16,24,40,.08);
+    --radius:14px;
+    /* cores por formato */
+    --fmt-feed:#0072ce; --fmt-unico:#7c3aed; --fmt-carrossel:#de8d13;
+    --fmt-reels:#d4433a; --fmt-stories:#1a9e5f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--texto); line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--azul)}
+  .wrap{max-width:1300px;margin:0 auto;padding:20px 20px 64px}
+  header.top{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:16px 0 20px;border-bottom:1px solid var(--borda);margin-bottom:20px;
+  }
+  header.top img{height:34px;width:auto}
+  .title h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .title p{margin:2px 0 0;color:var(--muted);font-size:13px}
+  .spacer{flex:1}
+  select,button,input,textarea{font-family:inherit;font-size:14px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600}
+  select,input,textarea{
+    background:var(--card);color:var(--texto);border:1px solid var(--borda);
+    border-radius:9px;padding:8px 11px;outline:none;
+  }
+  select:focus,input:focus,textarea:focus{border-color:var(--azul);box-shadow:0 0 0 3px rgba(15,157,110,.15)}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;
+    background:var(--azul);color:#fff;border-radius:9px;padding:9px 15px;
+    font-weight:600;cursor:pointer;transition:background .15s,transform .05s;
+  }
+  .btn:hover{background:var(--azul-esc)} .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:transparent;color:var(--texto);border-color:var(--borda)}
+  .btn.ghost:hover{background:rgba(15,157,110,.07)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .btn.danger{background:var(--vermelho)} .btn.danger:hover{filter:brightness(.92)}
+
+  /* ---- Barra de controles ---- */
+  .toolbar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .monthnav{display:flex;align-items:center;gap:10px}
+  .monthnav .mlabel{font-size:17px;font-weight:700;min-width:170px;text-align:center;text-transform:capitalize}
+  .navbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--borda);background:var(--card);cursor:pointer;font-size:16px;line-height:1}
+  .navbtn:hover{background:rgba(15,157,110,.07)}
+  /* ---- Multi-Select Dropdown (filtros Clientes e Redes) ---- */
+  .msdd{position:relative;display:inline-block}
+  .msdd-btn{display:inline-flex;align-items:center;justify-content:space-between;gap:10px;min-width:190px;
+    background:var(--card);color:var(--texto);border:1px solid var(--borda);border-radius:9px;
+    padding:8px 11px;cursor:pointer;font-size:14px;text-align:left}
+  .msdd-btn:hover{border-color:var(--azul)}
+  .msdd.open .msdd-btn{border-color:var(--azul);box-shadow:0 0 0 3px rgba(15,157,110,.15)}
+  .msdd-caret{color:var(--muted);font-size:11px;transition:transform .15s}
+  .msdd.open .msdd-caret{transform:rotate(180deg)}
+  .msdd-panel{position:absolute;top:calc(100% + 5px);left:0;z-index:45;min-width:100%;
+    background:var(--card);border:1px solid var(--borda);border-radius:10px;box-shadow:var(--sombra-md);
+    padding:6px;display:none;max-height:300px;overflow:auto}
+  .msdd.open .msdd-panel{display:block}
+  .msdd-opt{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;
+    font-size:13px;color:var(--texto);white-space:nowrap;user-select:none}
+  .msdd-opt:hover{background:rgba(15,157,110,.07)}
+  .msdd-opt input{width:auto;margin:0;flex:none}
+  .msdd-opt.all{border-bottom:1px solid var(--borda);border-radius:0;margin-bottom:4px;font-weight:600}
+  .switch{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+  .switch input{width:auto}
+
+  /* ---- Legenda ---- */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:12px;color:var(--muted)}
+  .legend .item{display:inline-flex;align-items:center;gap:6px}
+  .legend .dot{width:12px;height:12px;border-radius:3px}
+
+  /* ---- Grade ---- */
+  .cal{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);overflow:hidden;box-shadow:var(--sombra)}
+  .cal .dow{display:grid;background:#fafbfc;border-bottom:1px solid var(--borda)}
+  .cal .dow div{padding:9px 10px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;text-align:left}
+  .cal .weeks{display:grid}
+  .week{display:grid;border-bottom:1px solid var(--borda)}
+  .week:last-child{border-bottom:none}
+  .day{min-height:118px;border-right:1px solid var(--borda);padding:6px 6px 8px;position:relative;overflow:hidden}
+  .day:last-child{border-right:none}
+  .day.out{background:#fafbfc}
+  .day .dn{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+  .day.today .dn{color:var(--azul)}
+  .day.today .dn span{background:var(--azul);color:#fff;border-radius:50%;padding:1px 6px}
+  .addday{position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:6px;border:1px dashed var(--borda);background:transparent;color:var(--muted);cursor:pointer;line-height:1;font-size:14px;display:none}
+  .day:hover .addday{display:inline-flex;align-items:center;justify-content:center}
+
+  /* ---- Chip de post ---- */
+  .chip{position:relative;display:block;width:100%;text-align:left;border:none;border-left:4px solid var(--cinza);
+        background:#f2f4f7;border-radius:6px;padding:4px 7px 4px 9px;margin-bottom:4px;cursor:pointer;font-size:12px;line-height:1.3;color:var(--texto)}
+  .chip:hover{filter:brightness(.97)}
+  .chip .assunto{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip .meta{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip.pub{opacity:.5;padding-left:32px}
+  .chip:hover{padding-left:32px}
+  .chip .imp{color:var(--ambar);font-weight:700}
+  /* checkmark de status (aparece no hover) */
+  .chip .ck{position:absolute;left:7px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;
+            border:1.5px solid var(--verde);background:var(--card);color:var(--verde);display:none;align-items:center;
+            justify-content:center;font-size:11px;cursor:pointer;padding:0;line-height:1}
+  .chip:hover .ck{display:inline-flex}
+  .chip.pub .ck{display:inline-flex;background:var(--verde);color:#fff}
+
+  /* ---- Modal ---- */
+  .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.55);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--card);border-radius:16px;box-shadow:var(--sombra-md);width:100%;max-width:560px;max-height:92vh;overflow:auto}
+  .modal-head{padding:18px 20px;border-bottom:1px solid var(--borda);display:flex;justify-content:space-between;align-items:center}
+  .modal-head h3{margin:0;font-size:16px}
+  .close-x{border:none;background:none;font-size:24px;cursor:pointer;color:var(--muted);line-height:1}
+  .modal-body{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .modal-body .full{grid-column:1/-1}
+  .modal-body label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
+  .modal-body input,.modal-body textarea,.modal-body select{width:100%}
+  .redepicker{display:flex;gap:6px;flex-wrap:wrap}
+  .redepicker label{display:inline-flex;align-items:center;gap:5px;font-weight:500;color:var(--texto);margin:0;cursor:pointer}
+  .redepicker input{width:auto}
+  .modal-foot{padding:16px 20px;border-top:1px solid var(--borda);display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .err{color:var(--vermelho);font-size:13px}
+
+  /* ---- Gerenciar listas ---- */
+  .tabs{display:flex;gap:6px;padding:14px 20px 0;flex-wrap:wrap}
+  .tab{padding:7px 12px;border-radius:9px 9px 0 0;border:1px solid var(--borda);border-bottom:none;background:#fafbfc;cursor:pointer;font-size:13px}
+  .tab.on{background:var(--card);font-weight:700}
+  .listbox{padding:16px 20px}
+  .listadd{display:flex;gap:8px;margin-bottom:12px}
+  .listadd input{flex:1}
+  .litem{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--borda)}
+  .litem .nome{flex:1}
+  .litem.off .nome{color:var(--muted);text-decoration:line-through}
+  .minibtn{border:1px solid var(--borda);background:var(--card);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:12px}
+
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--texto);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:60}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--vermelho);color:#fff}
+  /* Toast com ação (Desfazer, fase 4). `pointer-events` volta a ser auto só
+     quando o toast está visível — no #toast ele é `none` para não interceptar
+     cliques na grade enquanto está escondido. */
+  #toast.show{pointer-events:auto}
+  .toast-acao{margin-left:10px;background:transparent;border:1px solid currentColor;color:inherit;
+    border-radius:7px;padding:3px 10px;font-size:13px;font-weight:600;cursor:pointer}
+  .toast-acao:hover{background:rgba(255,255,255,.16)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+
+  /* ==========================================================================
+     AGENDA INTELIGENTE (v2) — barra de comando + chips de interpretação ao vivo
+     ========================================================================== */
+  /* --------------------------------------------------------------------------
+     ★ MEDIDAS DA ILHA — o que se ajusta ao revisar o layout mora AQUI.
+     -------------------------------------------------------------------------- */
+  :root{
+    --ilha-rep:330px;    /* largura em REPOUSO — a pílula, só o campo de comando */
+    --ilha-w:390px;      /* largura quando cresce (vitrine, plano, perguntas) */
+    --ilha-marg:18px;    /* folga entre a ilha e as bordas da tela */
+  }
+
+  /* ==========================================================================
+     ★ A ILHA ADAPTATIVA — terceira volta do layout (decisão do usuário, 2026-08-25)
+     ==========================================================================
+     A grade voltou a ser a página inteira: `.wrap` centrada em 1300px, sem shell,
+     sem coluna reservada e sem `padding-right` calculado. A Agenda deixou de ser
+     MÓVEL (um dock de 380px sempre presente) e virou MOMENTO: uma pílula
+     flutuante de ~330×42 num canto, que cresce só o que o conteúdo exige.
+
+     O que isso resolve e o dock do §8.6 não resolvia — a patologia está registrada
+     lá: *o painel cresce justamente quando há algo a decidir, cobrindo a grade que
+     a pessoa precisa olhar para decidir*. O dock TOLERAVA a colisão; a ilha DESVIA
+     dela (ver `ilhaDesviar` no JS).
+
+     ★ TRÊS SIMPLIFICAÇÕES CONCRETAS, não só um arranjo diferente:
+       1. A reserva de 294px em `calc()` nas barras acima da grade MORREU. Ela
+          existia porque o dock passava por cima de Portal / Minha conta /
+          + Novo post / Gerenciar listas. A ilha mora num canto e nasce no
+          INFERIOR: não alcança nenhum desses controles, e não há o que reservar.
+       2. O grid `.shell` de duas colunas e o `@media (min-width:1700px)` que
+          alternava entre "margem" e "sobreposto" morreram com ele.
+       3. A grade fica com os mesmos 1260px em TODA largura e em TODO estado —
+          antes isso só valia a partir de 1700px (modo margem) ou com o painel
+          fechado.
+
+     O custo em repouso é quase zero: a pílula cobre um pedaço de um cartão no
+     canto — e é justamente esse pedaço que a anticolisão devolve quando o cartão
+     em questão é o alvo do comando.
+     ========================================================================== */
+
+  /* --------------------------------------------------------------------------
+     A ILHA. Não é um chat: é comando + interpretação + ação. A anatomia de chat
+     que o dock emprestava (registro em cima, composer embaixo) continua aqui, só
+     que **por demanda**: em repouso existe apenas o composer, e o registro/vitrine
+     e a faixa do plano entram acima dele conforme fazem falta.
+
+     ★ NÃO É ARRASTÁVEL — mantém a decisão do §8.6 (WCAG 2.5.7 exige alternativa
+     não-arrastável; posição livre não sobrevive à troca de resolução; e só há
+     quatro lugares úteis). Troca-se de canto pelo botão ou por Alt+seta.
+     -------------------------------------------------------------------------- */
+  .ilha{position:fixed;z-index:48;
+    width:min(var(--ilha-rep), calc(100vw - var(--ilha-marg) * 2));
+    max-height:calc(100dvh - var(--ilha-marg) * 2);
+    display:flex;flex-direction:column;
+    /* ★ FUNDO SÓLIDO, não translúcido (pergunta aberta nº 3 do §8.8). Translucidez
+       em repouso custa legibilidade justamente onde a ilha mora: por cima dos
+       cartões, que são COLORIDOS por formato. O que ela ganharia em leveza, o
+       campo de comando perderia em contraste — e o campo é o que tem de estar
+       legível sempre. A separação da grade fica por conta da sombra. */
+    background:var(--card);
+    border:1px solid var(--borda);border-radius:16px;overflow:hidden;
+    box-shadow:0 10px 30px rgba(16,24,40,.15);
+    /* A transição de canto É o rastro: o olho segue o movimento. Um fantasma
+       deixado no canto antigo seria sujeira permanente para um ganho de um
+       instante. */
+    transition:width .18s ease, left .26s ease, right .26s ease,
+               top .26s ease, bottom .26s ease}
+
+  /* Cresce só o que o conteúdo exige — nunca em repouso. */
+  .ilha.cresceu{width:min(var(--ilha-w), calc(100vw - var(--ilha-marg) * 2))}
+
+  /* Os QUATRO cantos. b/c = baixo/cima · d/e = direita/esquerda. */
+  .ilha[data-canto="bd"]{right:var(--ilha-marg);bottom:var(--ilha-marg);left:auto;top:auto}
+  .ilha[data-canto="be"]{left:var(--ilha-marg);bottom:var(--ilha-marg);right:auto;top:auto}
+  .ilha[data-canto="cd"]{right:var(--ilha-marg);top:var(--ilha-marg);left:auto;bottom:auto}
+  .ilha[data-canto="ce"]{left:var(--ilha-marg);top:var(--ilha-marg);right:auto;bottom:auto}
+
+  /* ★ O CAMPO DE COMANDO NÃO SE MOVE quando a ilha cresce.
+     Nos cantos de BAIXO a âncora é o `bottom`: o conteúdo que entra acima do
+     composer empurra o TOPO para cima e o campo fica parado. Nos cantos de CIMA a
+     âncora é o `top` — sem inverter a ordem visual, o mesmo conteúdo empurraria o
+     campo para BAIXO e o cursor fugiria do lugar onde a pessoa acabou de clicar.
+     `column-reverse` resolve sem duplicar HTML: o composer passa a ser o primeiro
+     de cima para baixo e o crescimento desce. */
+  .ilha[data-canto^="c"]{flex-direction:column-reverse}
+  /* Consequência: as duas linhas separadoras trocam de dono. Na ordem normal
+     (corpo · plano · composer) elas são o `border-top` do plano e do composer; na
+     invertida (composer · plano · corpo) o `border-top` do plano continua certo —
+     é a linha entre ele e o composer — mas a do composer viraria um risco solto no
+     topo da ilha, e a que falta é a de cima do corpo. */
+  .ilha[data-canto^="c"] .cop-composer{border-top:none}
+  .ilha[data-canto^="c"] .cop-corpo{border-top:1px solid var(--borda)}
+
+  /* Faixa rolável: registro da sessão + vitrine de sugestões. Em repouso não
+     existe — entra ao focar (vitrine) ou ao abrir o registro pelo selo. */
+  .cop-corpo{display:none;flex:1 1 auto;min-height:0;overflow-y:auto;padding:11px 12px;
+    flex-direction:column;gap:12px}
+  .ilha.vitrine .cop-corpo,
+  .ilha.log-aberto .cop-corpo{display:flex}
+
+  /* Faixa do PLANO — chips, perguntas e avisos. Tem rolagem própria e teto de
+     altura para nunca engolir o registro nem empurrar o composer para fora da
+     tela quando o comando tem muitas perguntas. */
+  .cop-plano{flex:0 1 auto;display:none;border-top:1px solid var(--borda);
+    padding:11px 13px;max-height:44vh;overflow-y:auto;background:#fbfcfe}
+  .cop-plano.on{display:block}
+
+  /* Composer — É A ILHA EM REPOUSO: sozinho, ele é a pílula. E é SÓ a linha do
+     campo, de altura fixa.
+
+     ★ POR QUE os botões e o rodapé saíram daqui (bloco `.cop-acoes`, abaixo):
+     eles nascem quando aparece um comando. Estando DENTRO do composer, e o
+     composer ancorado pelo `bottom` nos cantos de baixo, o campo subia ~69px no
+     instante em que a pessoa terminava de digitar — medido. É o deslocamento
+     clássico: o ponteiro fica onde o campo estava e passa a pairar sobre um botão
+     recém-nascido. Fora do composer, eles crescem para o lado de fora e a linha do
+     campo fica pinada nos QUATRO cantos. O dock do §8.6 tinha o mesmo defeito;
+     aqui ele dói mais, porque não mover o que a pessoa está usando é o motivo de a
+     ilha existir. */
+  .cop-composer{flex:none;border-top:1px solid var(--borda);padding:8px 9px}
+  .ilha.com-texto .cop-composer{border-top:none}
+  .cop-linha{display:flex;gap:6px;align-items:center}
+  .cop-linha input{flex:1 1 auto;min-width:0;font-size:14px;padding:7px 10px;border-radius:10px}
+
+  /* Ações do comando: os botões e o rodapé que diz se o Enter grava. Ficam FORA
+     da faixa do plano (que tem rolagem própria) para nunca rolarem para fora de
+     vista — é a exigência do §8.2, e ela continua valendo: a frase "↵ Enter GRAVA"
+     não pode faltar na hora em que o dedo já está na tecla. */
+  .cop-acoes{flex:none;display:none;border-top:1px solid var(--borda);padding:9px 10px}
+  .ilha.com-texto .cop-acoes{display:block}
+
+  /* ★ A ilha NÃO FECHA — ela repousa (pergunta aberta nº 5 do §8.8). Sendo do
+     tamanho de um campo de texto, esconder e reabrir custaria mais do que
+     economiza, e a FAB do §8.6 (que existia porque o dock desaparecia por
+     inteiro) morreu junto: um elemento a menos na tela e um estado a menos para
+     lembrar. Quando a pílula incomoda onde está, a resposta é trocar de canto —
+     e quando ela incomoda em cima do ALVO, quem troca é a anticolisão, sozinha. */
+  /* Marca da ilha: vetor no lugar do emoji (o usuário achou o emoji ruim). Um
+     sparkle de 4 pontas — mesmo desenho usado por vários indicadores de
+     "assistente" — em CINZA (`--cinza`, não `--muted`, que aqui é azulado), para
+     ficar neutro perto do azul da marca em vez de competir com ele. */
+  .ilha-mark{flex:none;display:inline-flex;align-items:center;justify-content:center;
+    width:15px;height:15px;margin-left:2px;color:var(--cinza)}
+  .ilha-mark svg{width:100%;height:100%;display:block}
+  .ilha-btn{flex:none;border:1px solid var(--borda);background:var(--card);color:var(--muted);
+    border-radius:9px;min-width:27px;height:29px;padding:0 6px;font-size:11.5px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;font-weight:700;line-height:1}
+  .ilha-btn:hover{border-color:var(--azul);color:var(--azul)}
+  .ilha-btn[hidden]{display:none}
+  /* ★ O Desfazer fica FORA do selo, no corpo da pílula. A regra do §8.4 é que a
+     rede de segurança tem de estar no caminho de quem acabou de agir — atrás de um
+     clique no registro ela viraria exatamente o "menu" que a fase 4.1 recusou.
+     Continua sendo UM botão só (a rota é uma pilha, §6.2) e o toast segue com o
+     dele; isto é o que sobra quando o toast some. */
+  .ilha-btn.desfazer{border-color:rgba(15,157,110,.45);color:var(--azul)}
+  .ilha-btn.selo[aria-expanded="true"]{border-color:var(--azul);color:var(--azul);
+    background:rgba(15,157,110,.07)}
+
+  /* Quem decide se os botões existem é `.cop-acoes` (só com comando escrito): em
+     repouso um "Limpar" sobre campo vazio seria móvel sem função. */
+  .cop-botoes{display:flex;gap:7px}
+  .cop-botoes .btn{flex:1 1 auto;justify-content:center;padding:8px 12px}
+
+  /* ---- Registro da sessão ----------------------------------------------------
+     Some no F5, de propósito (decisão do usuário): é memória de trabalho, não
+     histórico. O log de verdade continua no D1 desde a fase 4.1, para auditoria.
+     -------------------------------------------------------------------------- */
+  .cop-hist{display:flex;flex-direction:column;gap:8px}
+  .hist-item{border:1px solid var(--borda);border-radius:11px;padding:8px 10px;background:#fbfcfe}
+  .hist-item .cmd{font-size:12.5px;font-weight:600;line-height:1.35}
+  .hist-item .res{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .hist-item.ok{border-left:3px solid var(--verde)}
+  .hist-item.consulta{border-left:3px solid var(--azul)}
+  .hist-item.err{border-left:3px solid var(--vermelho)}
+  .hist-item.err .res{color:#a3302a}
+  .hist-item.desfeito{opacity:.55}
+  .hist-item.desfeito .cmd{text-decoration:line-through}
+  .hist-desfazer{margin-top:6px;border:1px solid var(--borda);background:var(--card);
+    color:var(--texto);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:600}
+  .hist-desfazer:hover{border-color:var(--azul);color:var(--azul)}
+  .cop-vazio{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+  /* ---- Vitrine de sugestões --------------------------------------------------
+     Vêm do servidor JÁ VERIFICADAS (GET …/agenda/sugestoes): o que aparece aqui
+     executa. Clicar PREENCHE o campo — nunca executa —, inclusive a de remover.
+     -------------------------------------------------------------------------- */
+  .cop-sug{display:flex;flex-direction:column;gap:6px}
+  .cop-sug .cab{display:flex;align-items:center;gap:8px;
+    font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  .cop-sug .girar{margin-left:auto;border:1px solid var(--borda);background:var(--card);
+    color:var(--muted);border-radius:20px;padding:3px 9px;font-size:11px;cursor:pointer;
+    text-transform:none;letter-spacing:0;font-weight:600}
+  .cop-sug .girar:hover{border-color:var(--azul);color:var(--azul)}
+  .cop-sug button.sug{display:block;width:100%;text-align:left;cursor:pointer;
+    border:1px dashed var(--borda);background:transparent;color:var(--texto);
+    border-radius:10px;padding:7px 10px;font-size:12.5px;line-height:1.35}
+  .cop-sug button.sug:hover{border-color:var(--azul);background:rgba(15,157,110,.05)}
+  .cop-sug button.sug .verbo{display:block;font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:2px}
+  .cop-sug button.sug.perigo{border-color:rgba(212,67,58,.4)}
+  .cop-sug button.sug.perigo .verbo{color:#a3302a}
+  .cop-sug button.sug.perigo:hover{border-color:var(--vermelho);background:rgba(212,67,58,.05)}
+
+  .agenda-linha{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .intencao{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:14px}
+  .medidor{height:6px;width:96px;background:#eef1f5;border-radius:99px;overflow:hidden}
+  .medidor i{display:block;height:100%;width:0;background:var(--verde);transition:width .2s,background .2s}
+  .medidor.media i{background:var(--ambar)} .medidor.baixa i{background:var(--vermelho)}
+  .conf{font-size:12px;color:var(--muted)}
+  .chips{display:flex;gap:7px;flex-wrap:wrap}
+  /* Um chip = um campo interpretado. Verde = certeza; âmbar = conferir;
+     tracejado = pergunta em aberto. */
+  .cchip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;line-height:1.2;
+    background:#f2f6fb;border:1px solid #d9e4f0;color:var(--texto);
+    border-radius:20px;padding:5px 11px}
+  .cchip b{font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .cchip.ok{background:rgba(26,158,95,.09);border-color:rgba(26,158,95,.32)}
+  .cchip.conferir{background:rgba(222,141,19,.11);border-color:rgba(222,141,19,.38)}
+  .cchip.pergunta{background:transparent;border-style:dashed;border-color:var(--ambar);color:#8a5a06}
+  .cchip.falta{background:rgba(212,67,58,.08);border-color:rgba(212,67,58,.35);color:#a3302a}
+  /* Chip de MUDANÇA (fase 4.2): valor NOVO de um alterar. Azul da marca + borda
+     cheia para se distinguir à primeira vista dos chips de critério, que são o
+     que a busca usou. Os dois podem ser do mesmo campo na mesma frase. */
+  .cchip.muda{background:rgba(15,157,110,.10);border-color:rgba(15,157,110,.42);color:#0b6b4d;font-weight:600}
+  .cchip .x{cursor:pointer;color:var(--muted);font-weight:700;padding:0 1px;
+    background:transparent;border:0;font-size:15px;line-height:1;border-radius:50%}
+  .cchip .x:hover{color:var(--vermelho)}
+  .cchip .x:focus-visible{outline:2px solid var(--azul);outline-offset:1px}
+  .agenda-perguntas{margin-top:8px;display:flex;flex-direction:column;gap:7px}
+  .pergunta{font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pergunta .opt{border:1px solid var(--borda);background:var(--card);border-radius:20px;
+    padding:4px 11px;font-size:12.5px;cursor:pointer}
+  .pergunta .opt:hover{border-color:var(--azul);background:rgba(15,157,110,.06)}
+  /* Rodapé do composer: "não interpretado" + se o Enter grava. `:empty` porque em
+     repouso ele é a diferença entre uma pílula e uma pílula com uma sobra de 8px. */
+  .agenda-rodape{margin-top:8px;font-size:11.5px;color:var(--muted);
+    display:flex;flex-direction:column;gap:3px;line-height:1.4}
+  .agenda-rodape:empty{display:none}
+  .agenda-rodape .resto{color:#a3302a}
+  .agenda-rodape .grava{color:#a06407;font-weight:600}
+  .agenda-aviso{margin-top:10px;font-size:12px;background:rgba(222,141,19,.09);
+    border-left:3px solid var(--ambar);padding:8px 11px;border-radius:0 7px 7px 0;color:#7a5205}
+
+  /* Card que o último comando da Agenda criou (fase 2) ou alterou (fase 3):
+     pulsa duas vezes para responder "mexeu no post e no dia que eu quis?" sem a
+     pessoa ter que procurar na grade. */
+  @keyframes agNovo{
+    0%{box-shadow:0 0 0 0 rgba(15,157,110,.5)}
+    100%{box-shadow:0 0 0 13px rgba(15,157,110,0)}
+  }
+  .chip.novo{animation:agNovo 1.05s ease-out 2}
+  @media (prefers-reduced-motion:reduce){
+    .chip.novo{animation:none;outline:2px solid var(--azul);outline-offset:1px}
+  }
+
+  /* ---- O COMANDO NA GRADE (enxerto do prato 02 do estudo, §8.8) --------------
+     O chip "Post encontrado" descreve em TEXTO um post que a grade pode MOSTRAR.
+     Anel azul = o alvo resolvido. Números âmbar ① ② ③ = os candidatos, quando a
+     Agenda precisa perguntar qual é — e clicar no cartão RESPONDE a pergunta, no
+     lugar onde a decisão de verdade se toma: olhando os posts no mês, não uma
+     lista de títulos parecidos dentro do painel.
+
+     ★ Não substitui a lista de texto, soma a ela: o candidato pode estar em OUTRO
+     mês, e aí não há cartão nenhum para marcar.
+
+     ★ Anel por `box-shadow inset`, não por `outline`: `.day` tem `overflow:hidden`
+     e recorta o que passa da borda da célula. Inset nunca sai do cartão. */
+  .chip.alvo{box-shadow:inset 0 0 0 2px var(--azul)}
+  .chip.cand{box-shadow:inset 0 0 0 2px var(--ambar);cursor:pointer}
+  .chip .num{position:absolute;right:4px;top:4px;min-width:17px;height:17px;
+    border-radius:50%;background:var(--ambar);color:#fff;font-size:10.5px;font-weight:700;
+    display:inline-flex;align-items:center;justify-content:center;padding:0 3px}
+  .chip.alvo .num{background:var(--azul)}
+
+  /* Barra de FILTRO ATIVO (fase 1) — o que a grade está mostrando agora.
+     Some quando não há filtro nenhum. Cada critério é um chip removível, para
+     desfazer uma dimensão sem ter que reescrever o comando. */
+  .agfiltro{display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;
+    background:rgba(15,157,110,.05);border:1px solid rgba(15,157,110,.22);
+    border-radius:var(--radius);padding:9px 12px}
+  .agfiltro.on{display:flex}
+  .agfiltro .rot{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--azul)}
+  .agfiltro .vazio{font-size:12.5px;color:var(--muted)}
+  .agfiltro .limpar{margin-left:auto;border:1px solid var(--borda);background:var(--card);
+    color:var(--muted);border-radius:20px;padding:4px 11px;font-size:12px;cursor:pointer}
+  .agfiltro .limpar:hover{border-color:var(--vermelho);color:var(--vermelho)}
+  /* ==========================================================================
+     CELULAR — a ilha vira BARRA INFERIOR (pergunta aberta nº 6 do §8.8)
+     ==========================================================================
+     Em 375px não existem "quatro cantos": qualquer canto é a tela toda. Então a
+     ilha larga a geometria de canto e vira uma barra colada embaixo, de largura
+     cheia, e o botão de trocar de canto desaparece com ela — junto com a
+     anticolisão, desligada no JS pelo mesmo motivo (não há para onde desviar).
+
+     ★ A fórmula de reserva do §8.6 NÃO foi herdada porque ela morreu inteira: a
+     ilha não passa por cima de controle nenhum. O que precisa de reserva aqui é
+     só o FIM da página — senão a barra cobre a última semana da grade.
+
+     ★ Especificidade: as regras de canto acima são `.ilha[data-canto="xx"]`
+     (classe + atributo). Para vencê-las é preciso empatar e vir depois, e é o que
+     `.ilha[data-canto]` faz — dentro do media query e mais abaixo no arquivo.
+     Um `.ilha` seco perderia em silêncio.
+     ========================================================================== */
+  @media (max-width:700px){
+    .ilha[data-canto]{
+      left:8px;right:8px;bottom:8px;top:auto;
+      width:auto;max-width:none;max-height:calc(100dvh - 16px);
+      border-radius:14px;
+      /* Barra: sem inversão de ordem, o crescimento é sempre para cima. */
+      flex-direction:column}
+    .ilha[data-canto].cresceu{width:auto}
+    /* Desfaz a troca de separadores dos cantos de cima (aqui não há cantos) —
+       mas sem ressuscitar a linha dupla logo acima do campo quando as ações estão
+       na tela: `.cop-acoes` já traz a sua. */
+    .ilha[data-canto] .cop-composer{border-top:1px solid var(--borda)}
+    .ilha[data-canto].com-texto .cop-composer{border-top:none}
+    .ilha[data-canto] .cop-corpo{border-top:none}
+    .ilha-btn.canto{display:none}
+    /* A barra come o pé da página: a última semana precisa de onde aparecer, e o
+       toast não pode nascer debaixo dela. */
+    .wrap{padding-bottom:112px}
+    #toast{bottom:98px}
+    .cop-botoes{flex-wrap:wrap}
+    .agfiltro .limpar{margin-left:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--azul)">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--azul);color:#fff;font-size:15px;font-weight:800">V</span>
+      vetor
+    </div>
+    <div class="title">
+      <h1>Calendário de Clientes <span style="font-size:12px;color:var(--muted);font-weight:600">v2</span></h1>
+      <p>Planejamento editorial de posts por marca · com <strong>Agenda Inteligente</strong>.</p>
+    </div>
+    <div class="spacer"></div>
+    <a class="btn ghost sm" href="../../projetos.html" target="_top">← Portfólio</a>
+  </header>
+  <!-- A grade é a página inteira: a Agenda não é mais uma coluna do layout, é uma
+       ilha flutuante fora da `.wrap` (ver o fim do arquivo). -->
+  <main>
+  <!-- Controles -->
+  <div class="toolbar">
+    <div class="monthnav">
+      <button class="navbtn" id="prev" aria-label="Mês anterior">‹</button>
+      <div class="mlabel" id="mlabel">—</div>
+      <button class="navbtn" id="next" aria-label="Próximo mês">›</button>
+      <button class="btn ghost sm" id="hoje">Hoje</button>
+    </div>
+    <div class="field">
+      <label>Clientes</label>
+      <div id="ddClientes"></div>
+    </div>
+    <div class="field">
+      <label>Redes</label>
+      <div id="ddRedes"></div>
+    </div>
+    <div class="spacer"></div>
+    <label class="switch"><input type="checkbox" id="fFds" /> Mostrar fins de semana</label>
+    <button class="btn ghost sm" id="btnListas" style="display:none">Gerenciar listas</button>
+    <button class="btn" id="btnNovo" style="display:none">+ Novo post</button>
+  </div>
+
+  <!-- Filtro ativo (fase 1): espelha os dropdowns + as dimensões que só a
+       Agenda aplica (formato, status, pilar, público, objetivo, período…).
+       ★ Fica na GRADE, fora da ilha, de propósito: é o resumo do que a grade
+       está mostrando e reflete também o que foi mexido nos dropdowns. Dentro do
+       painel ele sumiria quando o painel fechasse — e aí a grade filtraria sem
+       explicar por quê. -->
+  <div class="agfiltro" id="ag-filtro"></div>
+
+  <!-- Legenda -->
+  <div class="legend" id="legend"></div>
+
+  <!-- Grade -->
+  <div class="cal">
+    <div class="dow" id="dow"></div>
+    <div class="weeks" id="weeks"></div>
+  </div>
+  </main>
+</div>
+
+<!-- ======================================================================
+     A ILHA ADAPTATIVA — a Agenda Inteligente (§8.8 do doc). As SEIS intenções
+     executam: CONSULTAR filtra a grade (não escreve); CRIAR, MOVER, TROCAR
+     STATUS, ALTERAR e REMOVER gravam. Nos comandos sobre post existente o chip
+     "Post encontrado" diz em QUAL post o comando vai mexer — e agora a GRADE
+     também diz, com um anel no cartão; com mais de um candidato, a Agenda
+     pergunta e numera ① ② ③ os cartões. Em ALTERAR, o "para" separa: antes dele
+     os critérios (chips normais), depois o valor novo (chips azuis com seta).
+     Remover pede confirmação nomeando o post, e todo comando que grava oferece
+     Desfazer.
+
+     ► FORA da `.wrap`, de propósito: ela é `position:fixed` e não participa mais
+       do fluxo da página. A grade voltou a ser a página inteira.
+
+     ► NÃO É UM CHAT, e a diferença é deliberada. Chat promete vocabulário
+       aberto, turnos e memória; isto é um parser determinístico de vocabulário
+       fechado (§2 do doc). A anatomia de chat continua emprestada — registro em
+       cima, composer embaixo —, mas agora POR DEMANDA: em repouso existe só o
+       campo, e o que entra acima dele é o PLANO ao vivo, que nenhum chat tem e é
+       a decisão de produto central (§1).
+
+     ► A ORDEM DO DOM É [corpo · plano · composer] e isso importa: nos cantos de
+       cima o CSS a inverte com `column-reverse` para o campo não fugir do dedo.
+     ====================================================================== -->
+<aside class="ilha" id="ilha" data-canto="bd" aria-label="Agenda Inteligente">
+
+  <!-- Faixa rolável: registro da sessão OU vitrine de sugestões verificadas.
+       Em repouso não existe — entra ao focar o campo (vitrine, que é o momento em
+       que a pessoa precisa saber o que dizer) ou ao abrir o registro pelo selo. -->
+  <div class="cop-corpo" id="cop-corpo">
+    <div class="cop-hist" id="cop-hist"></div>
+    <div class="cop-sug" id="cop-sug" hidden></div>
+  </div>
+
+  <!-- Faixa do PLANO — só aparece quando há algo digitado. -->
+  <div class="cop-plano" id="ag-out">
+    <div class="agenda-linha">
+      <span class="intencao" id="ag-intencao">—</span>
+      <span class="medidor" id="ag-medidor"><i></i></span>
+      <span class="conf" id="ag-conf"></span>
+    </div>
+    <div class="chips" id="ag-chips"></div>
+    <div class="agenda-perguntas" id="ag-perguntas"></div>
+    <div id="ag-avisos"></div>
+  </div>
+
+  <!-- Ações do comando: botões + o rodapé que avisa se o Enter grava. FORA do
+       composer de propósito — dentro dele, nascer empurrava a linha do campo para
+       cima nos cantos de baixo (~69px medidos). E fora da faixa do plano, que tem
+       rolagem própria: o rodapé não pode rolar para fora de vista (§8.2). -->
+  <div class="cop-acoes">
+    <div class="cop-botoes">
+      <button class="btn" id="ag-aplicar" type="button" style="display:none">Filtrar a grade</button>
+      <button class="btn ghost" id="ag-limpar" type="button">Limpar</button>
+    </div>
+    <div class="agenda-rodape" id="ag-rodape"></div>
+  </div>
+
+  <!-- Composer. Sozinho, ELE É A ILHA em repouso — e é só a linha do campo, de
+       altura fixa, para o cursor nunca fugir de onde a pessoa clicou. -->
+  <div class="cop-composer">
+    <div class="cop-linha">
+      <span class="ilha-mark" title="Agenda Inteligente" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C12 6.627 17.373 12 24 12C17.373 12 12 17.373 12 24C12 17.373 6.627 12 0 12C6.627 12 12 6.627 12 0Z"/>
+        </svg>
+      </span>
+      <input id="ag-texto" autocomplete="off" spellcheck="false"
+             aria-label="Comando da Agenda Inteligente"
+             placeholder="Escreva um comando…" />
+      <!-- Desfazer FORA do selo: a rede de segurança não pode ficar atrás de um
+           clique (§8.4). Um botão só — a rota é uma pilha (§6.2). -->
+      <button class="ilha-btn desfazer" id="ilha-desfazer" type="button" hidden
+              title="Desfazer o último comando">&#8630;</button>
+      <button class="ilha-btn selo" id="ilha-selo" type="button" hidden
+              aria-expanded="false" aria-controls="cop-hist">&#9776;</button>
+      <button class="ilha-btn canto" id="ilha-canto" type="button">&#8689;</button>
+    </div>
+  </div>
+</aside>
+
+<!-- Modal post -->
+<div class="modal-bg" id="modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3 id="modal-title">Novo post</h3>
+      <button class="close-x" id="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="full">
+        <label for="m-assunto">Assunto (título)</label>
+        <input id="m-assunto" maxlength="200" />
+      </div>
+      <div>
+        <label for="m-cliente">Cliente</label>
+        <select id="m-cliente"></select>
+      </div>
+      <div>
+        <label for="m-formato">Formato</label>
+        <select id="m-formato"></select>
+      </div>
+      <div>
+        <label for="m-datapub">Data de publicação</label>
+        <input id="m-datapub" type="date" />
+      </div>
+      <!-- ★ "Data original (organização)" foi APOSENTADA em 2026-08-26 (decisão do
+           usuário). Medido em produção: 76% dos posts a tinham IGUAL à data de
+           publicação, e NADA no sistema a consumia — não posiciona o card, não
+           filtra, não vai a relatório. Ela era a entrada do bloco "Dias em Atraso"
+           da planilha, que o §3 do doc descartou como indicador derivado; e desde a
+           fase 4.1 o log da Agenda mede atraso melhor (registra TODO deslocamento,
+           com quem e quando).
+           ★ A COLUNA CONTINUA NO BANCO com o histórico importado das planilhas — e
+           por isso a chave saiu também do corpo enviado ao PATCH (ver readForm):
+           mandar `data_original: null` é `null` EXPLÍCITO, que o servidor lê como
+           "limpe este campo" e apagaria o histórico a cada edição de post.
+           A Agenda também deixou de escrevê-la (passo 1.2 do parser). -->
+      <div>
+        <label for="m-horario">Horário (informativo)</label>
+        <input id="m-horario" type="time" />
+      </div>
+      <div>
+        <label for="m-status">Status</label>
+        <select id="m-status"></select>
+      </div>
+      <div class="full">
+        <label>Redes sociais</label>
+        <div class="redepicker" id="m-redes"></div>
+      </div>
+      <div>
+        <label for="m-pilar">Pilar de conteúdo</label>
+        <select id="m-pilar"></select>
+      </div>
+      <div>
+        <label for="m-publico">Para quem? (público)</label>
+        <select id="m-publico"></select>
+      </div>
+      <div>
+        <label for="m-objetivo">Objetivo do conteúdo</label>
+        <select id="m-objetivo"></select>
+      </div>
+      <div>
+        <label class="switch" style="margin-top:22px"><input type="checkbox" id="m-impulsionar" /> Impulsionar (patrocinado)</label>
+      </div>
+      <div class="full">
+        <label for="m-conteudo">Conteúdo / observações (resumo ou link)</label>
+        <textarea id="m-conteudo" rows="3" maxlength="2000"></textarea>
+      </div>
+      <div class="full err" id="modal-err"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger sm" id="modal-del" style="visibility:hidden">Excluir</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn" id="modal-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal gerenciar listas -->
+<div class="modal-bg" id="listas">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3>Gerenciar listas</h3>
+      <button class="close-x" id="listas-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="tabs" id="listas-tabs"></div>
+    <div class="listbox">
+      <div class="listadd">
+        <input id="listas-input" placeholder="Adicionar novo…" />
+        <button class="btn sm" id="listas-add">Adicionar</button>
+      </div>
+      <div id="listas-items"></div>
+    </div>
+    <div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="listas-done">Fechar</button></div>
+  </div>
+</div>
+
+<!-- Modal escopo por cliente (Pilar/Público/Objetivo exclusivos a certas marcas) -->
+<div class="modal-bg" id="scopebg">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:440px">
+    <div class="modal-head">
+      <h3 id="scope-title">Exclusivo a quais clientes?</h3>
+      <button class="close-x" id="scope-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="listbox">
+      <p style="color:var(--muted);font-size:12px;margin:0 0 12px">
+        Marque os clientes aos quais este item é <strong>exclusivo</strong>.
+        Nenhum marcado = visível para <strong>todos</strong> os clientes.</p>
+      <div id="scope-list" style="display:flex;flex-direction:column;gap:8px;max-height:46vh;overflow:auto"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost sm" id="scope-none">Deixar global</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn ghost" id="scope-cancel">Cancelar</button>
+        <button class="btn" id="scope-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "/api/calendario";
+  var $ = function(s,r){return (r||document).querySelector(s);};
+  var REDES = ["Instagram","LinkedIn","YouTube","TikTok"];
+  var FORMATOS = [
+    {nome:"Post no Feed", cor:"var(--fmt-feed)"},
+    {nome:"Post Único",   cor:"var(--fmt-unico)"},
+    {nome:"Carrossel",    cor:"var(--fmt-carrossel)"},
+    {nome:"Reels",        cor:"var(--fmt-reels)"},
+    {nome:"Stories",      cor:"var(--fmt-stories)"}
+  ];
+  var FMT_COR = {};
+  FORMATOS.forEach(function(f){FMT_COR[f.nome]=f.cor;});
+  var STATUSES = ["Não iniciado","Em produção","Não publicado","Publicado"];
+  var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  var DOW = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+  // Estado
+  var view = new Date(); view.setDate(1);
+  var me = {canEditCalendario:false, canToggleCalendarioStatus:false};
+  var listas = {clientes:[], pilares:[], publicos:[], objetivos:[]};
+  var posts = [];
+  var clientesFiltro = [];         // vazio = todos os clientes (ids)
+  var redesFiltro = [];            // vazio = todas
+  var showFds = false;
+  var editingId = null;            // id do post no modal (null = novo)
+  // Filtro vindo da Agenda (fase 1). Só as dimensões que NÃO têm dropdown:
+  // cliente e redes continuam morando em clientesFiltro/redesFiltro, para não
+  // haver duas fontes de verdade do mesmo filtro. null = nenhum.
+  var agFiltro = null;
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+  function toast(msg,isErr){ var t=$("#toast"); t.textContent=msg; t.className="show"+(isErr?" err":""); clearTimeout(t._t); t._t=setTimeout(function(){t.className="";},2600); }
+  /**
+   * Toast com uma AÇÃO — hoje só o Desfazer da Agenda (fase 4).
+   *
+   * O desfazer não pode viver escondido num menu: ele é o que torna aceitável um
+   * comando que apaga post. Se a pessoa tem de procurar como voltar, a rede de
+   * segurança não existe na prática. Fica mais tempo na tela que o toast comum,
+   * porque exige uma decisão em vez de só informar.
+   */
+  function toastAcao(msg, rotulo, onClick){
+    var t=$("#toast");
+    t.textContent="";
+    t.appendChild(document.createTextNode(msg+" "));
+    var b=document.createElement("button");
+    b.type="button"; b.className="toast-acao"; b.textContent=rotulo;
+    b.onclick=function(){ t.className=""; onClick(); };
+    t.appendChild(b);
+    t.className="show";
+    clearTimeout(t._t);
+    t._t=setTimeout(function(){ t.className=""; }, 9000);
+  }
+  function pad(n){ return (n<10?"0":"")+n; }
+  function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function lastDay(y,m){ return new Date(y,m+1,0).getDate(); }
+
+  async function api(path, opts){
+    var r = await fetch(API+path, Object.assign({headers:{Accept:"application/json","Content-Type":"application/json"}}, opts||{}));
+    var data; try{ data = await r.json(); }catch(e){ data = {ok:false,error:"resposta inválida"}; }
+    if(!r.ok || data.ok===false) throw new Error(data.error||("HTTP "+r.status));
+    return data;
+  }
+
+  // ---- carregamento ----
+  async function loadMe(){
+    try{ me = await (await fetch("/api/me",{headers:{Accept:"application/json"}})).json(); }catch(e){}
+    $("#btnNovo").style.display = me.canEditCalendario ? "" : "none";
+    $("#btnListas").style.display = me.canEditCalendario ? "" : "none";
+  }
+  async function loadListas(){
+    try{ listas = await api("/listas"); }catch(e){ toast("Falha ao carregar listas",true); }
+  }
+  async function loadPosts(){
+    var y=view.getFullYear(), m=view.getMonth();
+    var from=y+"-"+pad(m+1)+"-01", to=y+"-"+pad(m+1)+"-"+pad(lastDay(y,m));
+    // Carrega todos os clientes do mês; os filtros (cliente/rede) são aplicados
+    // no cliente por visiblePosts() — ambos são multi-seleção.
+    var q="/posts?from="+from+"&to="+to;
+    try{ var d=await api(q); posts=d.posts||[]; }catch(e){ posts=[]; toast("Falha ao carregar posts",true); }
+  }
+
+  // ---- filtros/populate ----
+  function opcaoNome(lista,id){ var f=(listas[lista]||[]).filter(function(o){return o.id===id;})[0]; return f?f.nome:""; }
+
+  // Uma opção é visível para um cliente se for global (sem escopo) ou se o
+  // cliente estiver no seu escopo. `keepId` força manter a opção já atribuída.
+  function optVisible(o, clienteId){
+    var scoped = o.clientes && o.clientes.length;
+    return !scoped || (clienteId && o.clientes.indexOf(Number(clienteId))>=0);
+  }
+  function fillOptSelect(sel, arr, clienteId, keepId){
+    sel.innerHTML = '<option value="">—</option>';
+    (arr||[]).forEach(function(o){
+      var keep = keepId && o.id===keepId;
+      if(o.ativo===false && !keep) return;
+      if(!optVisible(o, clienteId) && !keep) return;
+      var op=document.createElement("option"); op.value=o.id; op.textContent=o.nome; sel.appendChild(op);
+    });
+  }
+  function refreshOptSelects(clienteId, keep){
+    keep = keep || {};
+    fillOptSelect($("#m-pilar"),    listas.pilares,   clienteId, keep.pilar);
+    fillOptSelect($("#m-publico"),  listas.publicos,  clienteId, keep.publico);
+    fillOptSelect($("#m-objetivo"), listas.objetivos, clienteId, keep.objetivo);
+  }
+
+  function fillSelect(sel, arr, withEmpty, emptyLabel){
+    sel.innerHTML = withEmpty ? '<option value="">'+esc(emptyLabel||"—")+'</option>' : "";
+    arr.forEach(function(o){
+      if(o.ativo===false) return;
+      var op=document.createElement("option"); op.value=o.id; op.textContent=o.nome; sel.appendChild(op);
+    });
+  }
+  // Multi-Select Dropdown reutilizável: botão com resumo + painel de checkboxes,
+  // primeiro item "Todos/Todas" que limpa a seleção. `selected` é o array de
+  // estado (vazio = todos). `onchange` re-renderiza a grade.
+  var _ddOpen = [];  // instâncias abertas (para fechar ao clicar fora / Esc)
+  function makeMultiSelect(host, allLabel, selected, onchange){
+    host.classList.add("msdd");
+    host.innerHTML='<button type="button" class="msdd-btn"><span class="msdd-label"></span><span class="msdd-caret">▾</span></button><div class="msdd-panel"></div>';
+    var btn=host.querySelector(".msdd-btn"), panel=host.querySelector(".msdd-panel"), lbl=host.querySelector(".msdd-label");
+    var items=[];
+    function summary(){
+      if(!selected.length) return allLabel;
+      if(selected.length===1){ var it=items.filter(function(i){return i.value===selected[0];})[0]; return it?it.label:"1 selecionado"; }
+      return selected.length+" selecionados";
+    }
+    function drawLabel(){ lbl.textContent=summary(); }
+    function drawPanel(){
+      panel.innerHTML="";
+      var all=document.createElement("label"); all.className="msdd-opt all";
+      all.innerHTML='<input type="checkbox"'+(selected.length===0?" checked":"")+'/> '+esc(allLabel);
+      var allInput=all.querySelector("input");
+      allInput.onchange=function(){ selected.length=0; drawPanel(); drawLabel(); onchange(); };
+      panel.appendChild(all);
+      items.forEach(function(it){
+        var o=document.createElement("label"); o.className="msdd-opt";
+        o.innerHTML='<input type="checkbox"'+(selected.indexOf(it.value)>=0?" checked":"")+'/> '+esc(it.label);
+        o.querySelector("input").onchange=function(){
+          var i=selected.indexOf(it.value);
+          if(i>=0) selected.splice(i,1); else selected.push(it.value);
+          allInput.checked = selected.length===0;  // "Todos/Todas" reflete o estado
+          drawLabel(); onchange();
+        };
+        panel.appendChild(o);
+      });
+    }
+    btn.onclick=function(e){
+      e.stopPropagation();
+      var willOpen=!host.classList.contains("open");
+      closeAllDropdowns();
+      if(willOpen){ host.classList.add("open"); }
+    };
+    var api={ close:function(){ host.classList.remove("open"); },
+      setItems:function(newItems){ items=newItems||[]; drawPanel(); drawLabel(); },
+      refresh:function(){ drawPanel(); drawLabel(); } };
+    _ddOpen.push(host);
+    return api;
+  }
+  function closeAllDropdowns(){ _ddOpen.forEach(function(h){ h.classList.remove("open"); }); }
+
+  var msClientes=null, msRedes=null;
+  function populateFilters(){
+    if(!msClientes) msClientes=makeMultiSelect($("#ddClientes"), "Todos os clientes", clientesFiltro, render);
+    if(!msRedes)    msRedes   =makeMultiSelect($("#ddRedes"),    "Todas as redes",    redesFiltro,    render);
+    msClientes.setItems((listas.clientes||[]).filter(function(c){return c.ativo!==false;}).map(function(c){return {value:c.id, label:c.nome};}));
+    msRedes.setItems(REDES.map(function(r){return {value:r, label:r};}));
+  }
+  function renderLegend(){
+    var el=$("#legend"); el.innerHTML="<strong style='color:var(--texto)'>Formato:</strong>";
+    FORMATOS.forEach(function(f){
+      var s=document.createElement("span"); s.className="item";
+      s.innerHTML='<span class="dot" style="background:'+f.cor+'"></span>'+esc(f.nome);
+      el.appendChild(s);
+    });
+    var s2=document.createElement("span"); s2.className="item"; s2.style.marginLeft="8px";
+    s2.innerHTML='<span class="dot" style="background:#f2f4f7;border:1px solid var(--borda)"></span>Publicado (esmaecido)';
+    el.appendChild(s2);
+  }
+
+  function visiblePosts(){
+    return posts.filter(function(p){
+      if(clientesFiltro.length && clientesFiltro.indexOf(p.cliente_id)<0) return false;
+      if(redesFiltro.length && !p.redes.some(function(r){return redesFiltro.indexOf(r)>=0;})) return false;
+      return agFiltroCasa(p);
+    });
+  }
+
+  /**
+   * O post existe no mês mas NÃO está desenhado por ser sábado/domingo com o
+   * toggle de fim de semana desligado.
+   *
+   * Importa em dois lugares: contar sem isso faria a barra de filtro prometer
+   * posts que a pessoa não vê, e criar um post num sábado oculto daria "criado!"
+   * com a grade sem nenhuma mudança visível.
+   *
+   * O "T12:00:00" é obrigatório: `new Date("2026-08-15")` é meia-noite UTC, que
+   * em BRT ainda é dia 14 — e o dia da semana sairia errado.
+   */
+  function fimDeSemanaOculto(dataStr){
+    if(showFds) return false;
+    var dow=new Date(dataStr+"T12:00:00").getDay();
+    return dow===0 || dow===6;
+  }
+
+  // Comparação sem acento/caixa: quem digita "producao" tem de achar "produção".
+  function semAcento(s){
+    return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  }
+
+  // O post passa pelo filtro da Agenda? Cada campo nulo = "não filtrar por isto".
+  function agFiltroCasa(p){
+    var f=agFiltro; if(!f) return true;
+    if(f.formato && p.formato!==f.formato) return false;
+    if(f.status && p.status!==f.status) return false;
+    if(f.pilar_id!=null && p.pilar_id!==f.pilar_id) return false;
+    if(f.publico_id!=null && p.publico_id!==f.publico_id) return false;
+    if(f.objetivo_id!=null && p.objetivo_id!==f.objetivo_id) return false;
+    // impulsionar tem três estados: true, false e null ("não falou").
+    if(f.impulsionar!=null && !!p.impulsionar!==f.impulsionar) return false;
+    if(f.titulo && semAcento(p.assunto).indexOf(semAcento(f.titulo))<0) return false;
+    if(f.de && p.data_publicacao<f.de) return false;
+    if(f.ate && p.data_publicacao>f.ate) return false;
+    return true;
+  }
+
+  // ---- grade ----
+  function render(){
+    var y=view.getFullYear(), m=view.getMonth();
+    $("#mlabel").textContent = MESES[m]+" "+y;
+    var cols = showFds ? [0,1,2,3,4,5,6] : [1,2,3,4,5];
+    var tmpl = "repeat("+cols.length+",1fr)";
+    $("#dow").style.gridTemplateColumns = tmpl;
+    $("#dow").innerHTML = cols.map(function(c){return "<div>"+DOW[c]+"</div>";}).join("");
+
+    // agrupa posts por dia
+    var byDay={};
+    visiblePosts().forEach(function(p){ (byDay[p.data_publicacao]=byDay[p.data_publicacao]||[]).push(p); });
+
+    var first=new Date(y,m,1);
+    var start=new Date(first); start.setDate(1-first.getDay()); // volta ao domingo
+    var todayStr=ymd(new Date());
+    var weeks=$("#weeks"); weeks.innerHTML="";
+    var cursor=new Date(start);
+    for(var w=0; w<6; w++){
+      // se a semana inteira é de outro mês (após terminar), para
+      if(w>0 && cursor.getMonth()!==m && cursor>first) {
+        // ainda pode haver dias do mês; só quebra se já passou do fim
+        if(cursor.getFullYear()>y || (cursor.getFullYear()===y && cursor.getMonth()>m)) break;
+      }
+      var row=document.createElement("div"); row.className="week"; row.style.gridTemplateColumns=tmpl;
+      for(var i=0;i<7;i++){
+        var d=new Date(cursor); cursor.setDate(cursor.getDate()+1);
+        if(cols.indexOf(d.getDay())<0) continue;
+        var inMonth=(d.getMonth()===m);
+        var cell=document.createElement("div");
+        cell.className="day"+(inMonth?"":" out")+(ymd(d)===todayStr?" today":"");
+        var dn=document.createElement("div"); dn.className="dn";
+        dn.innerHTML=(ymd(d)===todayStr?"<span>"+d.getDate()+"</span>":d.getDate());
+        cell.appendChild(dn);
+        if(inMonth && me.canEditCalendario){
+          var add=document.createElement("button"); add.className="addday"; add.textContent="+";
+          (function(ds){ add.onclick=function(e){ e.stopPropagation(); openPost(null, ds); }; })(ymd(d));
+          cell.appendChild(add);
+        }
+        var dayPosts = byDay[ymd(d)]||[];
+        dayPosts.forEach(function(p){ cell.appendChild(chipEl(p)); });
+        row.appendChild(cell);
+      }
+      weeks.appendChild(row);
+    }
+    // A barra de filtro ativo é desenhada aqui de propósito: assim ela reflete
+    // também as mudanças feitas direto nos dropdowns, não só as da Agenda.
+    agRenderFiltro();
+    // A vitrine fala do que está NA GRADE, então segue o mesmo gancho. Só vai à
+    // rede quando mês ou cliente realmente mudaram — render() roda a cada mexida
+    // de filtro, e uma requisição por clique aqui seria caro à toa.
+    agSugestoesSeMudou();
+    // A grade foi redesenhada do zero: as marcas do comando atual (anel do alvo,
+    // números dos candidatos) morreram com os cartões antigos. Repõe — senão
+    // navegar de mês ou mexer num filtro apagaria em silêncio o alvo que a pessoa
+    // está conferindo. Barato: é uma consulta por id, não um novo interpretar.
+    if(typeof agPlano !== "undefined" && agPlano) agMarcarNaGrade(agPlano);
+  }
+
+  function chipEl(p){
+    var pub = (p.status==="Publicado");
+    var b=document.createElement("button");
+    b.className="chip"+(pub?" pub":"")+(p.id===agPostDestaque?" novo":"");
+    // O id no DOM é o que deixa a Agenda achar o cartão para pôr o anel do alvo
+    // (ou o número do candidato) sem varrer a grade nem redesenhá-la.
+    b.dataset.postId = p.id;
+    b.style.borderLeftColor = FMT_COR[p.formato]||"var(--cinza)";
+    var meta=[];
+    if(clientesFiltro.length!==1 && p.cliente_nome) meta.push(esc(p.cliente_nome));
+    meta.push(esc(p.formato));
+    if(p.horario) meta.push(esc(p.horario));
+    var impMark = p.impulsionar ? ' <span class="imp" title="Impulsionar">▲</span>' : '';
+    b.innerHTML =
+      (me.canToggleCalendarioStatus ? '<span class="ck" title="Alternar publicado">✓</span>' : '')+
+      '<span class="assunto">'+esc(p.assunto)+impMark+'</span>'+
+      '<span class="meta">'+meta.join(" · ")+'</span>';
+    b.onclick=function(){
+      // Cartão NUMERADO responde a pergunta "qual post?" em vez de abrir o modal
+      // (§8.8). Fica aqui, e não num listener posto ao marcar, para o comportamento
+      // normal voltar sozinho quando a marca sai — sem guardar o onclick antigo.
+      if(b.classList.contains("cand")){ agResponderAlvoPeloCartao(p.id); return; }
+      openPost(p.id);
+    };
+    if(me.canToggleCalendarioStatus){
+      var ck=$(".ck",b);
+      if(ck) ck.onclick=function(e){ e.stopPropagation(); toggleStatus(p); };
+    }
+    return b;
+  }
+
+  async function toggleStatus(p){
+    var novo = (p.status==="Publicado") ? "Não publicado" : "Publicado";
+    try{
+      await api("/posts/"+p.id+"/status",{method:"PATCH",body:JSON.stringify({status:novo})});
+      p.status=novo; render();
+      toast('Status: '+novo);
+    }catch(e){ toast(e.message,true); }
+  }
+
+  // ---- modal post ----
+  // Cliente sugerido ao criar post: o único selecionado no filtro (se houver
+  // exatamente um) ou o primeiro cliente da lista.
+  function defaultCliente(){
+    return clientesFiltro.length===1 ? clientesFiltro[0] : ((listas.clientes[0]&&listas.clientes[0].id)||0);
+  }
+  function openPost(id, dateStr){
+    if(id && !me.canToggleCalendarioStatus && !me.canEditCalendario) return;
+    editingId = id;
+    var p = id ? posts.filter(function(x){return x.id===id;})[0] : null;
+    var canEdit = me.canEditCalendario;
+    $("#modal-title").textContent = id ? (canEdit?"Editar post":"Detalhes do post") : "Novo post";
+
+    fillSelect($("#m-cliente"), listas.clientes, false);
+    $("#m-formato").innerHTML = FORMATOS.map(function(f){return '<option>'+esc(f.nome)+'</option>';}).join("");
+    $("#m-status").innerHTML = STATUSES.map(function(s){return '<option>'+esc(s)+'</option>';}).join("");
+    // Selects de Pilar/Público/Objetivo filtrados pelo cliente do post (opções
+    // exclusivas de outra marca não aparecem); mantém a opção já atribuída.
+    var cliId = p ? p.cliente_id : defaultCliente();
+    refreshOptSelects(cliId, p ? {pilar:p.pilar_id, publico:p.publico_id, objetivo:p.objetivo_id} : {});
+    var rp=$("#m-redes"); rp.innerHTML="";
+    REDES.forEach(function(r){
+      var checked = p && p.redes.indexOf(r)>=0;
+      var lab=document.createElement("label");
+      lab.innerHTML='<input type="checkbox" value="'+r+'"'+(checked?" checked":"")+'/> '+r;
+      rp.appendChild(lab);
+    });
+
+    $("#m-assunto").value = p?p.assunto:"";
+    $("#m-cliente").value = p?p.cliente_id:(defaultCliente()||"");
+    $("#m-formato").value = p?p.formato:"Stories";
+    $("#m-datapub").value = p?p.data_publicacao:(dateStr||ymd(new Date()));
+    $("#m-horario").value = p&&p.horario?p.horario:"";
+    $("#m-status").value = p?p.status:"Não iniciado";
+    $("#m-pilar").value = p&&p.pilar_id?p.pilar_id:"";
+    $("#m-publico").value = p&&p.publico_id?p.publico_id:"";
+    $("#m-objetivo").value = p&&p.objetivo_id?p.objetivo_id:"";
+    $("#m-impulsionar").checked = !!(p&&p.impulsionar);
+    $("#m-conteudo").value = p&&p.conteudo?p.conteudo:"";
+    $("#modal-err").textContent="";
+
+    // Permissões: quem não edita só pode mexer no status (se puder).
+    var inputs = document.querySelectorAll("#modal .modal-body input, #modal .modal-body select, #modal .modal-body textarea");
+    inputs.forEach(function(el){ el.disabled = !canEdit && el.id!=="m-status"; });
+    if(!canEdit){ $("#m-status").disabled = !me.canToggleCalendarioStatus; }
+    $("#modal-save").style.display = (canEdit || me.canToggleCalendarioStatus) ? "" : "none";
+    $("#modal-del").style.visibility = (id && canEdit) ? "visible" : "hidden";
+
+    $("#modal").classList.add("open");
+  }
+  function closePost(){ $("#modal").classList.remove("open"); editingId=null; }
+
+  function readForm(){
+    var redes=[]; document.querySelectorAll("#m-redes input:checked").forEach(function(c){redes.push(c.value);});
+    return {
+      cliente_id: Number($("#m-cliente").value)||null,
+      assunto: $("#m-assunto").value.trim(),
+      formato: $("#m-formato").value,
+      data_publicacao: $("#m-datapub").value,
+      horario: $("#m-horario").value||null,
+      status: $("#m-status").value,
+      pilar_id: $("#m-pilar").value?Number($("#m-pilar").value):null,
+      publico_id: $("#m-publico").value?Number($("#m-publico").value):null,
+      objetivo_id: $("#m-objetivo").value?Number($("#m-objetivo").value):null,
+      impulsionar: $("#m-impulsionar").checked,
+      conteudo: $("#m-conteudo").value.trim()||null,
+      redes: redes
+    };
+  }
+  async function savePost(){
+    // Sem permissão de edição: só grava o status (perfil calendario-status).
+    if(!me.canEditCalendario){
+      if(!editingId){ closePost(); return; }
+      var p=posts.filter(function(x){return x.id===editingId;})[0];
+      try{ await api("/posts/"+editingId+"/status",{method:"PATCH",body:JSON.stringify({status:$("#m-status").value})});
+        if(p)p.status=$("#m-status").value; render(); closePost(); toast("Status atualizado");
+      }catch(e){ $("#modal-err").textContent=e.message; }
+      return;
+    }
+    var body=readForm();
+    if(!body.assunto){ $("#modal-err").textContent="Informe o assunto."; return; }
+    if(!body.cliente_id){ $("#modal-err").textContent="Selecione o cliente."; return; }
+    if(!body.data_publicacao){ $("#modal-err").textContent="Informe a data de publicação."; return; }
+    try{
+      if(editingId){ await api("/posts/"+editingId,{method:"PATCH",body:JSON.stringify(body)}); }
+      else{ await api("/posts",{method:"POST",body:JSON.stringify(body)}); }
+      // ★ `editingId` tem de ser lido ANTES de closePost(), que o zera — senão o
+      // toast dizia "Post criado" em toda EDIÇÃO. Defeito antigo, achado ao
+      // exercitar a remoção do campo Data original (2026-08-26).
+      var eraEdicao = !!editingId;
+      closePost(); await loadPosts(); render(); toast(eraEdicao?"Post atualizado":"Post criado");
+    }catch(e){ $("#modal-err").textContent=e.message; }
+  }
+  async function delPost(){
+    if(!editingId) return;
+    if(!confirm("Excluir este post?")) return;
+    try{ await api("/posts/"+editingId,{method:"DELETE"}); closePost(); await loadPosts(); render(); toast("Post excluído"); }
+    catch(e){ $("#modal-err").textContent=e.message; }
+  }
+
+  // ---- gerenciar listas ----
+  var listaTab="clientes";
+  var TAB_DEF=[{k:"clientes",label:"Clientes",cat:null},{k:"pilares",label:"Pilar",cat:"pilar"},
+               {k:"publicos",label:"Público",cat:"publico"},{k:"objetivos",label:"Objetivo",cat:"objetivo"}];
+  function openListas(){ listaTab="clientes"; renderTabs(); renderListaItems(); $("#listas").classList.add("open"); }
+  function closeListas(){ $("#listas").classList.remove("open"); }
+  function renderTabs(){
+    $("#listas-tabs").innerHTML="";
+    TAB_DEF.forEach(function(t){
+      var b=document.createElement("button"); b.className="tab"+(t.k===listaTab?" on":""); b.textContent=t.label;
+      b.onclick=function(){ listaTab=t.k; renderTabs(); renderListaItems(); }; $("#listas-tabs").appendChild(b);
+    });
+  }
+  function curTabDef(){ return TAB_DEF.filter(function(t){return t.k===listaTab;})[0]; }
+  function scopeLabel(o){
+    var n = (o.clientes||[]).length;
+    if(!n) return "Todos os clientes";
+    if(n===1) return opcaoNome("clientes", o.clientes[0]) || "1 cliente";
+    return n+" clientes";
+  }
+  function renderListaItems(){
+    var box=$("#listas-items"); box.innerHTML="";
+    var isCliente = listaTab==="clientes";
+    (listas[listaTab]||[]).forEach(function(o){
+      var row=document.createElement("div"); row.className="litem"+(o.ativo===false?" off":"");
+      row.innerHTML='<span class="nome">'+esc(o.nome)+'</span>';
+      if(!isCliente){
+        var sc=document.createElement("button"); sc.className="minibtn scope"; sc.textContent="👥 "+scopeLabel(o);
+        sc.title="Definir a quais clientes este item é exclusivo";
+        sc.onclick=function(){ openScope(o); };
+        row.appendChild(sc);
+      }
+      var ren=document.createElement("button"); ren.className="minibtn"; ren.textContent="Renomear";
+      ren.onclick=function(){ renameItem(o); };
+      var tog=document.createElement("button"); tog.className="minibtn"; tog.textContent=o.ativo===false?"Ativar":"Ocultar";
+      tog.onclick=function(){ toggleItem(o); };
+      var del=document.createElement("button"); del.className="minibtn"; del.textContent="Excluir";
+      del.onclick=function(){ deleteItem(o); };
+      row.appendChild(ren); row.appendChild(tog); row.appendChild(del); box.appendChild(row);
+    });
+  }
+
+  // ---- escopo por cliente (Pilar/Público/Objetivo exclusivos a certas marcas) ----
+  var scopeItem=null;
+  function openScope(o){
+    scopeItem=o;
+    $("#scope-title").textContent='Exclusivo a quais clientes? — "'+o.nome+'"';
+    var box=$("#scope-list"); box.innerHTML="";
+    var sel=(o.clientes||[]);
+    (listas.clientes||[]).forEach(function(c){
+      var lab=document.createElement("label"); lab.className="switch"; lab.style.gap="8px";
+      lab.innerHTML='<input type="checkbox" value="'+c.id+'"'+(sel.indexOf(c.id)>=0?" checked":"")+'/> '+esc(c.nome);
+      box.appendChild(lab);
+    });
+    $("#scopebg").classList.add("open");
+  }
+  function closeScope(){ $("#scopebg").classList.remove("open"); scopeItem=null; }
+  async function saveScope(clearAll){
+    if(!scopeItem) return;
+    var ids=[];
+    if(!clearAll){ document.querySelectorAll("#scope-list input:checked").forEach(function(c){ ids.push(Number(c.value)); }); }
+    try{
+      await api("/opcoes/"+scopeItem.id,{method:"PATCH",body:JSON.stringify({clientes:ids})});
+      closeScope(); await refreshListas(); toast("Escopo atualizado");
+    }catch(e){ toast(e.message,true); }
+  }
+  function itemPath(id){ return listaTab==="clientes" ? ("/clientes/"+(id||"")) : ("/opcoes/"+(id||"")); }
+  function createPath(){ var t=curTabDef(); return t.cat?("/opcoes/"+t.cat):"/clientes"; }
+  async function addItem(){
+    var nome=$("#listas-input").value.trim(); if(!nome) return;
+    try{ await api(createPath(),{method:"POST",body:JSON.stringify({nome:nome})}); $("#listas-input").value="";
+      await refreshListas(); toast("Adicionado"); }catch(e){ toast(e.message,true); }
+  }
+  async function renameItem(o){
+    var nome=prompt("Novo nome:", o.nome); if(nome===null) return; nome=nome.trim(); if(!nome) return;
+    try{ await api(itemPath(o.id),{method:"PATCH",body:JSON.stringify({nome:nome})}); await refreshListas(); }
+    catch(e){ toast(e.message,true); }
+  }
+  async function toggleItem(o){
+    try{ await api(itemPath(o.id),{method:"PATCH",body:JSON.stringify({ativo:o.ativo===false})}); await refreshListas(); }
+    catch(e){ toast(e.message,true); }
+  }
+  async function deleteItem(o){
+    if(!confirm('Excluir "'+o.nome+'"?')) return;
+    try{ await api(itemPath(o.id),{method:"DELETE"}); await refreshListas(); toast("Excluído"); }
+    catch(e){ toast(e.message,true); }
+  }
+  async function refreshListas(){ await loadListas(); populateFilters(); renderListaItems(); await loadPosts(); render(); }
+
+  // ---- eventos ----
+  function bind(){
+    // agSoltarPeriodo(): navegar de mês contradiz um período aplicado pela
+    // Agenda ("em julho" e depois clicar ›). As outras dimensões continuam.
+    $("#prev").onclick=async function(){ agSoltarPeriodo(); view.setMonth(view.getMonth()-1); await loadPosts(); render(); };
+    $("#next").onclick=async function(){ agSoltarPeriodo(); view.setMonth(view.getMonth()+1); await loadPosts(); render(); };
+    $("#hoje").onclick=async function(){ agSoltarPeriodo(); view=new Date(); view.setDate(1); await loadPosts(); render(); };
+    $("#fFds").onchange=function(){ showFds=$("#fFds").checked; render(); };
+    $("#btnNovo").onclick=function(){ openPost(null); };
+    $("#btnListas").onclick=openListas;
+    $("#modal-close").onclick=closePost; $("#modal-cancel").onclick=closePost;
+    $("#modal-save").onclick=savePost; $("#modal-del").onclick=delPost;
+    // Trocar o cliente no modal re-filtra Pilar/Público/Objetivo, preservando o
+    // que já estava escolhido (se a opção continuar válida para o novo cliente).
+    $("#m-cliente").onchange=function(){
+      var cur={pilar:$("#m-pilar").value, publico:$("#m-publico").value, objetivo:$("#m-objetivo").value};
+      refreshOptSelects(Number($("#m-cliente").value),
+        {pilar:Number(cur.pilar)||0, publico:Number(cur.publico)||0, objetivo:Number(cur.objetivo)||0});
+      $("#m-pilar").value=cur.pilar; $("#m-publico").value=cur.publico; $("#m-objetivo").value=cur.objetivo;
+    };
+    $("#listas-close").onclick=closeListas; $("#listas-done").onclick=closeListas;
+    $("#listas-add").onclick=addItem;
+    $("#listas-input").addEventListener("keydown",function(e){ if(e.key==="Enter") addItem(); });
+    $("#scope-close").onclick=closeScope; $("#scope-cancel").onclick=closeScope;
+    $("#scope-save").onclick=function(){ saveScope(false); };
+    $("#scope-none").onclick=function(){ saveScope(true); };
+    [$("#modal"),$("#listas"),$("#scopebg")].forEach(function(bg){ bg.addEventListener("click",function(e){ if(e.target===bg) bg.classList.remove("open"); }); });
+    // Fecha os dropdowns de filtro ao clicar fora deles.
+    document.addEventListener("click",function(e){ if(!e.target.closest(".msdd")) closeAllDropdowns(); });
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ closePost(); closeListas(); closeScope(); closeAllDropdowns(); } });
+  }
+
+  // ==========================================================================
+  //  AGENDA INTELIGENTE (v2) — interpretação ao vivo
+  // ==========================================================================
+  // Contrato: o front NÃO interpreta nada. Ele manda o texto + o contexto da
+  // tela (data de hoje LOCAL e mês visível na grade) para
+  // POST /api/calendario/agenda/interpretar e desenha o plano que volta.
+  // Uma fonte de verdade só, no Worker, testada por `npm run test:agenda`.
+  //
+  // Aplicáveis hoje: consultar (filtra, escrita zero), criar, mover e trocar
+  // status. Alterar e remover seguem em dry-run — a tela responde "a ferramenta
+  // entendeu o que eu escrevi?" antes de existir botão que grave.
+  var AG_DEBOUNCE = 320;      // ms após a última tecla
+  var AG_MIN = 4;             // não vale interpretar "Inc"
+  var agTimer = null, agSeq = 0, agUltimo = "", agUi = null, agPlano = null;
+  // Respostas HUMANAS às perguntas do parser, enviadas ao aplicar (fase 2).
+  // Zeradas a cada nova interpretação: texto novo = perguntas novas, e um
+  // `trecho` de antes pode nem existir mais no comando.
+  var agResolucoes = {};
+  var agEnviando = false;     // trava contra duplo Enter / duplo clique
+  var agPostDestaque = null;  // id do post que o último comando criou OU alterou
+  /** Intenções que GRAVAM (o Enter delas escreve). Desde a 4.2, TODAS gravam. */
+  var ESCREVEM = {criar:true, mover:true, status:true, remover:true, alterar:true};
+
+  // ── A ILHA: estados, canto e anticolisão ───────────────────────────────────
+  // ★ A ilha NÃO FECHA (§8.8, pergunta aberta nº 5). Do tamanho de um campo de
+  // texto, esconder e reabrir custaria mais do que economiza — e a FAB do §8.6,
+  // que só existia porque o dock desaparecia por inteiro, morreu junto. O que se
+  // lembra entre visitas, portanto, não é "aberto/fechado": é o CANTO.
+  var ILHA_CANTO_CHAVE = "cal2.ilha.canto";
+  /** Ordem do botão de canto: gira sempre no mesmo sentido, porque previsível
+   *  vale mais que ótimo — dois cliques têm de levar sempre ao mesmo lugar. */
+  var CANTOS = ["bd","be","ce","cd"];
+  var CANTO_NOME = {bd:"canto inferior direito", be:"canto inferior esquerdo",
+                    ce:"canto superior esquerdo", cd:"canto superior direito"};
+  /** Canto para cada seta do Alt+seta — a alternativa de teclado ao botão. */
+  var CANTO_SETA = {ArrowLeft:{bd:"be", cd:"ce", be:"be", ce:"ce"},
+                    ArrowRight:{be:"bd", ce:"cd", bd:"bd", cd:"cd"},
+                    ArrowUp:{bd:"cd", be:"ce", cd:"cd", ce:"ce"},
+                    ArrowDown:{cd:"bd", ce:"be", bd:"bd", be:"be"}};
+  var ILHA_MARG = 18;      // espelha --ilha-marg
+  var ILHA_MOBILE = 700;   // espelha o @media (max-width:700px)
+
+  var ilhaCanto = localStorage.getItem(ILHA_CANTO_CHAVE) || "bd";
+  if(CANTOS.indexOf(ilhaCanto) < 0) ilhaCanto = "bd";
+  var ilhaLogAberto = false;
+  var ilhaFocada = false;
+  var ilhaDesviou = false;   // ★ no máximo UM salto por comando
+
+  /**
+   * Fonte única do estado visual da ilha. Quem muda algo chama isto, em vez de
+   * mexer em classe na mão: são quatro estados que se COMBINAM (repouso, vitrine,
+   * registro aberto, comando escrito), e espalhá-los seria o jeito garantido de a
+   * pílula acabar grande e vazia — ou pequena com conteúdo dentro.
+   */
+  function ilhaSincronizar(){
+    var il = $("#ilha");
+    var texto = $("#ag-texto").value.trim();
+    // A VITRINE aparece ao FOCAR, antes de digitar (§8.8, pergunta aberta nº 1):
+    // é o instante exato em que a pessoa precisa saber o que dizer. Com comando
+    // escrito, quem ocupa o lugar é o plano — as sugestões não somem, só esperam,
+    // e é por isso que elas podem sair da tela em repouso sem perder a função de
+    // ensinar o vocabulário a quem nunca usou.
+    var vitrine = ilhaFocada && !texto && agSugCache.length > 0 && !ilhaLogAberto;
+    il.setAttribute("data-canto", ilhaCanto);
+    il.classList.toggle("vitrine", vitrine);
+    il.classList.toggle("log-aberto", ilhaLogAberto);
+    il.classList.toggle("com-texto", !!texto);
+    il.classList.toggle("cresceu", vitrine || ilhaLogAberto || !!texto);
+    $("#cop-hist").hidden = !ilhaLogAberto;
+
+    // Selo do registro: um número, não um chat. Abre por CLIQUE (§8.8, nº 2) —
+    // hover em elemento flutuante é frágil e simplesmente não existe no toque.
+    var selo = $("#ilha-selo"), n = agHistorico.length;
+    selo.hidden = !n;
+    selo.textContent = "☰ " + n;
+    selo.title = n + (n===1 ? " comando nesta sessão" : " comandos nesta sessão")
+               + " — clique para " + (ilhaLogAberto ? "fechar" : "ver") + " o registro";
+    selo.setAttribute("aria-expanded", ilhaLogAberto ? "true" : "false");
+
+    // ★ Desfazer FORA do selo: a regra do §8.4 é que a rede de segurança fica no
+    // caminho de quem acabou de agir. Atrás de um clique no registro ela seria o
+    // "menu" que a fase 4.1 recusou.
+    $("#ilha-desfazer").hidden = agIndiceDesfazivel() < 0;
+
+    var bc = $("#ilha-canto");
+    var prox = CANTOS[(CANTOS.indexOf(ilhaCanto) + 1) % CANTOS.length];
+    bc.title = "Mover a Agenda para o " + CANTO_NOME[prox] + " (ou Alt + setas)";
+    bc.setAttribute("aria-label", bc.title);
+  }
+
+  function ilhaIrPara(canto){
+    if(CANTOS.indexOf(canto) < 0 || canto === ilhaCanto) return;
+    ilhaCanto = canto;
+    try{ localStorage.setItem(ILHA_CANTO_CHAVE, canto); }catch(e){}
+    ilhaSincronizar();
+  }
+  function ilhaGirarCanto(){
+    ilhaIrPara(CANTOS[(CANTOS.indexOf(ilhaCanto) + 1) % CANTOS.length]);
+  }
+
+  /** Retângulo que a ilha OCUPARIA num canto — sem movê-la para descobrir. */
+  function ilhaRetEm(canto, w, h){
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var esq = (canto === "be" || canto === "ce") ? ILHA_MARG : vw - ILHA_MARG - w;
+    var top = (canto === "cd" || canto === "ce") ? ILHA_MARG : vh - ILHA_MARG - h;
+    return {left:esq, top:top, right:esq + w, bottom:top + h};
+  }
+  function seCruzam(a, b){
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
+
+  /**
+   * ★ ANTICOLISÃO — é por isto que a ilha foi escolhida entre as seis maquetes.
+   *
+   * A patologia registrada no §8.6 era: o painel cresce justamente quando há algo
+   * a decidir, cobrindo a grade que a pessoa precisa olhar PARA decidir. O dock
+   * tolerava a colisão; a ilha sai da frente.
+   *
+   * As três regras existem todas para a tela não ficar nervosa:
+   *   1. Só salta quando o retângulo da ilha REALMENTE cruza um cartão marcado —
+   *      não por precaução, nem "sempre que houver alvo".
+   *   2. No máximo UM salto por comando (`ilhaDesviou`, zerado a cada texto novo).
+   *   3. Vai para o primeiro canto LIVRE na ordem do botão. Se nenhum estiver
+   *      livre, fica onde está: trocar uma colisão por outra é só movimento.
+   *
+   * O movimento é a transição de CSS, e ela É o rastro: o olho segue. Um fantasma
+   * deixado no canto antigo seria sujeira permanente por um ganho de um instante.
+   * Com `prefers-reduced-motion` o navegador suprime a transição e o salto fica
+   * seco — o que continua correto, porque o valor está em SAIR da frente.
+   */
+  function ilhaDesviar(){
+    if(ilhaDesviou) return;
+    if(window.innerWidth <= ILHA_MOBILE) return;   // barra inferior: não há para onde
+    var marcados = document.querySelectorAll(".chip.alvo, .chip.cand");
+    if(!marcados.length) return;
+
+    var il = $("#ilha");
+    // ★ A largura vem da VARIÁVEL, não de offsetWidth: `cresceu` acabou de entrar
+    // e a transição de .18s ainda está no meio, então medir devolveria um valor
+    // interpolado e a conta erraria. A altura pode ser medida (não é transicionada).
+    var cs = getComputedStyle(document.documentElement);
+    var alvoW = parseFloat(cs.getPropertyValue(
+      il.classList.contains("cresceu") ? "--ilha-w" : "--ilha-rep")) || 390;
+    var w = Math.min(alvoW, window.innerWidth - ILHA_MARG * 2);
+    var h = il.offsetHeight;
+
+    var cartoes = [];
+    Array.prototype.forEach.call(marcados, function(el){
+      cartoes.push(el.getBoundingClientRect());
+    });
+    function livre(canto){
+      var r = ilhaRetEm(canto, w, h);
+      for(var i=0;i<cartoes.length;i++){ if(seCruzam(r, cartoes[i])) return false; }
+      return true;
+    }
+
+    ilhaDesviou = true;              // tentou: não tenta outra vez neste comando
+    if(livre(ilhaCanto)) return;     // já está fora do caminho
+    var i0 = CANTOS.indexOf(ilhaCanto);
+    for(var k=1;k<CANTOS.length;k++){
+      var c = CANTOS[(i0 + k) % CANTOS.length];
+      if(livre(c)){ ilhaIrPara(c); return; }
+    }
+  }
+
+  // ── O comando na GRADE (enxerto do prato 02 do estudo, §8.8) ───────────────
+  // O chip "Post encontrado" descreve em TEXTO um post que a grade pode MOSTRAR.
+  var NUM_CIRC = ["","①","②","③","④","⑤","⑥"];
+
+  function agLimparMarcas(){
+    Array.prototype.forEach.call(document.querySelectorAll(".chip.alvo, .chip.cand"),
+      function(el){
+        el.classList.remove("alvo","cand");
+        var n = $(".num", el); if(n) n.remove();
+      });
+  }
+
+  /**
+   * Marca no calendário o post que o comando encontrou (anel azul) ou os
+   * candidatos que ele precisa desempatar (número âmbar).
+   *
+   * ★ SOMA à lista de texto do painel, não substitui: o candidato pode estar em
+   * OUTRO mês, e aí não existe cartão para marcar. Não achar nada é normal aqui.
+   */
+  function agMarcarNaGrade(plano){
+    agLimparMarcas();
+    var alvo = plano && plano.alvo;
+    if(!alvo) return;
+    if(alvo.estado === "resolvido" && alvo.escolhido){
+      agMarcarCartao(alvo.escolhido.id, "alvo", null);
+    }else if(alvo.estado === "perguntar"){
+      (alvo.candidatos||[]).forEach(function(c,i){ agMarcarCartao(c.id, "cand", i+1); });
+    }
+  }
+  function agMarcarCartao(id, classe, numero){
+    var el = document.querySelector('.chip[data-post-id="'+id+'"]');
+    if(!el) return;
+    el.classList.add(classe);
+    if(numero != null){
+      var s = document.createElement("span");
+      s.className = "num"; s.textContent = NUM_CIRC[numero] || numero;
+      el.appendChild(s);
+    }
+  }
+
+  /**
+   * Clicar num cartão numerado RESPONDE "qual post?" — pelo mesmo caminho do
+   * botão de opção no painel: a escolha volta ao servidor (§8.3), porque é ele
+   * que sabe se aquele post já está na data pedida e é ele que devolve o chip do
+   * alvo com os dados reais. A diferença é só ONDE se decide: olhando os posts no
+   * mês, não uma lista de títulos parecidos dentro de um painel.
+   */
+  function agResponderAlvoPeloCartao(id){
+    agResolucoes.alvo = {acao:"escolher", id:id};
+    agInterpretar(agUltimo, true);
+  }
+
+  // ── Registro da sessão ─────────────────────────────────────────────────────
+  // Memória de TRABALHO, não histórico: vive só em memória e some no F5 (decisão
+  // do usuário). O log de verdade continua no D1 desde a fase 4.1 — é ele que
+  // sustenta o Desfazer e a auditoria; isto aqui é a visão do que EU acabei de
+  // fazer, para não precisar reler a grade a cada comando.
+  var agHistorico = [];
+  var JANELA_DESFAZER_MS = 60*60*1000;   // espelha JANELA_DESFAZER_MIN do servidor
+
+  /** @param tipo 'ok' (gravou) | 'consulta' (filtrou) | 'err' (recusado) */
+  function agRegistrar(tipo, texto, resultado, logId){
+    agHistorico.push({
+      tipo:tipo, texto:texto, resultado:resultado,
+      logId:logId||null, quando:Date.now(), desfeito:false
+    });
+    agRenderHistorico();
+  }
+
+  /**
+   * ★ O Desfazer aparece em UMA linha só — a última que gravou e ainda não foi
+   * desfeita. Não é economia de botão: a rota `/agenda/desfazer` é uma PILHA
+   * (desfaz o último comando da pessoa, §6.2), então oferecer o botão em toda
+   * linha prometeria escolher qual reverter e faria outra coisa. Depois de
+   * desfazer, o botão migra sozinho para a linha anterior — que é exatamente o
+   * que o servidor passará a reverter.
+   */
+  /**
+   * Índice da última linha que o servidor reverteria — a mesma régua que a rota
+   * usa (última da PESSOA, gravável, não desfeita, dentro da janela). Extraída
+   * porque agora tem dois leitores: o registro (para pôr o botão na linha certa) e
+   * o selo da ilha (para decidir se o Desfazer existe na pílula).
+   */
+  function agIndiceDesfazivel(){
+    for(var i=agHistorico.length-1;i>=0;i--){
+      var h=agHistorico[i];
+      if(h.tipo==="ok" && h.logId && !h.desfeito && (Date.now()-h.quando)<JANELA_DESFAZER_MS) return i;
+    }
+    return -1;
+  }
+
+  function agRenderHistorico(){
+    var box=$("#cop-hist"); box.innerHTML="";
+    ilhaSincronizar();   // o selo conta as linhas; o Desfazer da pílula depende delas
+    if(!agHistorico.length){
+      var v=document.createElement("div"); v.className="cop-vazio";
+      v.textContent="Diga o que você quer fazer.";
+      box.appendChild(v);
+      return;
+    }
+    var alvoDesfazer=agIndiceDesfazivel();
+    agHistorico.forEach(function(h,i){
+      var d=document.createElement("div");
+      d.className="hist-item "+h.tipo+(h.desfeito?" desfeito":"");
+      var c=document.createElement("div"); c.className="cmd"; c.textContent=h.texto;
+      var r=document.createElement("div"); r.className="res"; r.textContent=h.resultado;
+      d.appendChild(c); d.appendChild(r);
+      if(i===alvoDesfazer){
+        var b=document.createElement("button");
+        b.type="button"; b.className="hist-desfazer"; b.textContent="↶ Desfazer";
+        b.onclick=agDesfazer;
+        d.appendChild(b);
+      }
+      box.appendChild(d);
+    });
+    // Comando novo vai para o fim: a faixa rola até ele, como um registro.
+    var corpo=$("#cop-corpo"); corpo.scrollTop=corpo.scrollHeight;
+  }
+
+  /** Marca a última linha gravável como desfeita (o Desfazer migra sozinho). */
+  function agMarcarDesfeito(){
+    for(var i=agHistorico.length-1;i>=0;i--){
+      if(agHistorico[i].tipo==="ok" && !agHistorico[i].desfeito){ agHistorico[i].desfeito=true; break; }
+    }
+    agRenderHistorico();
+  }
+
+  // ── Sugestões verificadas ──────────────────────────────────────────────────
+  // Vêm de GET /agenda/sugestoes, montadas a partir do dado que está NA GRADE e
+  // já passadas pelo parser no servidor: o que aparece aqui executa (ver o topo
+  // de src/calendario/agenda-sugestoes.js). Substituem as nove frases fixas que
+  // moravam neste arquivo e citavam posts que podiam nem existir mais.
+  //
+  // Buscadas por EVENTO — abrir o painel, trocar de mês, trocar de cliente,
+  // pedir outras ideias, concluir um comando —, nunca por tecla.
+  var agSemente = 0, agSugSeq = 0, agSugCtx = "", agSugCache = [];
+  var AG_VERBO_SUG = {consultar:"Consultar", criar:"Criar", mover:"Mover",
+                      status:"Trocar status", alterar:"Alterar", remover:"Remover"};
+
+  /**
+   * BUSCA as sugestões. Separada de agRenderSugestoes de propósito: desenhar
+   * acontece a toda hora (a vitrine some e volta conforme o campo enche e
+   * esvazia), buscar não pode — `agLimpar` roda a cada tecla enquanto o texto
+   * ainda é curto, e uma requisição ali seria query por keystroke, o padrão que
+   * está na fila de "Revisão do Repositório" do hub.
+   */
+  async function agSugestoes(girar){
+    // Não há mais guarda de "painel aberto": a ilha não fecha. A economia que a
+    // guarda fazia continua de pé pelo outro lado — a busca é por EVENTO
+    // (abrir a vitrine, trocar de mês/cliente, girar, concluir comando), jamais
+    // por tecla.
+    agSemente = girar ? (agSemente + 1) : agSemente;
+    var seq = ++agSugSeq;
+    var ctx = agContexto();
+    try{
+      var qs = "?mes="+encodeURIComponent(ctx.mes)+"&hoje="+encodeURIComponent(ctx.hoje)
+             + "&semente="+agSemente + (ctx.cliente_id ? "&cliente_id="+ctx.cliente_id : "");
+      var r = await fetch(API+"/agenda/sugestoes"+qs, {headers:{Accept:"application/json"}});
+      var d = await r.json();
+      if(seq!==agSugSeq) return;                       // resposta velha: descarta
+      agSugCache = (d.ok && d.sugestoes) || [];
+    }catch(e){
+      if(seq!==agSugSeq) return;
+      agSugCache = [];                                 // sem vitrine, o resto vive
+    }
+    agRenderSugestoes();
+  }
+
+  function agRenderSugestoes(){
+    var lista = agSugCache;
+    var box=$("#cop-sug"); box.innerHTML="";
+    ilhaSincronizar();   // a vitrine ter ou não conteúdo decide se a ilha cresce
+    // Some enquanto há comando escrito: sugestão é para a folha em branco.
+    if(!lista.length || $("#ag-texto").value.trim()){ box.hidden=true; return; }
+    box.hidden=false;
+
+    // ★ O cabeçalho NOMEIA a ferramenta. Em repouso a ilha é só um campo de texto;
+    // é aqui — no primeiro foco, antes de digitar — que quem nunca viu a Agenda
+    // descobre o que ela é. Era o papel do rótulo da FAB no §8.6.
+    var cab=document.createElement("div"); cab.className="cab";
+    cab.appendChild(document.createTextNode("Agenda Inteligente · experimente"));
+    var g=document.createElement("button");
+    g.type="button"; g.className="girar"; g.textContent="↻ outras ideias";
+    g.title="Mostra outros comandos possíveis com o que está na grade";
+    g.onclick=function(){ agSugestoes(1); };
+    cab.appendChild(g);
+    box.appendChild(cab);
+
+    lista.forEach(function(s){
+      var b=document.createElement("button");
+      b.type="button"; b.className="sug"+(s.perigo?" perigo":"");
+      var v=document.createElement("span"); v.className="verbo";
+      v.textContent=AG_VERBO_SUG[s.intencao]||s.intencao;
+      b.appendChild(v);
+      b.appendChild(document.createTextNode(s.texto));
+      // ★ PREENCHE, nunca executa — vale inclusive para a de remover. A promessa
+      // dos chips é ver antes de agir, e uma sugestão que agisse sozinha seria a
+      // primeira coisa da tela a quebrá-la.
+      b.onclick=function(){
+        $("#ag-texto").value=s.texto; agUltimo=""; agAoDigitar();
+        $("#ag-texto").focus();
+      };
+      box.appendChild(b);
+    });
+  }
+
+  /**
+   * Rebusca a vitrine quando o CONTEXTO da grade muda (mês ou cliente do
+   * filtro) — e só então. Chamada de dentro de render(), que roda a cada mexida
+   * de filtro; a comparação de chave é o que impede uma requisição por clique.
+   */
+  function agSugestoesSeMudou(){
+    var c=agContexto();
+    var chave=c.mes+"|"+(c.cliente_id||"");
+    if(chave===agSugCtx) return;
+    agSugCtx=chave;
+    agSugestoes(0);
+  }
+
+  function agContexto(){
+    var hoje = new Date();
+    return {
+      hoje: ymd(hoje),                                                   // data LOCAL de quem digita
+      mes: view.getFullYear()+"-"+pad(view.getMonth()+1),                // mês aberto na grade
+      cliente_id: clientesFiltro.length===1 ? clientesFiltro[0] : null   // cliente do filtro, se único
+    };
+  }
+
+  function agRotulo(campo){
+    return (agUi && agUi.rotulos && agUi.rotulos[campo]) || campo;
+  }
+
+  // Texto curto e legível para o valor de um chip.
+  function agValor(campo, c){
+    if(Array.isArray(c.valor)) return c.valor.join(" + ");
+    if(c.valor && typeof c.valor==="object") return (c.valor.de||"")+" → "+(c.valor.ate||"");
+    if(campo==="impulsionar") return c.valor ? "Sim" : "Não";
+    return String(c.rotulo!=null && c.rotulo!=="" ? c.rotulo : c.valor);
+  }
+
+  function agChip(classe, campo, valor, titulo){
+    var s=document.createElement("span");
+    s.className="cchip "+classe;
+    if(titulo) s.title=titulo;
+    s.innerHTML='<b>'+esc(agRotulo(campo))+'</b> '+esc(valor);
+    return s;
+  }
+
+  function agDesenhar(plano){
+    agPlano = plano;
+    var out=$("#ag-out");
+    out.classList.add("on");
+    agRenderSugestoes();   // há comando escrito: a vitrine sai da frente
+
+    // Intenção + medidor de confiança
+    var nomeInt=(agUi&&agUi.intencoes&&agUi.intencoes[plano.intencao])||plano.intencao;
+    $("#ag-intencao").textContent=nomeInt;
+    var pct=Math.round(plano.confianca*100);
+    var med=$("#ag-medidor");
+    med.className="medidor"+(pct>=75?"":(pct>=50?" media":" baixa"));
+    $("i",med).style.width=pct+"%";
+    $("#ag-conf").textContent=pct+"% de confiança";
+
+    // O botão troca de papel conforme a intenção: filtrar (fase 1, não escreve),
+    // criar (fase 2), mover e marcar status (fase 3). Alterar/remover seguem em
+    // dry-run — sem botão. O destaque visual acompanha quem GRAVA.
+    var acao=agAcaoDoPlano(plano);
+    var btn=$("#ag-aplicar");
+    if(acao){
+      btn.style.display="";
+      btn.textContent=acao.rotulo;
+      btn.disabled=!acao.pode || agEnviando;
+      btn.title=acao.porque||"";
+      // `.danger` já existe na folha (é o Excluir do modal) — mesma cor para a
+      // mesma consequência, em vez de um vermelho novo só para a Agenda.
+      btn.className="btn"+(acao.escreve?"":" ghost")+(acao.perigo?" danger":"");
+    }else{
+      btn.style.display="none";
+    }
+
+    // Chips dos campos, na ordem estável que o backend define
+    var box=$("#ag-chips"); box.innerHTML="";
+    var ordem=(agUi&&agUi.ordem)||Object.keys(plano.campos);
+    ordem.forEach(function(campo){
+      var c=plano.campos[campo]; if(!c) return;
+      var classe = c.confianca>=0.9 ? "ok" : "conferir";
+      var dica = "origem: "+c.origem+" · confiança "+Math.round(c.confianca*100)+"%"
+               + (c.trecho ? ' · lido de "'+c.trecho+'"' : "");
+      box.appendChild(agChip(classe, campo, agValor(campo,c), dica));
+    });
+    // Mudanças (fase 4.2) — chips com uma SETA, para a leitura ser "o que vira o
+    // quê". Sem a seta, um chip "Formato Reels" ao lado de "Formato Carrossel"
+    // (o critério) seria indistinguível, e é exatamente essa confusão que a
+    // decisão do "para" existe para desfazer.
+    Object.keys(plano.mudancas||{}).forEach(function(campo){
+      var c=plano.mudancas[campo];
+      box.appendChild(agChip("muda", campo, "→ "+agValor(campo,c),
+        "valor NOVO · origem: "+c.origem+(c.trecho?' · lido de "'+c.trecho+'"':"")));
+    });
+    // Obrigatórios ausentes viram chips vermelhos — a pessoa vê o que falta.
+    (plano.faltando||[]).forEach(function(campo){
+      box.appendChild(agChip("falta", campo, "?", "obrigatório para "+nomeInt.toLowerCase()));
+    });
+    if(!box.children.length){
+      var vazio=document.createElement("span"); vazio.className="conf";
+      vazio.textContent="Nada reconhecido ainda.";
+      box.appendChild(vazio);
+    }
+
+    // Perguntas (ambiguidades). Responder registra a escolha em agResolucoes —
+    // é isso que viaja para /aplicar. A tela nunca manda o corpo do post; ela só
+    // responde o que é decisão humana (ver o topo de src/calendario/agenda.js).
+    var pbox=$("#ag-perguntas"); pbox.innerHTML="";
+    (plano.ambiguidades||[]).forEach(function(a){
+      var linha=document.createElement("div"); linha.className="pergunta";
+      var qual = a.acao==="criar"
+        ? 'não existe em <strong>'+esc(agRotulo(a.campo))+'</strong> — cadastrar?'
+        : 'qual <strong>'+esc(agRotulo(a.campo))+'</strong>?';
+      linha.innerHTML='<span>❓ "<strong>'+esc(a.trecho)+'</strong>" '+qual+'</span>';
+
+      function resolver(resolucao, chip){
+        agResolucoes[a.campo]=resolucao;
+        // Fase 3: responder QUAL POST volta ao servidor em vez de resolver na
+        // tela. Não é preciosismo — é o servidor que sabe se aquele post já está
+        // na data pedida (o "nada a mover") e que devolve o chip do alvo com os
+        // dados reais. Nas opções o atalho local vale a pena: lá a escolha é só
+        // um id que já veio na lista.
+        if(a.campo==="alvo"){ agInterpretar(agUltimo, true); return; }
+        // Fase 4.2: a resposta vai para `mudancas` quando a pergunta é sobre o
+        // VALOR NOVO — e nesse caso ela satisfaz o obrigatório `mudanca`, que veio
+        // do servidor calculado ANTES da resposta. Sem soltar esse `faltando`, a
+        // pessoa respondia a pergunta e o botão continuava desabilitado para
+        // sempre. O servidor revalida do jeito dele; isto é a tela não mentir.
+        var destino = a.destino==="mudanca" ? (plano.mudancas=plano.mudancas||{}) : plano.campos;
+        if(chip) destino[a.campo]=chip; else delete destino[a.campo];
+        if(a.destino==="mudanca" && chip){
+          plano.faltando=(plano.faltando||[]).filter(function(f){ return f!=="mudanca"; });
+        }
+        plano.ambiguidades=plano.ambiguidades.filter(function(x){return x!==a;});
+        agDesenhar(plano);
+      }
+
+      if(a.acao==="criar"){
+        var bc=document.createElement("button"); bc.className="opt";
+        bc.textContent='Cadastrar "'+a.trecho+'"';
+        bc.title="Cria o valor na lista, exclusivo deste cliente, ao criar o post";
+        bc.onclick=function(){
+          // valor null: o id só existe depois de o Worker cadastrar. O chip fica
+          // em "conferir" para deixar claro que ainda vai ser criado.
+          resolver({acao:"criar"}, {valor:null, rotulo:a.trecho+" (cadastrar)",
+            trecho:a.trecho, origem:"cadastrar ao criar", confianca:0.85});
+        };
+        linha.appendChild(bc);
+      }else{
+        (a.opcoes||[]).forEach(function(o){
+          var b=document.createElement("button"); b.className="opt";
+          // Sem score é candidato a POST achado por cliente+data, não por
+          // semelhança de título: mostrar "(0%)" ali seria só ruído.
+          b.textContent=o.nome+(o.score==null?"":" ("+Math.round(o.score*100)+"%)");
+          b.onclick=function(){
+            resolver({acao:"escolher", id:o.id},
+              {valor:o.id, rotulo:o.nome, trecho:a.trecho, origem:"escolha do usuário", confianca:1});
+          };
+          linha.appendChild(b);
+        });
+      }
+      // Saída explícita: "isso não era pilar/público, era parte do texto". Não
+      // vale para o alvo (`sem_ignorar`): um comando de mover fala de um post
+      // existente por definição — "não é um post" não é resposta possível.
+      if(!a.sem_ignorar){
+        var bi=document.createElement("button"); bi.className="opt";
+        bi.textContent="Não é "+agRotulo(a.campo).toLowerCase();
+        bi.onclick=function(){ resolver({acao:"ignorar"}, null); };
+        linha.appendChild(bi);
+      }
+
+      pbox.appendChild(linha);
+    });
+
+    // Avisos do parser (ano inferido, data no passado, cliente vs. título…)
+    var abox=$("#ag-avisos"); abox.innerHTML="";
+    (plano.avisos||[]).forEach(function(a){
+      var d=document.createElement("div"); d.className="agenda-aviso"; d.textContent="⚠ "+a;
+      abox.appendChild(d);
+    });
+
+    // Rodapé: o que sobrou sem interpretação + em que fase isso será aplicável.
+    var rod=$("#ag-rodape"); rod.innerHTML="";
+    if((plano.resto||[]).length){
+      var r=document.createElement("span"); r.className="resto";
+      r.textContent="não interpretado: "+plano.resto.join(" · ");
+      rod.appendChild(r);
+    }
+    var VERBO_ENTER={criar:"CRIA o post", mover:"MOVE o post", status:"TROCA o status do post",
+                     remover:"pede confirmação para REMOVER o post", alterar:"ALTERA o post"};
+    var f=document.createElement("span");
+    // Destaque no aviso de que o Enter GRAVA. O Enter da Agenda nunca deve ser
+    // surpresa (§8.2), e num painel estreito uma linha cinza a mais passa batida.
+    if(acao && acao.escreve && acao.pode) f.className="grava";
+    if(plano.consulta){
+      f.textContent = plano.consulta.vazia
+        ? "↵ Enter mostra tudo (limpa os filtros) — nada é gravado"
+        : "↵ Enter filtra a grade — consulta não grava nada";
+    }else if(acao && acao.escreve){
+      f.textContent = acao.pode
+        ? "↵ Enter "+VERBO_ENTER[acao.tipo]+" — esta ação grava"
+        : acao.porque;
+    }else if(plano.intencao==="criar" && !me.canEditCalendario){
+      f.textContent = "criar exige o perfil de edição do calendário";
+    }else if(plano.intencao==="mover" && !me.canEditCalendario){
+      f.textContent = "mudar a data exige o perfil de edição do calendário";
+    }else if(plano.intencao==="remover" && !me.canEditCalendario){
+      f.textContent = "remover exige o perfil de edição do calendário";
+    }else if(plano.intencao==="alterar" && !me.canEditCalendario){
+      f.textContent = "alterar campos exige o perfil de edição do calendário";
+    }else if(plano.intencao==="status" && !me.canToggleCalendarioStatus){
+      f.textContent = "trocar status exige perfil do calendário";
+    }else{
+      f.textContent = plano.meta.fase_aplicacao
+        ? "execução de “"+nomeInt.toLowerCase()+"” prevista para a fase "+plano.meta.fase_aplicacao
+        : "";
+    }
+    rod.appendChild(f);
+
+    // ── A grade participa do plano (§8.8) ────────────────────────────────────
+    // Estes dois passos vêm no FIM de propósito: marcar depende do alvo já
+    // resolvido, e desviar depende da altura FINAL da ilha (que os chips e as
+    // perguntas acima acabaram de definir).
+    agMarcarNaGrade(plano);
+    ilhaDesviar();
+  }
+
+  /**
+   * O que o botão faz para este plano — ou null quando não há ação nesta fase.
+   * Fase 1: consultar (filtra, não grava). Fase 2: criar. Fase 3: mover e trocar
+   * status. `alterar` e `remover` seguem em dry-run.
+   *
+   * Devolve {tipo, rotulo, pode, porque, escreve}. `escreve` é o que decide o
+   * destaque do botão e o texto do rodapé: a pessoa tem de saber, ANTES do
+   * Enter, se aquele comando toca o banco.
+   */
+  function agAcaoDoPlano(plano){
+    if(!plano) return null;
+    if(plano.consulta) return {tipo:"filtrar", rotulo:"Filtrar a grade", pode:true, porque:"", escreve:false};
+
+    var ACOES={
+      criar:  {rotulo:function(){ return "Criar post"; },        precisa:"editar"},
+      mover:  {rotulo:function(p){ var d=p.campos.data_publicacao;
+                                   return "Mover para "+(d?agData(d.valor):"a data"); }, precisa:"editar"},
+      // Status é a única ação de escrita que o perfil `calendario-status` alcança
+      // — a mesma divisão do checkmark do card (Ana e Daiane trocam status, não
+      // criam nem movem). O servidor recusa de todo jeito; isto é para não
+      // oferecer o que não dá.
+      status: {rotulo:function(p){ var s=p.campos.status;
+                                   return "Marcar como "+(s?s.valor:"…"); },           precisa:"status"},
+      // Fase 4. Rótulo com o verbo explícito e destaque de perigo: é a única ação
+      // cujo resultado não fica visível na grade depois (o card simplesmente sai).
+      remover:{rotulo:function(){ return "Remover post"; },      precisa:"editar", perigo:true},
+      // Fase 4.2. O rótulo diz QUAL campo muda, porque é o que a pessoa precisa
+      // conferir: alterar erra escrevendo o valor certo no campo errado.
+      alterar:{rotulo:function(p){
+        var campos=Object.keys(p.mudancas||{});
+        return campos.length ? ("Alterar "+campos.map(agRotulo).join(" e ")) : "Alterar post";
+      }, precisa:"editar"}
+    };
+    var def=ACOES[plano.intencao];
+    if(!def) return null;
+    if(def.precisa==="editar" && !me.canEditCalendario) return null;
+    if(def.precisa==="status" && !me.canToggleCalendarioStatus) return null;
+
+    var pendencias=[];
+    var falta=(plano.faltando||[]).map(agRotulo);
+    if(falta.length) pendencias.push("informar "+falta.join(", "));
+    var perguntas=(plano.ambiguidades||[]).length;
+    if(perguntas) pendencias.push(perguntas===1?"responder 1 pergunta":"responder "+perguntas+" perguntas");
+
+    var porque = pendencias.length ? ("Falta "+pendencias.join(" e ")+".") : "";
+
+    // Fase 3: o alvo é o bloqueio mais comum, e a frase vem do SERVIDOR — a mesma
+    // que a rota de aplicar usaria — para tela e API nunca se contradizerem.
+    var alvo=plano.alvo;
+    if(alvo && alvo.impedimento){ porque=alvo.impedimento; }
+    else if(alvo && alvo.estado && alvo.estado!=="resolvido" && alvo.estado!=="perguntar"){
+      porque=alvo.motivo;
+    }
+
+    return {
+      tipo:plano.intencao, rotulo:def.rotulo(plano), escreve:true, perigo:!!def.perigo,
+      pode:!porque, porque:porque
+    };
+  }
+
+  /** 'YYYY-MM-DD' -> '12/09' (rótulo curto de botão e toast). */
+  function agData(iso){
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? String(iso).slice(8,10)+"/"+String(iso).slice(5,7) : String(iso||"");
+  }
+
+  // ── Filtro ativo (fase 1) ──────────────────────────────────────────────────
+  // A barra é uma VISÃO de tudo que filtra a grade: os dois dropdowns + as
+  // dimensões que só a Agenda aplica. Um chip por critério, com × para desfazer
+  // uma dimensão sem reescrever o comando inteiro.
+  var AG_FILTRO_DEF = [
+    {k:"formato",     campo:"formato",     txt:function(v){ return v; }},
+    {k:"status",      campo:"status",      txt:function(v){ return v; }},
+    {k:"pilar_id",    campo:"pilar",       txt:function(v){ return opcaoNome("pilares",v); }},
+    {k:"publico_id",  campo:"publico",     txt:function(v){ return opcaoNome("publicos",v); }},
+    {k:"objetivo_id", campo:"objetivo",    txt:function(v){ return opcaoNome("objetivos",v); }},
+    {k:"impulsionar", campo:"impulsionar", txt:function(v){ return v?"Sim":"Não"; }},
+    // Em consulta o resíduo cai em alvo_titulo; como filtro, é "contém".
+    {k:"titulo",      rotulo:"Título contém", txt:function(v){ return v; }}
+  ];
+
+  function agFiltroTemAlgo(f){
+    if(!f) return false;
+    for(var k in f){ if(f[k]!=null) return true; }
+    return false;
+  }
+
+  function agFiltroChip(rotulo, valor, remover){
+    var s=document.createElement("span");
+    s.className="cchip ok";
+    s.innerHTML='<b>'+esc(rotulo)+'</b> '+esc(valor);
+    // <button> de verdade, não <span> com onclick: o × precisa ser alcançável
+    // por teclado e anunciado por leitor de tela — é um controle, não enfeite.
+    var x=document.createElement("button");
+    x.type="button"; x.className="x"; x.textContent="×";
+    x.title="Remover este critério";
+    x.setAttribute("aria-label","Remover filtro "+rotulo+" "+valor);
+    x.onclick=remover;
+    s.appendChild(x);
+    return s;
+  }
+
+  // Navegar de mês CONTRADIZ um período aplicado ("em julho" e depois clicar ›).
+  // Solta só o período; as outras dimensões do filtro continuam valendo.
+  function agSoltarPeriodo(){
+    if(!agFiltro || (agFiltro.de==null && agFiltro.ate==null)) return;
+    agFiltro.de=null; agFiltro.ate=null;
+    if(!agFiltroTemAlgo(agFiltro)) agFiltro=null;
+  }
+
+  function agFiltroLimparTudo(){
+    clientesFiltro.length=0; redesFiltro.length=0; agFiltro=null;
+    if(msClientes) msClientes.refresh();
+    if(msRedes) msRedes.refresh();
+    render();
+  }
+
+  function agRenderFiltro(){
+    var bar=$("#ag-filtro"); bar.innerHTML="";
+    var chips=[];
+
+    // Cliente e redes vivem nos dropdowns — remover o chip mexe no dropdown.
+    clientesFiltro.slice().forEach(function(id){
+      chips.push(agFiltroChip(agRotulo("cliente"), opcaoNome("clientes",id)||("#"+id), function(){
+        var i=clientesFiltro.indexOf(id); if(i>=0) clientesFiltro.splice(i,1);
+        if(msClientes) msClientes.refresh();
+        render();
+      }));
+    });
+    redesFiltro.slice().forEach(function(r){
+      chips.push(agFiltroChip(agRotulo("redes"), r, function(){
+        var i=redesFiltro.indexOf(r); if(i>=0) redesFiltro.splice(i,1);
+        if(msRedes) msRedes.refresh();
+        render();
+      }));
+    });
+
+    if(agFiltro){
+      AG_FILTRO_DEF.forEach(function(d){
+        var v=agFiltro[d.k]; if(v==null) return;
+        chips.push(agFiltroChip(d.rotulo||agRotulo(d.campo), d.txt(v), function(){
+          agFiltro[d.k]=null;
+          if(!agFiltroTemAlgo(agFiltro)) agFiltro=null;
+          render();
+        }));
+      });
+      if(agFiltro.de!=null || agFiltro.ate!=null){
+        var per = (agFiltro.de===agFiltro.ate)
+          ? agFiltro.de
+          : (agFiltro.de||"…")+" → "+(agFiltro.ate||"…");
+        chips.push(agFiltroChip(agRotulo("periodo"), per, function(){
+          agSoltarPeriodo(); render();
+        }));
+      }
+    }
+
+    if(!chips.length){ bar.classList.remove("on"); return; }
+    var rot=document.createElement("span"); rot.className="rot"; rot.textContent="Filtrando";
+    bar.appendChild(rot);
+    chips.forEach(function(c){ bar.appendChild(c); });
+
+    // Contagem é o retorno mais honesto de um filtro: zero avisa que a consulta
+    // não achou nada, em vez de deixar a grade vazia sem explicação. Só conta o
+    // que está DESENHADO, e diz quantos ficaram fora por fim de semana oculto —
+    // senão a barra prometeria posts invisíveis.
+    var achados=visiblePosts();
+    var ocultos=achados.filter(function(p){ return fimDeSemanaOculto(p.data_publicacao); }).length;
+    var n=achados.length-ocultos;
+    var cont=document.createElement("span"); cont.className="vazio";
+    cont.textContent = (n===0 ? "nenhum post neste mês" : (n===1 ? "1 post neste mês" : n+" posts neste mês"))
+      + (ocultos ? " · "+ocultos+" em fim de semana oculto" : "");
+    bar.appendChild(cont);
+
+    var limpar=document.createElement("button");
+    limpar.className="limpar"; limpar.type="button"; limpar.textContent="Limpar filtros";
+    limpar.onclick=agFiltroLimparTudo;
+    bar.appendChild(limpar);
+    bar.classList.add("on");
+  }
+
+  /**
+   * Aplica o plano de uma CONSULTA na grade. Não escreve nada — é o que torna
+   * `consultar` a primeira intenção executável (fase 1).
+   */
+  async function agAplicar(){
+    if(!agPlano || !agPlano.consulta){ return; }
+    var f=agPlano.consulta.filtros;
+    var comando=$("#ag-texto").value.trim();
+
+    // "Mostre tudo": aplicar = limpar tudo.
+    if(agPlano.consulta.vazia){
+      agFiltroLimparTudo();
+      agRegistrar("consulta", comando, "Filtros limpos — mostrando tudo.");
+      toast("Filtros limpos — mostrando tudo.");
+      return;
+    }
+
+    clientesFiltro.length=0;
+    if(f.cliente_id!=null) clientesFiltro.push(f.cliente_id);
+    redesFiltro.length=0;
+    if(f.redes) f.redes.forEach(function(r){ redesFiltro.push(r); });
+    if(msClientes) msClientes.refresh();
+    if(msRedes) msRedes.refresh();
+
+    agFiltro={
+      formato:f.formato, status:f.status,
+      pilar_id:f.pilar_id, publico_id:f.publico_id, objetivo_id:f.objetivo_id,
+      impulsionar:f.impulsionar, titulo:f.titulo, de:f.de, ate:f.ate
+    };
+    if(!agFiltroTemAlgo(agFiltro)) agFiltro=null;
+
+    // O período manda a grade para o mês do início. A grade mostra UM mês por
+    // vez (decisão §7 nº 2 do doc: sem visão de lista), então um intervalo que
+    // atravessa o mês é avisado em vez de silenciosamente cortado.
+    var aviso="";
+    if(f.de){
+      var y=+f.de.slice(0,4), m=+f.de.slice(5,7)-1;
+      if(y!==view.getFullYear() || m!==view.getMonth()){
+        view=new Date(y,m,1);
+        await loadPosts();
+      }
+      if(f.ate && f.ate.slice(0,7)!==f.de.slice(0,7)){
+        aviso="O período vai até "+f.ate+", mas a grade mostra um mês por vez.";
+      }
+    }
+    render();
+    // A contagem é o retorno honesto de uma consulta — e no registro ela é o que
+    // diferencia "filtrou e achou 12" de "filtrou e não achou nada", que na grade
+    // são a mesma tela vazia.
+    var achados=visiblePosts().length;
+    agRegistrar("consulta", comando,
+      (achados===0 ? "Nenhum post" : (achados===1 ? "1 post" : achados+" posts"))
+      +" no mês visível."+(aviso?" "+aviso:""));
+    toast(aviso ? ("Filtro aplicado. "+aviso) : "Filtro aplicado à grade.");
+  }
+
+  /**
+   * Executa o comando: criar (fase 2), mover ou trocar status (fase 3). É a
+   * única ação da Agenda que grava, e é uma rota só para as três.
+   *
+   * Manda o TEXTO + as resoluções — nunca o corpo do post, nem qual post
+   * alterar. O Worker re-interpreta e aplica o que ele mesmo derivou (ver
+   * src/calendario/agenda.js); é o determinismo do parser que torna isso
+   * possível e seguro.
+   */
+  async function agExecutar(confirmacoes){
+    if(agEnviando || !agPlano) return;
+    var acao=agAcaoDoPlano(agPlano);
+    if(!acao || !acao.escreve || !acao.pode) return;
+    var conf = confirmacoes || {};
+    // O texto é lido AGORA porque o campo é limpo no sucesso — e é o texto cru
+    // que vai para o registro, não o resumo do que o parser entendeu.
+    var comando = $("#ag-texto").value.trim();
+
+    agEnviando=true;
+    var btn=$("#ag-aplicar"); btn.disabled=true;
+    try{
+      var r=await fetch(API+"/agenda/aplicar",{
+        method:"POST",
+        headers:{Accept:"application/json","Content-Type":"application/json"},
+        body:JSON.stringify({
+          texto: $("#ag-texto").value.trim(),
+          contexto: agContexto(),
+          resolucoes: agResolucoes,
+          confirmar_duplicado: !!conf.duplicado,
+          confirmar_remocao: !!conf.remocao
+        })
+      });
+      var d=await r.json();
+
+      // 409 tem TRÊS significados, e os três são "decida você":
+      //   duplicado          -> já existe post igual (criar)
+      //   confirmar:'remocao'-> apagar precisa de sim explícito (remover)
+      //   alvo               -> mais de um post atende ao comando
+      if(r.status===409 && d.duplicado){
+        agEnviando=false; btn.disabled=false;
+        if(confirm("Já existe um post com esse título, nesse dia, para esse cliente.\n\nCriar mesmo assim?")){
+          return agExecutar({duplicado:true});
+        }
+        agRegistrar("err", comando, "Criação cancelada — já existe post igual.");
+        toast("Criação cancelada.");
+        return;
+      }
+      // A pergunta NOMEIA o post e a data. "Remover mesmo?" sem dizer o quê é a
+      // confirmação que a pessoa aprende a clicar sem ler.
+      if(r.status===409 && d.confirmar==="remocao"){
+        agEnviando=false; btn.disabled=false;
+        var alvo=d.alvo_post||{};
+        if(confirm("Remover o post:\n\n“"+(alvo.assunto||"?")+"” — "+(alvo.data_publicacao||"?")
+                   +(alvo.cliente_nome?" ("+alvo.cliente_nome+")":"")
+                   +"\n\nO post sai da grade. Dá para desfazer logo depois.")){
+          return agExecutar({remocao:true});
+        }
+        agRegistrar("err", comando, "Remoção cancelada — nada foi apagado.");
+        toast("Remoção cancelada.");
+        return;
+      }
+      if(r.status===409 && d.alvo){
+        // O servidor achou candidatos: redesenha o plano dele (com a pergunta) em
+        // vez de inventar um diálogo aqui. A pessoa escolhe no mesmo lugar em que
+        // já responde as outras perguntas.
+        agEnviando=false; btn.disabled=false;
+        if(d.plano){ agDesenhar(d.plano); }
+        toast(d.error||"Escolha qual post.", true);
+        return;
+      }
+      if(!r.ok || d.ok===false) throw new Error(d.error||("HTTP "+r.status));
+
+      // Leva a grade até o post e destaca o card. A pergunta que importa depois
+      // de um comando é sempre a mesma: "mexeu no post e no dia que eu quis?".
+      var dt=d.post.data_publicacao;
+      var y=+dt.slice(0,4), m=+dt.slice(5,7)-1;
+      agPostDestaque=d.post.id;
+      if(y!==view.getFullYear() || m!==view.getMonth()) view=new Date(y,m,1);
+      // Se caiu em sábado/domingo com o fim de semana oculto, revela — "criado!"
+      // com a grade inalterada é pior que mostrar o fim de semana sem pedir.
+      var revelou=false;
+      if(fimDeSemanaOculto(dt)){ showFds=true; $("#fFds").checked=true; revelou=true; }
+      // Opção nova cadastrada => a lista mudou e os dropdowns precisam recarregar.
+      if((d.opcoes_criadas||[]).length){ await loadListas(); populateFilters(); }
+      await loadPosts();
+      render();
+
+      $("#ag-texto").value=""; agLimpar();
+      // A grade mudou, então a vitrine envelheceu: o post que ela citava pode ter
+      // acabado de sair, mudar de data ou de formato. Rebusca (é o único ponto em
+      // que a vitrine vai à rede sem o contexto ter mudado).
+      agSugestoes(0);
+      var novas=(d.opcoes_criadas||[]).map(function(o){return o.nome;}).join(", ");
+      // O "de onde saiu" não é enfeite: mesmo com o Desfazer ao lado, é o que diz
+      // à pessoa o que exatamente mudou.
+      var msg;
+      if(d.acao==="mover") msg='“'+d.post.assunto+'” movido de '+agData(d.anterior.data_publicacao)+" para "+agData(dt);
+      else if(d.acao==="status") msg='“'+d.post.assunto+'” agora está '+d.post.status+" (estava "+d.anterior.status+")";
+      else if(d.acao==="remover") msg='“'+d.post.assunto+'” removido de '+agData(dt);
+      else if(d.acao==="alterar"){
+        // Diz o que mudou, campo a campo — é a conferência que importa num alterar.
+        var quais=Object.keys(d.mudou||{}).map(function(k){ return agRotulo(k)+": "+d.mudou[k]; }).join(" · ");
+        msg='“'+d.post.assunto+'” alterado — '+quais;
+      }
+      else msg="Post criado em "+dt;
+      msg = msg
+        +(novas?" · cadastrado nas listas: "+novas:"")
+        +(revelou?" · mostrei o fim de semana para você ver o card":"")+".";
+
+      // Desfazer no próprio toast (fase 4). É o que torna aceitável um comando que
+      // apaga post: a volta tem de estar no caminho de quem acabou de agir, não
+      // escondida num menu. Vale para as quatro ações — errar a data de um mover é
+      // tão comum quanto errar o post de um remover.
+      // O registro guarda o mesmo texto do toast. Não é duplicação inútil: o
+      // toast some em 9 s e serve a quem está olhando; o registro responde
+      // "o que eu já fiz nesta sessão?" cinco comandos depois — e é onde o
+      // Desfazer continua alcançável depois de o toast sumir.
+      agRegistrar("ok", comando, msg, d.log_id);
+      if(d.log_id) toastAcao(msg, "Desfazer", agDesfazer);
+      else toast(msg);
+    }catch(e){
+      agRegistrar("err", comando, "Não aplicou: "+e.message);
+      toast("Não aplicou: "+e.message, true);
+    }finally{
+      agEnviando=false;
+      if(agPlano) btn.disabled=false;
+    }
+  }
+
+  /**
+   * Reverte o último comando desta pessoa (fase 4). Não manda o que desfazer: o
+   * servidor decide pelo LOG, que é a única fonte que sabe o estado anterior.
+   */
+  async function agDesfazer(){
+    try{
+      var r=await fetch(API+"/agenda/desfazer",{
+        method:"POST", headers:{Accept:"application/json","Content-Type":"application/json"}, body:"{}"
+      });
+      var d=await r.json();
+      if(!r.ok || d.ok===false) throw new Error(d.error||("HTTP "+r.status));
+
+      // Leva a grade até o post restaurado e destaca — a pergunta depois de um
+      // desfazer é "voltou para onde estava?".
+      var dt=d.post && d.post.data_publicacao;
+      if(dt){
+        var y=+dt.slice(0,4), m=+dt.slice(5,7)-1;
+        agPostDestaque=d.post.id;
+        if(y!==view.getFullYear() || m!==view.getMonth()) view=new Date(y,m,1);
+        if(fimDeSemanaOculto(dt)){ showFds=true; $("#fFds").checked=true; }
+      }
+      await loadPosts();
+      render();
+      var COMO={criar:"criação desfeita — o post saiu da grade", mover:"data devolvida",
+                status:"status devolvido", remover:"post de volta na grade",
+                alterar:"campo devolvido ao valor anterior"};
+      // Risca a linha desfeita no registro e passa o botão para a anterior — que
+      // é exatamente o que o servidor reverteria no próximo clique (a rota é uma
+      // pilha, §6.2). A vitrine também envelheceu: o post voltou para a grade.
+      agMarcarDesfeito();
+      agSugestoes(0);
+      toast("Desfeito: "+(COMO[d.desfeito.intencao]||d.desfeito.intencao)+".");
+    }catch(e){
+      toast("Não desfez: "+e.message, true);
+    }
+  }
+
+  function agLimpar(){
+    $("#ag-out").classList.remove("on");
+    $("#ag-aplicar").style.display="none";
+    // O rodapé vive no composer, fora da faixa do plano — some junto com ela, ou
+    // ficaria dizendo "↵ Enter GRAVA" sobre um comando que já não existe.
+    $("#ag-rodape").innerHTML="";
+    agPlano=null; agUltimo=""; agResolucoes={};
+    // O anel e os números pertenciam ao comando que acabou de sair de cena. Deixá-los
+    // seria a grade apontando para um alvo que já não existe em lugar nenhum.
+    agLimparMarcas();
+    ilhaDesviou=false;
+    agRenderSugestoes();   // campo vazio: a vitrine volta (do cache, sem ir à rede)
+  }
+
+  /**
+   * @param texto              o comando
+   * @param preservarResolucoes true quando a re-interpretação foi disparada por
+   *   uma RESPOSTA (hoje: a escolha do post na fase 3). O texto é o mesmo, então
+   *   as respostas continuam valendo — e é justamente para o servidor aplicá-las
+   *   e devolver o plano já resolvido que se volta nele.
+   */
+  async function agInterpretar(texto, preservarResolucoes){
+    var seq = ++agSeq;
+    // Comando novo, perguntas novas: uma resolução da frase anterior pode
+    // apontar para um trecho que já não existe.
+    if(!preservarResolucoes) agResolucoes = {};
+    agPostDestaque = null;   // o destaque pertence ao comando anterior
+    try{
+      var r = await fetch(API+"/agenda/interpretar",{
+        method:"POST",
+        headers:{Accept:"application/json","Content-Type":"application/json"},
+        body:JSON.stringify({texto:texto, contexto:agContexto(), resolucoes:agResolucoes})
+      });
+      var d = await r.json();
+      if(seq !== agSeq) return;                 // resposta velha: descarta
+      if(!r.ok || d.ok===false) throw new Error(d.error||("HTTP "+r.status));
+      agUi = d.ui || agUi;
+      agDesenhar(d.plano);
+    }catch(e){
+      if(seq !== agSeq) return;
+      toast("Agenda: "+e.message, true);
+    }
+  }
+
+  function agAoDigitar(){
+    var texto = $("#ag-texto").value.trim();
+    clearTimeout(agTimer);
+    ilhaSincronizar();   // a pílula cresce/encolhe junto com o campo ter conteúdo
+    if(texto.length < AG_MIN){ agLimpar(); return; }
+    if(texto === agUltimo) return;
+    // ★ Texto novo, direito a um salto novo. O crédito é POR COMANDO: sem zerar
+    // aqui, a ilha desviaria uma vez na vida; zerando a cada tecla, ela ficaria
+    // saltando enquanto a pessoa digita — que é o risco anotado na maquete.
+    ilhaDesviou = false;
+    agTimer = setTimeout(function(){ agUltimo = texto; agInterpretar(texto); }, AG_DEBOUNCE);
+  }
+
+  function agBind(){
+    $("#ag-texto").addEventListener("input", agAoDigitar);
+    $("#ag-texto").addEventListener("keydown", function(e){
+      if(e.key==="Enter"){
+        e.preventDefault(); clearTimeout(agTimer);
+        var t=$("#ag-texto").value.trim();
+        if(t.length<AG_MIN) return;
+        // Enter EXECUTA quando o plano na tela é deste mesmo texto. Se ainda não
+        // é, só interpreta: nunca se executa um plano que a pessoa não viu — a
+        // promessa dos chips, que vale ainda mais agora que criar/mover gravam.
+        var pronto = agPlano && t===agUltimo;
+        if(pronto && agPlano.consulta) agAplicar();
+        else if(pronto && ESCREVEM[agPlano.intencao]) agExecutar();
+        else { agUltimo=t; agInterpretar(t); }
+      }
+      if(e.key==="Escape"){ $("#ag-texto").value=""; agLimpar(); }
+      // ★ Alternativa de TECLADO ao botão de canto (WCAG 2.5.7 pede um caminho
+      // não-arrastável; aqui há dois). Alt evita brigar com a navegação do texto:
+      // seta sozinha move o cursor, e é isso que ela tem de fazer.
+      if(e.altKey && CANTO_SETA[e.key]){
+        e.preventDefault();
+        ilhaIrPara(CANTO_SETA[e.key][ilhaCanto]);
+      }
+    });
+
+    // Foco/desfoque decidem a VITRINE — não a existência da ilha, que não fecha.
+    $("#ag-texto").addEventListener("focus", function(){
+      ilhaFocada = true;
+      ilhaSincronizar();
+      // Ao focar, a vitrine tem de falar do que está na grade AGORA. Só vai à rede
+      // se o contexto mudou desde a última busca (mesma régua de agSugestoesSeMudou).
+      if(!agSugCache.length) agSugestoes(0); else ilhaSincronizar();
+    });
+    // `focusout` no ASIDE, não `blur` no input: clicar numa sugestão, num botão de
+    // pergunta ou no selo tira o foco do campo sem sair da ilha, e recolher ali
+    // fecharia a vitrine debaixo do dedo de quem ia clicar nela.
+    $("#ilha").addEventListener("focusout", function(){
+      setTimeout(function(){
+        if($("#ilha").contains(document.activeElement)) return;
+        ilhaFocada = false;
+        ilhaSincronizar();
+      }, 0);
+    });
+    $("#ag-aplicar").onclick=function(){
+      if(!agPlano) return;
+      if(agPlano.consulta) agAplicar(); else agExecutar();
+    };
+    // Limpar zera o COMANDO, não o filtro já aplicado: o filtro sobrevive ao
+    // texto de propósito (é o resultado, não o rascunho).
+    $("#ag-limpar").onclick=function(){ $("#ag-texto").value=""; agLimpar(); $("#ag-texto").focus(); };
+
+    // Selo: abre/fecha o REGISTRO da sessão. Ao abrir, rola até o fim — enquanto
+    // escondido o elemento tem scrollHeight 0, então o scroll que agRenderHistorico
+    // fez a cada comando não pegou e o registro abriria na primeira linha.
+    $("#ilha-selo").onclick=function(){
+      ilhaLogAberto=!ilhaLogAberto;
+      ilhaSincronizar();
+      if(ilhaLogAberto){ var c=$("#cop-corpo"); c.scrollTop=c.scrollHeight; }
+    };
+    // Desfazer na pílula: mesma rota e mesma pilha do botão do toast e do registro.
+    $("#ilha-desfazer").onclick=agDesfazer;
+    $("#ilha-canto").onclick=ilhaGirarCanto;
+
+    ilhaSincronizar();
+    agRenderHistorico();
+  }
+
+  async function init(){
+    renderLegend(); bind(); agBind();
+    await loadMe();
+    await loadListas(); populateFilters();
+    await loadPosts(); render();
+  }
+  init();
+})();
+</script>
+</body>
+</html>

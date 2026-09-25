@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Intelidata · Cronograma de Projetos (demo)</title>
+<link rel="icon" href="brand/favicon.png">
+<script src="mock-api.js"></script>
+<style>
+/* ===========================================================================
+   CRONOGRAMA DE PROJETOS — 100% da tela é a grade.
+   A cromia segue a identidade Intelidata (azul #0072ce, âmbar #de8d13, cinza
+   #777). A cor do "executado" é POR PROJETO (campo `cor`), então a grade muda
+   de cor conforme a página aberta na sidebar.
+   =========================================================================== */
+:root{
+  --azul:#0072ce; --ambar:#de8d13; --cinza:#777;
+  --exec:#0072ce;                    /* sobrescrito por projeto em runtime */
+  --plan:#d9dee4;                    /* PLANEJADO (cinza) */
+  --linha:#eceff3; --texto:#1d2733; --fraco:#6b7684; --fundo:#fff;
+  --w:84px;                          /* largura da coluna de semana — ÚNICA (sem zoom, por decisão do time) */
+  --h:50px;                          /* altura da linha (o bloco ocupa 34px; o resto é respiro) */
+  --bloco:34px;                      /* altura do bloco planejado/executado */
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  color:var(--texto); background:var(--fundo);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+button{font:inherit;color:inherit}
+
+/* ---------- Barra de topo ---------- */
+.topo{
+  display:flex; align-items:center; gap:16px; padding:0 18px; height:62px;
+  background:#fff; border-bottom:1px solid var(--linha); flex:0 0 auto; z-index:40;
+}
+.hamburguer{
+  width:38px;height:34px;border:1px solid var(--linha);border-radius:8px;background:#fff;
+  cursor:pointer;display:grid;place-items:center;gap:3px;padding:8px 9px;flex:0 0 auto;
+}
+.hamburguer span{display:block;width:100%;height:2px;background:var(--texto);border-radius:2px}
+.hamburguer:hover{background:#f0f4f9;border-color:#c9d3de}
+.titulo{font-size:16.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:30vw}
+.titulo small{display:block;font-weight:400;font-size:11px;color:var(--fraco);margin-top:2px}
+.kpis{display:flex;gap:22px;margin-left:auto;align-items:center;padding-right:4px}
+.kpi{text-align:right;min-width:52px}
+.kpi b{display:block;font-size:17px;line-height:1.1;font-weight:700}
+.kpi span{font-size:9.5px;color:#9aa4b1;text-transform:uppercase;letter-spacing:.6px}
+.acoes{display:flex;gap:6px;align-items:center}
+.bt{
+  border:1px solid var(--linha);background:#fff;border-radius:8px;padding:6px 11px;
+  cursor:pointer;white-space:nowrap;
+}
+.bt:hover{background:#f0f4f9;border-color:#c9d3de}
+.bt.primario{background:var(--azul);border-color:var(--azul);color:#fff}
+.bt.primario:hover{filter:brightness(1.08)}
+.bt.perigo{color:#c0392b}
+.bt[disabled]{opacity:.45;cursor:not-allowed}
+
+/* Pincel: define o que o clique/arrasto pinta. */
+.pincel{display:flex;border:1px solid var(--linha);border-radius:8px;overflow:hidden;background:#fff}
+.pincel button{border:0;background:#fff;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.pincel button+button{border-left:1px solid var(--linha)}
+.pincel button[aria-pressed="true"]{background:#eef4fb;font-weight:600;box-shadow:inset 0 -2px 0 var(--azul)}
+.bolinha{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+/* ---------- Sidebar (drawer) ---------- */
+.velo{position:fixed;inset:0;background:rgba(16,25,38,.42);opacity:0;pointer-events:none;transition:opacity .18s;z-index:45}
+body.menu .velo{opacity:1;pointer-events:auto}
+.lateral{
+  position:fixed;top:0;left:0;bottom:0;width:310px;background:#fff;z-index:50;
+  border-right:1px solid var(--linha);transform:translateX(-100%);transition:transform .2s ease;
+  display:flex;flex-direction:column;box-shadow:2px 0 18px rgba(16,25,38,.12);
+}
+body.menu .lateral{transform:none}
+.lateral header{padding:14px;border-bottom:1px solid var(--linha);display:flex;align-items:center;gap:10px}
+.lateral header img{height:24px}
+.lateral header b{font-size:13px}
+.lateral .lista{overflow:auto;flex:1;padding:8px}
+.proj{
+  display:block;width:100%;text-align:left;border:1px solid transparent;background:none;
+  border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:2px;
+}
+.proj:hover{background:#f2f5f9}
+.proj[aria-current="true"]{background:#eef4fb;border-color:#cfe1f5}
+.proj b{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.proj i{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.proj span{display:block;font-size:11px;color:var(--fraco);margin-top:2px;padding-left:17px}
+.proj.inativo b{color:var(--fraco);text-decoration:line-through}
+.lateral footer{padding:10px;border-top:1px solid var(--linha);display:flex;gap:6px}
+.lateral footer .bt{flex:1;text-align:center}
+
+/* ---------- Grade ----------
+   ★ Princípio visual: NADA de grade fechada. Nenhuma borda entre células — a
+   separação vem do branco. Cada semana é um BLOCO arredondado flutuando dentro
+   da linha (26px de bloco numa linha de 40px = o respiro). É o que a planilha
+   do time faz no Excel, e o que faz isto não parecer uma planilha. */
+.rolagem{flex:1;overflow:auto;position:relative;background:#fff}
+table.grade{border-collapse:separate;border-spacing:0;background:#fff;table-layout:fixed}
+.grade th,.grade td{padding:0;border:0}
+.grade thead th{position:sticky;background:#fff;z-index:20;font-weight:600;text-align:center}
+.grade thead tr:nth-child(1) th{top:0;height:34px}
+.grade thead tr:nth-child(2) th{top:34px;height:36px}
+.mes{
+  color:var(--texto);font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;
+  font-weight:700;vertical-align:middle;
+}
+/* O mês é um BOTÃO de filtro: clicar seleciona/desseleciona e os KPIs do topo
+   passam a olhar só os objetivos com planejado/executado nos meses marcados. */
+.mes span{
+  display:block;margin:5px 4px;padding:4px 0;border-radius:7px;
+  background:#f4f6f9;color:#54606f;font-weight:600;cursor:pointer;user-select:none;
+  transition:background .12s,color .12s;
+}
+.mes.alt span{background:#eef1f6}
+.mes span:hover{background:color-mix(in srgb,var(--exec) 16%,#fff);color:color-mix(in srgb,var(--exec) 78%,#1d2733)}
+.mes.on span{background:var(--exec);color:#fff;box-shadow:0 1px 6px color-mix(in srgb,var(--exec) 38%,transparent)}
+/* Semanas dos meses NÃO selecionados recuam (o filtro precisa ser visível). */
+body.filtrando .sem.fora,body.filtrando td.cel.fora{opacity:.4}
+/* Chip do filtro na barra de topo. */
+#chipMeses{display:none;align-items:center;gap:8px;font-size:11.5px;color:var(--fraco);white-space:nowrap}
+body.filtrando #chipMeses{display:flex}
+#chipMeses b{color:var(--texto);font-weight:600}
+#chipMeses button{
+  border:0;background:#f4f6f9;cursor:pointer;font:600 11px/1 inherit;color:#5a6675;
+  padding:5px 9px;border-radius:6px;
+}
+#chipMeses button:hover{background:#e7edf5;color:var(--azul)}
+.sem{line-height:1.25;font-size:9.5px;color:#98a2ae;font-weight:500;padding-bottom:6px}
+.sem b{display:block;font-size:11px;color:#5a6675;font-weight:600}
+.sem.hoje b{color:var(--ambar)}
+.sem.hoje::after{content:"";display:block;height:2px;margin:4px 12px -6px;border-radius:2px;background:var(--ambar)}
+
+/* Colunas fixas à esquerda.
+   As larguras vêm do <colgroup> montado em renderGrade (com table-layout:fixed,
+   o colgroup é a única fonte confiável: a 1ª linha tem os meses mesclados e
+   sozinha distribuiria as larguras errado). Os `left` abaixo são a soma
+   acumulada dessas larguras — mexeu numa, mexa na outra. */
+.fx{position:sticky;background:#fff;z-index:25}
+thead .fx{z-index:30}
+.c-grupo{left:0}
+.c-obj  {left:150px}
+.c-peso {left:400px;text-align:center}
+/* Sombra suave no fim do bloco fixo — separa sem desenhar uma linha. */
+.c-exec {left:452px;text-align:center;box-shadow:7px 0 9px -7px rgba(20,32,48,.16)}
+thead .c-grupo,thead .c-obj,thead .c-peso,thead .c-exec{
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.7px;color:#98a2ae;
+  vertical-align:bottom;padding-bottom:8px;
+}
+thead .mes{cursor:default}
+thead .c-obj{text-align:left;padding-left:14px}
+
+tbody tr{height:var(--h)}
+
+/* GRUPO: bloco vertical tingido com a cor do projeto (o "Desktop" do Excel). */
+/* O bloco é ABSOLUTO dentro do <td>: com rowspan, `height:100%` num filho não
+   resolve (o td não tem altura declarada) e o bloco encolhia para o texto. O td
+   é position:sticky, então já serve de referência para o absolute. */
+.c-grupo{vertical-align:top}
+.c-grupo .bloco{
+  position:absolute;top:3px;bottom:3px;left:10px;right:4px;
+  border-radius:9px;display:flex;justify-content:center;
+  background:color-mix(in srgb,var(--exec) 11%,#fff);
+}
+/* padding-right maior reserva o lugar do botão ⊖ (absoluto no canto): sem ele,
+   nome de grupo longo passava por baixo do botão.
+   Centralização vertical: truque do sticky com margem automática — `.bloco`
+   (flex, eixo cruzado vertical) é o CONTAINING BLOCK do sticky, então o rótulo
+   fica preso entre `top` (abaixo do cabeçalho) e `bottom` (acima do rodapé),
+   mas `margin:auto 0` o CENTRALIZA nesse intervalo em vez de colar no topo —
+   e ainda assim nunca escapa da altura do próprio grupo (grupo curto = fica
+   parado no centro dele; grupo mais alto que a tela = acompanha a rolagem). */
+.c-grupo .rot{
+  position:sticky;top:78px;bottom:34px;margin:auto 0;
+  padding:9px 22px 9px 10px;text-align:center;font-size:11px;font-weight:700;
+  letter-spacing:.3px;color:color-mix(in srgb,var(--exec) 72%,#1d2733);
+}
+.c-obj div{display:flex;align-items:center;gap:6px;padding:0 10px 0 14px;font-size:13px}
+.c-obj .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-obj .ed{opacity:0;border:0;background:none;cursor:pointer;font-size:12px;padding:2px 4px;
+  color:var(--fraco);border-radius:5px}
+tr:hover .c-obj .ed{opacity:1}
+.c-obj .ed:hover{color:var(--azul);background:#f0f4f9}
+tr:hover .c-obj{background:#fafbfd}
+
+/* Peso / Executado: chips, não colunas de planilha. */
+.num{
+  display:inline-block;min-width:30px;padding:3px 7px;border-radius:7px;background:#f4f6f9;
+  font-variant-numeric:tabular-nums;font-size:11.5px;color:#5a6675;
+}
+.c-exec .num{font-weight:700;color:var(--texto)}
+.num.vazio{background:none;color:#c3cad3}
+.num.ok{background:#e2f4e9;color:#1e7d50;font-weight:700}
+.ok{color:#1e7d50}
+
+/* Linha de SEÇÃO: um respiro maior + rótulo discreto. Sem faixa colorida. */
+tr.secao{height:52px}
+/* Sem `text-transform:uppercase` aqui de propósito: as seções são nomes de
+   produto (LeIA, Uniplus Web) e o uppercase estragava a grafia ("LEIA"). */
+tr.secao .tit{
+  position:sticky;left:0;z-index:26;background:#fff;padding:22px 0 4px 6px;
+  white-space:nowrap;vertical-align:bottom;
+}
+tr.secao .tit button{
+  border:0;background:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  font:700 12px/1 inherit;letter-spacing:.2px;color:#8b96a4;padding:4px 8px;border-radius:7px;
+}
+tr.secao .tit button:hover{background:#f4f6f9;color:var(--texto)}
+/* O nome cede espaço, não o %: o bloco fixo tem 504px e o progresso é ancorado
+   à direita, então nome longo trunca (o completo fica no title).
+   ★ 220 (nome) + 240 (progresso) + a folga de 10px do :right ficam bem abaixo
+   dos 504px totais — sem essa distância combinada, "N objetivos" (só aparece
+   com a seção colapsada) e o detalhe do progresso colavam um no outro. */
+tr.secao .tit button{max-width:220px;overflow:hidden}
+tr.secao .tit .nmS{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+tr.secao .tit .seta{
+  display:inline-block;width:6px;height:6px;border-right:2px solid var(--exec);
+  border-bottom:2px solid var(--exec);transform:rotate(45deg);margin-bottom:2px;transition:transform .15s;
+}
+tr.secao.fechada .tit .seta{transform:rotate(-45deg)}
+tr.secao .tit .qtd{font-weight:500;color:#b3bcc7;flex-shrink:0;white-space:nowrap}
+/* Progresso da SEÇÃO — o único % da grade (o do objetivo saiu por decisão do
+   time: ali o que interessa é peso e executado). Vem do cálculo automático
+   executado/peso de todos os objetivos da seção, ponderado pelo peso. */
+/* Posição FIXA: ancorado no fim do bloco de colunas fixas (o td .tit é sticky,
+   logo serve de referência ao absolute). Assim o % de toda seção cai sempre na
+   mesma coluna — não dança conforme o tamanho do nome da seção. */
+tr.secao .prog{
+  position:absolute;right:10px;bottom:6px;display:flex;align-items:baseline;gap:10px;
+  max-width:240px;
+  font:600 11px/1 inherit;color:#8b96a4;font-variant-numeric:tabular-nums;
+}
+/* .p NÃO encolhe (flex:none): é o que fica na posição fixa. .det absorve todo
+   o limite de 240px e trunca — sem isso, detalhe longo empurrava o bloco
+   inteiro para a esquerda até colar no nome da seção. */
+tr.secao .prog .p{min-width:46px;flex:none;text-align:right;font-size:12.5px;color:#5a6675}
+tr.secao .prog .p.ok{color:#1e7d50}
+tr.secao .prog .det{
+  font-weight:500;color:#b3bcc7;flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* Botões de ocultar (grupo, objetivo) — só aparecem no hover da linha. */
+.oculta{
+  opacity:0;border:0;background:none;cursor:pointer;color:var(--fraco);
+  font-size:12px;line-height:1;padding:3px 5px;border-radius:6px;
+}
+tr:hover .oculta,.c-grupo:hover .oculta{opacity:1}
+.oculta:hover{background:#f0f4f9;color:var(--azul)}
+.c-grupo .bloco .oculta{position:absolute;top:4px;right:4px}
+
+/* Linha-resumo do que está oculto (grupo escondido ou objetivos escondidos). */
+tr.resumo{height:34px}
+tr.resumo .msg{
+  position:sticky;left:150px;z-index:26;background:#fff;font-size:11.5px;color:#a6b0bc;
+  padding-left:14px;white-space:nowrap;
+}
+tr.resumo .msg button{
+  border:0;background:#f4f6f9;cursor:pointer;font:600 11px/1 inherit;color:#5a6675;
+  padding:5px 10px;border-radius:6px;margin-left:10px;
+}
+tr.resumo .msg button:hover{background:#e7edf5;color:var(--azul)}
+
+/* Objetivo oculto, exibido no modo "ver ocultos". */
+tr.esmaecido .c-obj,tr.esmaecido .c-peso,tr.esmaecido .c-exec{opacity:.45}
+tr.esmaecido td.cel{opacity:.3}
+
+/* Células: o bloco é um elemento interno absoluto — o <td> em si nunca pinta,
+   então nada encosta em nada e a linha respira. */
+td.cel{cursor:cell;position:relative;user-select:none}
+td.cel.mespar{background:#fcfdfe}
+td.cel.hoje{background:#fffaf1}
+td.cel .b{
+  position:absolute;left:3px;right:3px;top:calc((var(--h) - var(--bloco))/2);height:var(--bloco);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;
+}
+/* Planejado com valor = PREVISÃO (não entra na soma do executado); texto
+   escuro (o fundo cinza-claro não lê bem em branco) e itálico p/ diferenciar
+   do peso entregue. */
+td.cel[data-e="planejado"] .b{background:var(--plan);color:#5a6675;font-style:italic}
+td.cel[data-e="executado"] .b{background:var(--exec)}
+/* Planejado que já passou e não foi executado: risco visível (o Excel não mostrava). */
+td.cel.atrasado[data-e="planejado"] .b{
+  background:repeating-linear-gradient(135deg,#e9d2d2 0 5px,#f5e3e3 5px 10px);
+}
+/* Alvo fantasma no hover: mostra onde o bloco vai cair, sem desenhar grade. */
+td.cel:hover::after{
+  content:"";position:absolute;left:3px;right:3px;top:calc((var(--h) - var(--bloco))/2);
+  height:var(--bloco);border-radius:8px;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--exec) 45%,#fff);
+}
+td.cel input{
+  position:absolute;left:3px;right:3px;top:calc((var(--h) - var(--bloco))/2);height:var(--bloco);
+  width:auto;border:2px solid var(--exec);border-radius:8px;text-align:center;
+  font:700 13px/1 inherit;background:#fff;color:var(--texto);padding:0;z-index:2;
+}
+/* Rodapé: peso entregue por semana. */
+tfoot td{
+  position:sticky;bottom:0;background:#fff;font-size:10.5px;text-align:center;
+  font-variant-numeric:tabular-nums;color:#98a2ae;height:34px;
+  box-shadow:0 -7px 9px -7px rgba(20,32,48,.14);
+}
+tfoot td.fx{z-index:28}
+tfoot .rot{text-align:right;padding-right:12px;font-size:10px;text-transform:uppercase;letter-spacing:.7px}
+tfoot td.tot{font-weight:700;color:var(--texto)}
+
+/* ---------- Visão Geral (portfólio) ----------
+   Mesma grade, outra pergunta: uma linha por PROJETO, marcada em toda semana
+   que tenha planejado (ou executado) em QUALQUER objetivo dele. É só leitura —
+   não se pinta aqui; edita-se no cronograma do projeto. */
+body.portfolio .pincel,body.portfolio #btObjetivo,body.portfolio #btProjeto,
+body.portfolio #btOcultos,body.portfolio #btTudo{display:none}
+body.portfolio td.cel{cursor:default}
+body.portfolio td.cel:hover::after{content:none}
+/* Item fixo da sidebar: fica sempre no topo, separado dos projetos reais. */
+.proj.fixo{background:#f7f9fc;border-color:#e3eaf2;margin-bottom:8px}
+.proj.fixo[aria-current="true"]{background:#eef4fb;border-color:#cfe1f5}
+.proj.fixo b i{background:linear-gradient(135deg,var(--azul) 0 50%,var(--ambar) 50% 100%)}
+.sepSidebar{
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.7px;color:#a6b0bc;
+  padding:6px 11px 4px;font-weight:700;
+}
+/* Nome do projeto na linha do portfólio: leva ao cronograma dele. */
+.c-obj .abrir{
+  flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:0;
+  font:600 13px/1.4 inherit;color:var(--texto);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.c-obj .abrir:hover{color:var(--azul);text-decoration:underline}
+/* Faixa do projeto: o intervalo real dele dentro da janela do portfólio. */
+tr.linhaProj td.cel.foraJanela{background:#fbfcfd}
+
+/* ---------- Estados / diálogos ---------- */
+.aviso{padding:40px;text-align:center;color:var(--fraco)}
+dialog{border:0;border-radius:14px;padding:0;box-shadow:0 24px 60px rgba(16,25,38,.3);width:min(460px,92vw)}
+dialog::backdrop{background:rgba(16,25,38,.42)}
+dialog h3{margin:0;padding:16px 18px;border-bottom:1px solid var(--linha);font-size:15px}
+dialog .corpo{padding:16px 18px;display:grid;gap:12px}
+dialog label{display:grid;gap:4px;font-size:12px;color:var(--fraco)}
+dialog input,dialog textarea,dialog select{
+  border:1px solid var(--linha);border-radius:8px;padding:8px 10px;font:inherit;color:var(--texto);width:100%;
+}
+dialog input[type=color]{padding:2px;height:36px}
+dialog .duas{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+dialog footer{padding:12px 18px;border-top:1px solid var(--linha);display:flex;gap:8px;justify-content:flex-end}
+dialog .erro{color:#c0392b;font-size:12px;min-height:16px}
+.toast{
+  position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);
+  background:#1d2733;color:#fff;padding:8px 16px;border-radius:20px;font-size:12.5px;
+  opacity:0;transition:.2s;pointer-events:none;z-index:80;
+}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.legenda{display:flex;gap:12px;align-items:center;font-size:11px;color:var(--fraco)}
+.legenda i{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:4px}
+@media(max-width:1100px){.kpi:nth-child(n+4){display:none}.titulo{max-width:26vw}}
+@media(max-width:820px){.legenda{display:none}.kpi:nth-child(n+3){display:none}}
+</style>
+</head>
+<body>
+
+<div class="velo" id="velo"></div>
+
+<aside class="lateral" id="lateral" aria-label="Projetos">
+  <header>
+    <img src="brand/intelidata.png" alt="" onerror="this.style.display='none'">
+    <b>Cronogramas</b>
+    <button class="bt" style="margin-left:auto;padding:4px 9px" id="fecharMenu" title="Fechar">✕</button>
+  </header>
+  <div class="lista" id="listaProjetos"></div>
+  <footer>
+    <button class="bt primario" id="novoProjeto">+ Novo projeto</button>
+    <button class="bt" id="irHub" title="Voltar ao hub">Hub</button>
+  </footer>
+</aside>
+
+<div class="topo">
+  <button class="hamburguer" id="abrirMenu" aria-label="Projetos"><span></span><span></span><span></span></button>
+  <div class="titulo" id="tituloProjeto">Carregando…<small id="subProjeto"></small></div>
+
+  <div class="pincel" role="group" aria-label="Pincel">
+    <button data-pincel="planejado" aria-pressed="true"><i class="bolinha" style="background:var(--plan)"></i>Planejado</button>
+    <button data-pincel="executado" aria-pressed="false"><i class="bolinha" style="background:var(--exec)"></i>Executado</button>
+    <button data-pincel="limpar" aria-pressed="false"><i class="bolinha" style="background:#fff;border:1px solid #c9d3de"></i>Limpar</button>
+  </div>
+
+  <div id="chipMeses" title="Os KPIs estão limitados aos meses selecionados">
+    <span><b id="chipMesesTxt"></b></span>
+    <button type="button" id="limparMeses">Limpar</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="acoes">
+    <button class="bt" id="btOcultos" hidden aria-pressed="false"></button>
+    <button class="bt" id="btTudo" hidden title="Reexibir tudo neste projeto">Mostrar tudo</button>
+    <button class="bt" id="btHoje" title="Ir para a semana atual">Hoje</button>
+    <button class="bt" id="btObjetivo" title="Adicionar objetivo (linha)">+ Objetivo</button>
+    <button class="bt" id="btProjeto" title="Editar projeto">⚙</button>
+  </div>
+</div>
+
+<div class="rolagem" id="rolagem"><div class="aviso">Carregando cronogramas…</div></div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Diálogo de projeto -->
+<dialog id="dlgProjeto">
+  <form method="dialog" id="formProjeto">
+    <h3 id="dlgProjetoTit">Novo projeto</h3>
+    <div class="corpo">
+      <label>Nome do projeto<input name="nome" required maxlength="160" placeholder="Ex.: Redesenho do Portal do Cliente"></label>
+      <label>Descrição<input name="descricao" maxlength="1000" placeholder="Uma linha sobre o projeto"></label>
+      <div class="duas">
+        <label>Início (semana)<input name="inicio" type="date" required></label>
+        <label>Fim (semana)<input name="fim" type="date" required></label>
+      </div>
+      <div class="duas">
+        <label>Cor do executado<input name="cor" type="color" value="#0072ce"></label>
+        <label>Situação
+          <select name="ativo"><option value="1">Ativo</option><option value="0">Arquivado</option></select>
+        </label>
+      </div>
+      <div class="duas">
+        <label>Owner<select name="owner" id="selOwner"></select></label>
+        <label>Squad <small style="font-weight:400">(Ctrl/Cmd+clique p/ vários)</small>
+          <select name="squad" id="selSquad" multiple size="4"></select>
+        </label>
+      </div>
+      <p class="erro" id="erroProjeto"></p>
+    </div>
+    <footer>
+      <button type="button" class="bt perigo" id="excluirProjeto" hidden>Excluir</button>
+      <button type="button" class="bt" data-fechar>Cancelar</button>
+      <button type="submit" class="bt primario">Salvar</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Diálogo de objetivo -->
+<dialog id="dlgObjetivo">
+  <form method="dialog" id="formObjetivo">
+    <h3 id="dlgObjetivoTit">Novo objetivo</h3>
+    <div class="corpo">
+      <div class="duas">
+        <label>Seção <input name="secao" list="dlSecoes" maxlength="160" placeholder="Ex.: Web"></label>
+        <label>Grupo <input name="grupo" list="dlGrupos" maxlength="160" placeholder="Ex.: Desktop"></label>
+      </div>
+      <datalist id="dlSecoes"></datalist><datalist id="dlGrupos"></datalist>
+      <label>Objetivo<input name="nome" required maxlength="160" placeholder="Ex.: Painel de Faturas"></label>
+      <div class="duas">
+        <label>Peso planejado<input name="peso" type="number" step="0.05" min="0" placeholder="ex.: 9"></label>
+        <label>Concluído
+          <select name="concluido"><option value="0">Não</option><option value="1">Sim (✔ manual)</option></select>
+        </label>
+      </div>
+      <label>Observação<input name="obs" maxlength="1000"></label>
+      <p class="erro" id="erroObjetivo"></p>
+    </div>
+    <footer>
+      <button type="button" class="bt perigo" id="excluirObjetivo" hidden>Excluir</button>
+      <button type="button" class="bt" data-fechar>Cancelar</button>
+      <button type="submit" class="bt primario">Salvar</button>
+    </footer>
+  </form>
+</dialog>
+
+<script>
+'use strict';
+/* ===========================================================================
+   Estado + API
+   =========================================================================== */
+const API = '/api/cronograma';
+const $ = (s, r = document) => r.querySelector(s);
+const el = (t, c) => { const n = document.createElement(t); if (c) n.className = c; return n; };
+
+// Equipe fictícia p/ Owner/Squad (demo).
+const TEAM = ['Bruno', 'Camila Reis', 'Fernanda', 'Igor', 'Larissa', 'Thiago', 'Vinícius', 'Yasmin'];
+const splitSquad = (s) => (s || '').split(/[·\n]/).map((x) => x.trim()).filter(Boolean);
+const joinSquad = (arr) => arr.filter(Boolean).join(' · ');
+for (const sel of [$('#selOwner'), $('#selSquad')]) {
+  if (sel === $('#selOwner')) sel.append(new Option('— nenhum —', ''));
+  for (const nome of TEAM) sel.append(new Option(nome, nome));
+}
+
+let projetos = [];
+let atual = null;        // { projeto, objetivos, celulas }
+let semanas = [];        // [{ iso, mes, ano, rotulo, ini, fim, hoje }]
+let celulas = new Map(); // 'objetivoId|semana' -> { estado, valor }
+let pincel = 'planejado';
+
+/* Modo da tela: 'projeto' (a grade de sempre) ou 'portfolio' (a Visão Geral —
+   uma linha por projeto, só leitura). O portfólio reaproveita
+   TODA a maquinaria da grade: cada projeto entra como se fosse um "objetivo",
+   com o id do próprio projeto — por isso filtro de meses, KPIs e rodapé
+   funcionam sem tratamento especial. */
+let modo = 'projeto';
+const PORTFOLIO = 'portfolio';
+
+/* Filtro de MESES: clicar no cabeçalho do mês marca/desmarca. Vazio = ano todo.
+   Não é preferência persistida (nem localStorage, nem D1): é uma lente de
+   leitura do momento — abrir outro projeto começa sempre sem filtro. */
+let mesesSel = new Set();   // chaves 'ano-mes'
+let semanasSel = new Set(); // ISOs das semanas cobertas por mesesSel (derivado)
+
+/* Vista = o que está colapsado/oculto. É PREFERÊNCIA DE LEITURA, não dado do
+   cronograma: mora no localStorage por projeto e não vai para o D1 — cada
+   pessoa esconde o que já não acompanha sem mexer no que a outra vê. */
+let vista = { secoes: new Set(), grupos: new Set(), objetivos: new Set(), verOcultos: false };
+const SEP = '␟';   // separa seção de grupo na chave (grupos homônimos em seções diferentes)
+let arrastando = null;   // estado sendo pintado no arrasto atual
+const fila = new Map();  // gravações pendentes (debounce)
+let temporizador = null;
+
+async function api(rota, opcoes = {}) {
+  const r = await fetch(API + rota, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    ...opcoes,
+  });
+  let dados = {};
+  try { dados = await r.json(); } catch { /* resposta sem corpo */ }
+  if (!r.ok || dados.ok === false) throw new Error(dados.error || `Erro ${r.status}`);
+  return dados;
+}
+
+function toast(msg, ms = 2200) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms);
+}
+
+/* ===========================================================================
+   Semanas — derivadas da janela do projeto. Nunca falta um mês (a planilha
+   original pulava Novembro/2025 sem ninguém perceber).
+   =========================================================================== */
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const dd = (d) => String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');
+
+function segunda(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+  return d;
+}
+function isoHoje() { return new Date().toISOString().slice(0, 10); }
+
+/**
+ * A semana pertence ao mês da sua QUARTA-FEIRA (regra da maioria dos dias úteis).
+ * É o que a planilha fazia na mão: 28/07–01/08 ficou em Julho; 29/09–03/10, em Outubro.
+ */
+function gerarSemanas(inicio, fim) {
+  const out = [];
+  const ini = segunda(inicio), f = segunda(fim);
+  const semanaHoje = segunda(isoHoje()).toISOString().slice(0, 10);
+  for (let d = new Date(ini); d <= f; d.setUTCDate(d.getUTCDate() + 7)) {
+    const seg = new Date(d);
+    const sex = new Date(d); sex.setUTCDate(sex.getUTCDate() + 4);
+    const qua = new Date(d); qua.setUTCDate(qua.getUTCDate() + 2);
+    const iso = seg.toISOString().slice(0, 10);
+    out.push({
+      iso, mes: qua.getUTCMonth(), ano: qua.getUTCFullYear(),
+      faixa: dd(seg) + ' – ' + dd(sex),
+      hoje: iso === semanaHoje, passada: iso < semanaHoje,
+    });
+  }
+  // numera "Semana N" dentro de cada mês, como na planilha
+  let ref = null, n = 0;
+  for (const s of out) {
+    const chave = s.ano + '-' + s.mes;
+    if (chave !== ref) { ref = chave; n = 0; }
+    s.n = ++n;
+  }
+  return out;
+}
+
+/* ===========================================================================
+   Sidebar
+   =========================================================================== */
+function abrirMenu(v) { document.body.classList.toggle('menu', v !== false); }
+
+function renderSidebar() {
+  const lista = $('#listaProjetos'); lista.innerHTML = '';
+
+  // A Visão Geral é FIXA: não vem do banco, não pode ser editada nem
+  // excluída, e está sempre no topo da lista.
+  const vp = el('button', 'proj fixo');
+  vp.type = 'button';
+  vp.setAttribute('aria-current', String(modo === PORTFOLIO));
+  const vt = el('b'); vt.append(el('i'), document.createTextNode('Visão Geral'));
+  const vs = el('span');
+  vs.textContent = 'Todos os projetos em uma linha do tempo só';
+  vp.append(vt, vs);
+  vp.onclick = () => { abrirPortfolio(); abrirMenu(false); };
+  lista.append(vp);
+
+  if (projetos.length) { const t = el('div', 'sepSidebar'); t.textContent = 'Cronogramas'; lista.append(t); }
+
+  if (!projetos.length) {
+    const p = el('p'); p.className = 'aviso'; p.style.padding = '20px';
+    p.textContent = 'Nenhum cronograma ainda. Crie o primeiro.'; lista.append(p); return;
+  }
+  for (const p of projetos) {
+    const b = el('button', 'proj' + (p.ativo ? '' : ' inativo'));
+    b.type = 'button';
+    b.setAttribute('aria-current', atual && atual.projeto.id === p.id ? 'true' : 'false');
+    const t = el('b'); const i = el('i'); i.style.background = p.cor || '#0072ce';
+    t.append(i, document.createTextNode(p.nome));
+    const s = el('span');
+    const time = [p.owner, ...splitSquad(p.squad).filter((n) => n !== p.owner)].filter(Boolean);
+    s.textContent = `${p.objetivos || 0} objetivo${p.objetivos === 1 ? '' : 's'} · ${p.inicio.slice(0, 7)} → ${p.fim.slice(0, 7)}`
+      + (time.length ? ` · ${time.join(', ')}` : '');
+    b.append(t, s);
+    b.onclick = () => { abrirProjeto(p.id); abrirMenu(false); };
+    lista.append(b);
+  }
+}
+
+/* ===========================================================================
+   Carregamento
+   =========================================================================== */
+async function carregarProjetos(selecionar) {
+  const d = await api('/projetos');
+  projetos = d.projetos || [];
+  renderSidebar();
+  if (selecionar === PORTFOLIO) { await abrirPortfolio(); return; }
+  const alvo = selecionar
+    || (atual && modo === 'projeto' && projetos.some((p) => p.id === atual.projeto.id) && atual.projeto.id)
+    || (projetos[0] && projetos[0].id);
+  if (alvo) await abrirProjeto(alvo);
+  else {
+    // Sem nenhum cronograma não há o que agregar — o portfólio ficaria vazio.
+    $('#rolagem').innerHTML = '<div class="aviso">Nenhum cronograma ainda.<br><br>Abra o menu ☰ e crie o primeiro projeto.</div>';
+    $('#tituloProjeto').firstChild.textContent = 'Cronograma de Projetos';
+    abrirMenu(true);
+  }
+}
+
+async function abrirProjeto(id) {
+  await flush();
+  const d = await api('/projetos/' + id);
+  modo = 'projeto';
+  document.body.classList.remove('portfolio');
+  atual = d;
+  celulas = new Map();
+  for (const c of d.celulas) celulas.set(c.objetivo_id + '|' + c.semana, { estado: c.estado, valor: c.valor });
+  semanas = gerarSemanas(d.projeto.inicio, d.projeto.fim);
+  mesesSel.clear(); sincronizarFiltroMeses();
+  carregarVista();
+  document.documentElement.style.setProperty('--exec', d.projeto.cor || '#0072ce');
+  try { localStorage.setItem('crono:ultimo', String(id)); } catch { /* modo privado */ }
+  renderSidebar();
+  renderTudo();
+  requestAnimationFrame(() => irParaHoje(false));
+}
+
+/**
+ * VISÃO GERAL — o "projeto" fixo do portfólio.
+ *
+ * É DERIVADA, não cadastrada: o backend (`GET /portfolio`) agrega as células de
+ * todos os projetos ativos que a pessoa pode ver e devolve, por projeto, as
+ * semanas com alguma marcação. Pintar qualquer cronograma já muda esta tela na
+ * próxima abertura — não há nada para manter em dia na mão.
+ *
+ * Cada projeto vira um pseudo-objetivo com o ID DO PRÓPRIO PROJETO, então o
+ * resto da tela (filtro de meses, KPIs, rodapé, "Hoje") funciona sem saber que
+ * está num modo diferente.
+ */
+async function abrirPortfolio() {
+  await flush();
+  const d = await api('/portfolio');
+  modo = PORTFOLIO;
+  document.body.classList.add('portfolio');
+  vista = { secoes: new Set(), grupos: new Set(), objetivos: new Set(), verOcultos: false };
+
+  const linhas = d.linhas || [];
+  atual = {
+    projeto: {
+      id: PORTFOLIO, nome: 'Visão Geral', cor: '#0072ce',
+      inicio: d.inicio, fim: d.fim,
+      descricao: `${linhas.length} projeto${linhas.length === 1 ? '' : 's'} ativo${linhas.length === 1 ? '' : 's'}`
+        + (d.inicio ? ` · ${d.inicio} → ${d.fim}` : ''),
+    },
+    objetivos: linhas.map((l) => ({
+      id: l.id, nome: l.nome, secao: null, grupo: null, obs: l.descricao,
+      peso: l.peso, executado: l.executado, pct: l.pct, concluido: 0,
+      cor: l.cor || '#0072ce', owner: l.owner, squad: l.squad,
+      inicio: l.inicio, fim: l.fim, qtdObjetivos: l.objetivos,
+    })),
+    celulas: [],
+  };
+
+  celulas = new Map();
+  for (const l of linhas) {
+    for (const s of l.semanas || []) celulas.set(l.id + '|' + s.semana, { estado: s.estado, valor: s.valor });
+  }
+
+  semanas = d.inicio ? gerarSemanas(d.inicio, d.fim) : [];
+  mesesSel.clear(); sincronizarFiltroMeses();
+  document.documentElement.style.setProperty('--exec', '#0072ce');
+  try { localStorage.setItem('crono:ultimo', PORTFOLIO); } catch { /* modo privado */ }
+  renderSidebar();
+
+  if (!linhas.length) {
+    renderCabecalho();
+    $('#kpis').innerHTML = '';
+    $('#rolagem').innerHTML = '<div class="aviso">Nenhum projeto ativo para comparar.</div>';
+    return;
+  }
+  renderTudo();
+  requestAnimationFrame(() => irParaHoje(false));
+}
+
+/* ===========================================================================
+   Render da grade
+   =========================================================================== */
+/** Larguras das 4 colunas fixas (Grupo, Objetivo, Peso, Exec.), em px.
+    Precisam bater com os `left` de .c-* no CSS, que são a soma acumulada.
+    (A coluna % por objetivo foi removida: o único % é o da SEÇÃO.) */
+const LARGURAS = [150, 250, 52, 52];
+const FIXAS = LARGURAS.length;
+
+/* --- vista (colapsar/ocultar): persistência por projeto --- */
+const chaveVista = () => 'crono:vista:' + atual.projeto.id;
+
+function carregarVista() {
+  let j = {};
+  try { j = JSON.parse(localStorage.getItem(chaveVista()) || '{}'); } catch { /* modo privado */ }
+  vista = {
+    secoes: new Set(j.secoes || []),
+    grupos: new Set(j.grupos || []),
+    objetivos: new Set(j.objetivos || []),
+    verOcultos: false,               // sempre começa mostrando a vista limpa
+  };
+}
+
+function salvarVista() {
+  try {
+    localStorage.setItem(chaveVista(), JSON.stringify({
+      secoes: [...vista.secoes], grupos: [...vista.grupos], objetivos: [...vista.objetivos],
+    }));
+  } catch { /* modo privado */ }
+}
+
+/** Alterna um item num Set da vista, salva e redesenha. */
+function alternarVista(conjunto, chave) {
+  const s = vista[conjunto];
+  if (s.has(chave)) s.delete(chave); else s.add(chave);
+  salvarVista(); renderGrade(); renderOcultos();
+}
+
+/**
+ * Agrupa os objetivos em Seção → Grupo.
+ *
+ * ★ O grupo é identificado pelo NOME, não por contiguidade (mudou em
+ * 2026-08-17). Antes, um grupo era um bloco contíguo: se "Grupo 1" reaparecesse
+ * depois de "Grupo 2", virava um SEGUNDO bloco "Grupo 1" na tela. Isso foi
+ * relatado como bug — quem cria um objetivo e escolhe um grupo existente espera
+ * cair NELE, não ganhar um homônimo. Cada (seção, grupo) agora aparece uma vez
+ * só, na posição da PRIMEIRA aparição, e isso também conserta os projetos que
+ * já ficaram partidos, sem precisar mexer no banco. A causa raiz da fragmentação
+ * foi corrigida na inserção (ver createObjetivo em src/cronograma/projetos.js).
+ */
+function estrutura() {
+  const secoes = []; const porSecao = new Map();
+  for (const o of atual.objetivos) {
+    const sn = o.secao || '', gn = o.grupo || '';
+    let s = porSecao.get(sn);
+    if (!s) { s = { nome: sn, grupos: [], total: 0, porGrupo: new Map() }; porSecao.set(sn, s); secoes.push(s); }
+    let g = s.porGrupo.get(gn);
+    if (!g) { g = { nome: gn, chave: sn + SEP + gn, objetivos: [] }; s.porGrupo.set(gn, g); s.grupos.push(g); }
+    g.objetivos.push(o); s.total++;
+  }
+  return secoes;
+}
+
+/* ===========================================================================
+   Filtro de meses (clique no cabeçalho do mês)
+   =========================================================================== */
+const chaveMes = (s) => s.ano + '-' + s.mes;
+
+/** Recalcula as semanas cobertas pelo filtro e o chip do topo. */
+function sincronizarFiltroMeses() {
+  semanasSel = new Set();
+  for (const s of semanas) if (mesesSel.has(chaveMes(s))) semanasSel.add(s.iso);
+  document.body.classList.toggle('filtrando', mesesSel.size > 0);
+  if (mesesSel.size) {
+    // Nomeia na ordem da grade, não na de clique — é como a pessoa lê o topo.
+    const nomes = [];
+    for (const s of semanas) {
+      const k = chaveMes(s);
+      if (mesesSel.has(k) && !nomes.some((n) => n.k === k)) nomes.push({ k, nome: MESES[s.mes].slice(0, 3) + '/' + String(s.ano).slice(2) });
+    }
+    $('#chipMesesTxt').textContent = nomes.length > 3
+      ? `${nomes.length} meses` : nomes.map((n) => n.nome).join(', ');
+    $('#chipMeses').title = 'KPIs limitados a: ' + nomes.map((n) => n.nome).join(', ');
+  }
+}
+
+/** Sem filtro = todos. Com filtro = quem tem planejado/executado nesses meses. */
+function objetivosNoFiltro(lista) {
+  if (!mesesSel.size) return lista;
+  const comCelula = new Set();
+  for (const [k] of celulas) {
+    const [id, sem] = k.split('|');
+    if (semanasSel.has(sem)) comCelula.add(Number(id));
+  }
+  return lista.filter((o) => comCelula.has(o.id));
+}
+
+/** Executado de um objetivo, restrito (ou não) às semanas do filtro. */
+function execObjetivo(id, restringir) {
+  let s = 0;
+  for (const [k, c] of celulas) {
+    if (c.estado !== 'executado') continue;
+    const [oid, sem] = k.split('|');
+    if (Number(oid) !== id) continue;
+    if (restringir && !semanasSel.has(sem)) continue;
+    s += Number(c.valor) || 0;
+  }
+  return Math.round(s * 100) / 100;
+}
+
+function alternarMes(chave) {
+  if (mesesSel.has(chave)) mesesSel.delete(chave); else mesesSel.add(chave);
+  sincronizarFiltroMeses();
+  renderGrade();   // repinta seleção, esmaecimento e o % das seções
+  renderKpis();
+}
+
+function renderTudo() { renderCabecalho(); renderGrade(); renderKpis(); renderOcultos(); }
+
+function renderCabecalho() {
+  const p = atual.projeto;
+  const t = $('#tituloProjeto');
+  t.firstChild.textContent = p.nome;
+  $('#subProjeto').textContent = p.descricao || `${p.inicio} → ${p.fim}`;
+}
+
+function renderGrade() {
+  const alvo = $('#rolagem');
+  const tabela = el('table', 'grade');
+
+  /* --- colgroup: manda nas larguras (ver comentário em .fx no CSS) ---
+     ★ `table-layout:fixed` só entra em vigor se a TABELA tiver largura
+     explícita; com width:auto o navegador volta ao layout automático e ignora
+     o colgroup (as colunas fixas saíam com largura errada e as `left` sticky
+     desalinhavam por cima umas das outras). */
+  tabela.style.width = `calc(${LARGURAS.reduce((a, b) => a + b, 0)}px + ${semanas.length} * var(--w))`;
+  const cg = el('colgroup');
+  for (const w of LARGURAS) { const c = el('col'); c.style.width = w + 'px'; cg.append(c); }
+  for (const _ of semanas) { const c = el('col'); c.style.width = 'var(--w)'; cg.append(c); }
+  tabela.append(cg);
+
+  /* --- cabeçalho: meses + semanas --- */
+  const thead = el('thead');
+  const trM = el('tr'), trS = el('tr');
+  // As 4 colunas fixas são as mesmas nos dois modos (as larguras/`left` do CSS
+  // dependem disso) — só mudam os rótulos.
+  const rotulos = modo === PORTFOLIO
+    ? [['Owner', 'c-grupo'], ['Projeto', 'c-obj'], ['Peso', 'c-peso'], ['Exec.', 'c-exec']]
+    : [['Grupo', 'c-grupo'], ['Objetivo', 'c-obj'], ['Peso', 'c-peso'], ['Exec.', 'c-exec']];
+  for (const r of rotulos) {
+    const a = el('th', 'fx ' + r[1]); a.rowSpan = 2; a.textContent = r[0];
+    trM.append(a);
+  }
+  let bloco = null, alt = false;
+  for (const s of semanas) {
+    const chave = chaveMes(s);
+    const marcado = mesesSel.has(chave);
+    if (!bloco || bloco.chave !== chave) {
+      alt = !alt;
+      const th = el('th', 'mes' + (alt ? '' : ' alt') + (marcado ? ' on' : ''));
+      const sp = el('span');
+      sp.textContent = MESES[s.mes] + (s.mes === 0 || !bloco ? ' ' + s.ano : '');
+      sp.title = marcado ? 'Clique para remover este mês do filtro' : 'Clique para filtrar os KPIs por este mês';
+      sp.onclick = () => alternarMes(chave);
+      th.append(sp); th.colSpan = 1; trM.append(th);
+      bloco = { chave, th };
+    } else bloco.th.colSpan++;
+    s.par = alt;                       // usado para tingir levemente meses alternados
+    const th = el('th', 'sem' + (s.hoje ? ' hoje' : '') + (mesesSel.size && !marcado ? ' fora' : ''));
+    th.dataset.semana = s.iso;
+    th.innerHTML = `<b>S${s.n}</b>${s.faixa}`;
+    th.title = `Semana ${s.n} · ${s.faixa}`;
+    trS.append(th);
+  }
+  thead.append(trM, trS);
+
+  /* --- corpo --- */
+  const tbody = el('tbody');
+  // Portfólio: uma linha por projeto, sem seção/grupo de propósito — a pergunta
+  // aqui é só "quais projetos estão em andamento nesta semana".
+  if (modo === PORTFOLIO) for (const o of atual.objetivos) tbody.append(linhaProjeto(o));
+
+  for (const sec of (modo === PORTFOLIO ? [] : estrutura())) {
+    const fechada = !!sec.nome && vista.secoes.has(sec.nome);
+    if (sec.nome) tbody.append(linhaSecao(sec, fechada));
+    if (fechada) continue;
+
+    for (const g of sec.grupos) {
+      const grupoOculto = vista.grupos.has(g.chave);
+
+      // Grupo escondido: vira UMA linha-resumo com o botão de trazer de volta.
+      if (grupoOculto && !vista.verOcultos) {
+        tbody.append(linhaResumo(g, g.objetivos.length, 'grupo'));
+        continue;
+      }
+
+      const visiveis = g.objetivos.filter((o) => vista.verOcultos || !vista.objetivos.has(o.id));
+      let celGrupo = null;
+      for (const o of visiveis) {
+        const apagado = grupoOculto || vista.objetivos.has(o.id);
+        const tr = linhaObjetivo(o, apagado);
+        if (!celGrupo) { celGrupo = celulaGrupo(g, grupoOculto); tr.prepend(celGrupo); }
+        else celGrupo.rowSpan++;
+        tbody.append(tr);
+      }
+
+      // Objetivos escondidos dentro de um grupo que continua à vista.
+      const nOcultos = g.objetivos.filter((o) => vista.objetivos.has(o.id)).length;
+      if (nOcultos && !vista.verOcultos) tbody.append(linhaResumo(g, nOcultos, 'objetivos'));
+    }
+  }
+
+  /* --- rodapé: peso executado por semana --- */
+  const tfoot = el('tfoot');
+  const trF = el('tr');
+  const rot = el('td', 'fx rot'); rot.colSpan = 3; rot.style.left = '0';
+  rot.textContent = 'Entregue na semana';
+  const total = el('td', 'fx c-exec tot'); total.dataset.geral = '1';
+  trF.append(rot, total);
+  for (const s of semanas) {
+    const td = el('td'); td.dataset.somaSemana = s.iso; trF.append(td);
+  }
+  tfoot.append(trF);
+
+  tabela.append(thead, tbody, tfoot);
+  alvo.innerHTML = ''; alvo.append(tabela);
+  atualizarRodape();
+  ligarPintura(tabela);
+}
+
+/* --- as três linhas possíveis do corpo da grade --- */
+
+/** Cabeçalho de seção, com a seta que colapsa tudo que está abaixo dela + o
+    progresso agregado da seção (o ÚNICO % da grade). */
+function linhaSecao(sec, fechada) {
+  const tr = el('tr', 'secao' + (fechada ? ' fechada' : ''));
+  const td = el('td', 'tit'); td.colSpan = FIXAS;
+  const b = el('button'); b.type = 'button';
+  b.title = (fechada ? 'Expandir' : 'Colapsar') + ' seção: ' + sec.nome;
+  const nm = el('span', 'nmS'); nm.textContent = sec.nome;
+  b.append(el('i', 'seta'), nm);
+  if (fechada) { const q = el('span', 'qtd'); q.textContent = `${sec.total} objetivos`; b.append(q); }
+  b.onclick = () => alternarVista('secoes', sec.nome);
+  td.append(b);
+  const prog = el('span', 'prog');
+  prog.dataset.progSecao = sec.nome;
+  prog.innerHTML = htmlProgressoSecao(sec);
+  td.append(prog);
+  const resto = el('td'); resto.colSpan = semanas.length;
+  tr.append(td, resto);
+  return tr;
+}
+
+/** Célula do grupo (bloco vertical tingido) + botão de ocultar/mostrar o grupo. */
+function celulaGrupo(g, oculto) {
+  const td = el('td', 'fx c-grupo');
+  const bloco = el('div', 'bloco');
+  if (g.nome) { const r = el('div', 'rot'); r.textContent = g.nome; bloco.append(r); }
+  else bloco.style.background = 'none';
+  if (g.nome) {
+    const b = el('button', 'oculta'); b.type = 'button';
+    b.textContent = oculto ? '⊕' : '⊖';
+    b.title = oculto ? 'Mostrar este grupo' : 'Ocultar este grupo';
+    b.onclick = (e) => { e.stopPropagation(); alternarVista('grupos', g.chave); };
+    bloco.append(b);
+  }
+  td.append(bloco);
+  td.rowSpan = 1;
+  return td;
+}
+
+/** Linha-resumo do que está escondido, com o botão de trazer de volta. */
+function linhaResumo(g, n, tipo) {
+  const tr = el('tr', 'resumo');
+  tr.append(el('td', 'fx c-grupo'));            // mantém o alinhamento da 1ª coluna
+  const td = el('td', 'fx msg'); td.colSpan = FIXAS - 1;
+  const alvo = tipo === 'grupo' ? (g.nome || 'grupo') : 'objetivo';
+  td.append(document.createTextNode(
+    tipo === 'grupo' ? `${g.nome || 'Sem grupo'} — ${n} ${n === 1 ? 'objetivo oculto' : 'objetivos ocultos'}`
+                     : `${n} ${n === 1 ? 'objetivo oculto' : 'objetivos ocultos'}`));
+  const b = el('button'); b.type = 'button'; b.textContent = 'Mostrar';
+  b.title = `Trazer de volta ${alvo}`;
+  b.onclick = () => {
+    if (tipo === 'grupo') vista.grupos.delete(g.chave);
+    else for (const o of g.objetivos) vista.objetivos.delete(o.id);
+    salvarVista(); renderGrade(); renderOcultos();
+  };
+  td.append(b);
+  const resto = el('td'); resto.colSpan = semanas.length;
+  tr.append(td, resto);
+  return tr;
+}
+
+/** A linha do objetivo: rótulo, peso, executado, % e as células da semana. */
+function linhaObjetivo(o, apagado) {
+  const tr = el('tr', apagado ? 'esmaecido' : '');
+  tr.dataset.obj = o.id;
+
+  const tdO = el('td', 'fx c-obj');
+  const dO = el('div');
+  const nm = el('span', 'nm'); nm.textContent = o.nome;
+  // O título CORTADO precisa aparecer inteiro no hover — antes o title só
+  // trazia a observação e sumia com o nome quando havia as duas coisas.
+  nm.title = o.obs ? `${o.nome}\n\n${o.obs}` : o.nome;
+  const ed = el('button', 'ed'); ed.type = 'button'; ed.textContent = '✎'; ed.title = 'Editar objetivo';
+  ed.onclick = (e) => { e.stopPropagation(); dialogoObjetivo(o); };
+  const oc = el('button', 'oculta'); oc.type = 'button';
+  const escondido = vista.objetivos.has(o.id);
+  oc.textContent = escondido ? '⊕' : '⊖';
+  oc.title = escondido ? 'Mostrar este objetivo' : 'Ocultar este objetivo';
+  oc.onclick = (e) => { e.stopPropagation(); alternarVista('objetivos', o.id); };
+  dO.append(nm, ed, oc); tdO.append(dO);
+
+  const tdP = el('td', 'fx c-peso');
+  tdP.innerHTML = o.peso === null
+    ? '<span class="num vazio">–</span>'
+    : `<span class="num">${fmt(o.peso)}</span>`;
+
+  const tdE = el('td', 'fx c-exec');
+  tdE.innerHTML = `<span class="num" data-exec="${o.id}">${fmt(o.executado) || '0'}</span>`;
+  marcarExec(tdE.firstChild, o);
+
+  tr.append(tdO, tdP, tdE);
+  celulasDaLinha(tr, o);
+  return tr;
+}
+
+/** As células de semana de uma linha (iguais nos dois modos da tela). */
+function celulasDaLinha(tr, o) {
+  for (const s of semanas) {
+    const fora = mesesSel.size && !mesesSel.has(chaveMes(s));
+    const td = el('td', 'cel' + (s.hoje ? ' hoje' : s.par ? ' mespar' : '') + (fora ? ' fora' : ''));
+    td.dataset.obj = o.id; td.dataset.semana = s.iso;
+    if (s.passada && !o.concluido) td.classList.add('atrasado');
+    // No portfólio, a janela de cada projeto é menor que a da grade inteira:
+    // marcar o que está fora dela evita ler "vazio" como "nada planejado".
+    if (o.inicio && (s.iso < o.inicio || s.iso > o.fim)) td.classList.add('foraJanela');
+    pintar(td);
+    tr.append(td);
+  }
+}
+
+/**
+ * Linha do PORTFÓLIO: um projeto inteiro. Só leitura — o nome leva ao
+ * cronograma dele, que é onde se edita. Cada linha carrega a própria cor no
+ * `--exec`, então o bloco do executado sai na cor do projeto (é assim que se
+ * distingue um projeto do outro na mesma tela).
+ */
+function linhaProjeto(o) {
+  const tr = el('tr', 'linhaProj');
+  tr.dataset.obj = o.id;
+  tr.style.setProperty('--exec', o.cor || '#0072ce');
+
+  const tdG = el('td', 'fx c-grupo');
+  const bloco = el('div', 'bloco');
+  const time = [o.owner, ...splitSquad(o.squad).filter((n) => n !== o.owner)].filter(Boolean);
+  if (time.length) {
+    const r = el('div', 'rot');
+    r.textContent = o.owner || time[0];
+    r.title = time.join(' · ');
+    bloco.append(r);
+  }
+  tdG.append(bloco);
+
+  const tdO = el('td', 'fx c-obj');
+  const dO = el('div');
+  const bt = el('button', 'abrir'); bt.type = 'button';
+  bt.textContent = o.nome;
+  bt.title = `Abrir o cronograma de ${o.nome} (${o.qtdObjetivos} objetivo${o.qtdObjetivos === 1 ? '' : 's'} · ${o.inicio} → ${o.fim})`;
+  bt.onclick = () => abrirProjeto(o.id);
+  dO.append(bt); tdO.append(dO);
+
+  const tdP = el('td', 'fx c-peso');
+  tdP.innerHTML = o.peso === null ? '<span class="num vazio">–</span>' : `<span class="num">${fmt(o.peso)}</span>`;
+
+  const tdE = el('td', 'fx c-exec');
+  tdE.innerHTML = `<span class="num" data-exec="${o.id}">${fmt(o.executado) || '0'}</span>`;
+  marcarExec(tdE.firstChild, o);
+
+  tr.append(tdG, tdO, tdP, tdE);
+  celulasDaLinha(tr, o);
+  return tr;
+}
+
+/** Chip do topo: quantos objetivos/grupos estão escondidos e como voltar. */
+function renderOcultos() {
+  const n = vista.objetivos.size + vista.grupos.size + vista.secoes.size;
+  const bt = $('#btOcultos'), tudo = $('#btTudo');
+  bt.hidden = !n;
+  tudo.hidden = !n;
+  bt.textContent = vista.verOcultos ? '↩ Voltar' : `⊖ ${n} escondido${n === 1 ? '' : 's'}`;
+  bt.title = vista.verOcultos ? 'Voltar à vista enxuta' : 'Espiar o que está escondido';
+  bt.setAttribute('aria-pressed', String(vista.verOcultos));
+}
+
+const fmt = (n) => (n === null || n === undefined || n === '' ? '' : (Math.round(n * 100) / 100).toString().replace('.', ','));
+
+/**
+ * Progresso da SEÇÃO — cálculo AUTOMÁTICO, nunca digitado: soma o peso planejado
+ * e o executado de todos os objetivos da seção, então o % já sai ponderado pelo
+ * peso (um objetivo de peso 9 pesa 9x mais que um de peso 1 no total).
+ * Respeita o filtro de meses: com meses marcados, só entram os objetivos que
+ * têm planejado/executado ali.
+ */
+function progressoSecao(sec) {
+  const todos = sec.grupos.flatMap((g) => g.objetivos);
+  const lista = objetivosNoFiltro(todos);
+  let peso = 0, exec = 0, conc = 0;
+  for (const o of lista) {
+    if (o.peso !== null) peso += o.peso;
+    exec += o.executado || 0;
+    if (o.concluido || (o.peso && o.executado >= o.peso)) conc++;
+  }
+  peso = Math.round(peso * 100) / 100; exec = Math.round(exec * 100) / 100;
+  return { peso, exec, conc, total: lista.length, pct: peso ? Math.round((exec / peso) * 1000) / 10 : null };
+}
+
+function htmlProgressoSecao(sec) {
+  const t = progressoSecao(sec);
+  if (!t.total) return '<span class="det">nenhum objetivo nos meses selecionados</span>';
+  if (t.pct === null) return `<span class="det" title="${t.conc}/${t.total} concluídos · sem peso planejado">${t.conc}/${t.total} concluídos · sem peso planejado</span>`;
+  const done = t.pct >= 100;
+  // Detalhe à esquerda, % à DIREITA: o % é o que precisa ficar sempre no mesmo
+  // lugar, então é ele que encosta na âncora fixa (right:10px). O .det agora
+  // trunca dentro do limite de 240px do .prog — o title cobre o texto inteiro.
+  const det = `${fmt(t.exec)} de ${fmt(t.peso)} · ${t.conc}/${t.total} concluídos`;
+  return `<span class="det" title="${det}">${det}</span>`
+       + `<span class="p${done ? ' ok' : ''}">${done ? '✔' : ''}${fmt(t.pct)}%</span>`;
+}
+
+/** Repinta só os % das seções (usado após pintar uma célula). */
+function atualizarSecoes() {
+  const porNome = new Map(estrutura().map((s) => [s.nome, s]));
+  for (const sp of document.querySelectorAll('[data-prog-secao]')) {
+    const sec = porNome.get(sp.dataset.progSecao);
+    if (sec) sp.innerHTML = htmlProgressoSecao(sec);
+  }
+}
+
+/** O chip do executado fica verde quando o peso planejado foi atingido. */
+function marcarExec(chip, o) {
+  if (!chip) return;
+  chip.classList.toggle('ok', !!(o.concluido || (o.peso && o.executado >= o.peso)));
+  chip.classList.toggle('vazio', !o.executado && !o.concluido);
+}
+
+function pintar(td) {
+  const c = celulas.get(td.dataset.obj + '|' + td.dataset.semana);
+  if (!c) { delete td.dataset.e; td.innerHTML = ''; return; }
+  td.dataset.e = c.estado;
+  // Em 'planejado' o valor é PREVISÃO (não soma no executado); em 'executado'
+  // é o peso entregue de fato. Os dois usam o mesmo campo — ver upsertCelulas.
+  const v = c.valor !== null && c.valor !== undefined ? fmt(c.valor) : '';
+  td.innerHTML = `<span class="b">${v}</span>`;
+}
+
+/* ===========================================================================
+   KPIs + totais derivados (a soma NUNCA é digitada)
+   =========================================================================== */
+/** Totais do topo. Com meses marcados, olham SÓ os objetivos planejados (ou já
+    executados) nesses meses — o peso e o executado do objetivo entram inteiros,
+    porque o KPI responde "como estão estes objetivos", não "o que caiu no mês". */
+function totais() {
+  const lista = objetivosNoFiltro(atual.objetivos);
+  let peso = 0, exec = 0, conc = 0, comPeso = 0;
+  for (const o of lista) {
+    if (o.peso !== null) { peso += o.peso; comPeso++; }
+    exec += o.executado || 0;
+    if (o.concluido || (o.peso && o.executado >= o.peso)) conc++;
+  }
+  return { peso: Math.round(peso * 100) / 100, exec: Math.round(exec * 100) / 100, conc, total: lista.length, comPeso };
+}
+
+/**
+ * KPIs do PORTFÓLIO: a pergunta é simultaneidade, não progresso.
+ * - "Em andamento": projetos com marcação NA SEMANA ATUAL.
+ * - "Pico simultâneo": o maior número de projetos numa mesma semana da janela
+ *   (respeitando o filtro de meses) — é o número que dói no planejamento.
+ */
+function simultaneidade() {
+  const ids = new Set(objetivosNoFiltro(atual.objetivos).map((o) => o.id));
+  const porSemana = new Map();
+  for (const [k] of celulas) {
+    const [id, sem] = k.split('|');
+    if (!ids.has(Number(id))) continue;
+    if (mesesSel.size && !semanasSel.has(sem)) continue;
+    if (!porSemana.has(sem)) porSemana.set(sem, new Set());
+    porSemana.get(sem).add(Number(id));
+  }
+  let pico = 0, semanaPico = null;
+  for (const [sem, s] of porSemana) if (s.size > pico) { pico = s.size; semanaPico = sem; }
+  const hoje = semanas.find((s) => s.hoje);
+  const agora = hoje && porSemana.get(hoje.iso) ? porSemana.get(hoje.iso).size : 0;
+  return { pico, semanaPico, agora, temHoje: !!hoje };
+}
+
+function renderKpisPortfolio() {
+  const t = totais();
+  const s = simultaneidade();
+  const pct = t.peso ? Math.round((t.exec / t.peso) * 1000) / 10 : 0;
+  const faixa = s.semanaPico ? (semanas.find((x) => x.iso === s.semanaPico) || {}).faixa : null;
+  $('#kpis').innerHTML = [
+    ['Projetos', t.total, 'Projetos ativos nesta visão'],
+    ['Em andamento', s.temHoje ? s.agora : '–', s.temHoje ? 'Projetos com semana marcada agora' : 'A semana atual está fora da janela'],
+    ['Pico simultâneo', s.pico, faixa ? `Máximo de projetos numa mesma semana (${faixa})` : 'Máximo de projetos numa mesma semana'],
+    ['Peso total', fmt(t.peso) || '–', 'Soma dos pesos planejados de todos os projetos'],
+    ['Executado', fmt(t.exec), 'Soma do peso entregue'],
+    ['% do peso', t.peso ? fmt(pct) + '%' : '–', 'Executado ÷ peso planejado'],
+  ].map(([k, v, tit]) => `<div class="kpi" title="${tit}"><b>${v}</b><span>${k}</span></div>`).join('');
+}
+
+function renderKpis() {
+  if (modo === PORTFOLIO) return renderKpisPortfolio();
+  const t = totais();
+  const pct = t.peso ? Math.round((t.exec / t.peso) * 1000) / 10 : 0;
+  $('#kpis').innerHTML = [
+    ['Objetivos', t.total],
+    ['Concluídos', `${t.conc}/${t.total}`],
+    ['Peso total', fmt(t.peso) || '–'],
+    ['Executado', fmt(t.exec)],
+    ['% do peso', t.peso ? fmt(pct) + '%' : '–'],
+  ].map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+}
+
+function atualizarRodape() {
+  const soma = new Map(); let geral = 0;
+  for (const [k, c] of celulas) {
+    if (c.estado !== 'executado') continue;
+    const sem = k.split('|')[1];
+    const v = Number(c.valor) || 0;
+    soma.set(sem, (soma.get(sem) || 0) + v);
+    geral += v;
+  }
+  for (const td of document.querySelectorAll('[data-soma-semana]')) {
+    const v = soma.get(td.dataset.somaSemana);
+    td.textContent = v ? fmt(v) : '';
+    td.style.color = v ? 'var(--texto)' : '';
+    td.style.fontWeight = v ? '600' : '';
+  }
+  const g = document.querySelector('[data-geral]');
+  if (g) g.textContent = fmt(geral);
+}
+
+function recalcObjetivo(id) {
+  const o = atual.objetivos.find((x) => x.id === Number(id));
+  if (!o) return;
+  const s = execObjetivo(o.id, false);
+  o.executado = s;
+  o.restante = o.peso === null ? null : Math.round((o.peso - s) * 100) / 100;
+  o.pct = o.peso ? Math.round((s / o.peso) * 1000) / 10 : null;
+  const e = document.querySelector(`[data-exec="${o.id}"]`);
+  if (e) { e.textContent = fmt(o.executado) || '0'; marcarExec(e, o); }
+  atualizarRodape(); atualizarSecoes(); renderKpis();
+}
+
+/* ===========================================================================
+   Pintura: clique e ARRASTO (o ganho real sobre o Excel)
+   =========================================================================== */
+function ligarPintura(tabela) {
+  // O portfólio é DERIVADO: pintar ali não teria onde gravar (a célula pertence
+  // a um objetivo, não a um projeto). Edita-se no cronograma do projeto.
+  if (modo === PORTFOLIO) return;
+  tabela.addEventListener('mousedown', (ev) => {
+    const td = ev.target.closest('td.cel');
+    if (!td || ev.button !== 0 || ev.detail > 1) return;
+    ev.preventDefault();
+    arrastando = alvoDoPincel(td);
+    aplicar(td, arrastando);
+  });
+  tabela.addEventListener('mouseover', (ev) => {
+    if (arrastando === null) return;
+    const td = ev.target.closest('td.cel');
+    if (td) aplicar(td, arrastando);
+  });
+  tabela.addEventListener('dblclick', (ev) => {
+    const td = ev.target.closest('td.cel');
+    if (td) editarValor(td);
+  });
+  document.addEventListener('mouseup', () => { arrastando = null; agendar(); });
+}
+
+/** O pincel "Limpar" apaga; os outros alternam (clicar de novo no mesmo apaga). */
+function alvoDoPincel(td) {
+  if (pincel === 'limpar') return null;
+  return td.dataset.e === pincel ? null : pincel;
+}
+
+function aplicar(td, estado) {
+  const chave = td.dataset.obj + '|' + td.dataset.semana;
+  const antes = celulas.get(chave);
+  if (!estado) {
+    if (!antes) return;
+    celulas.delete(chave);
+  } else {
+    if (antes && antes.estado === estado) return;
+    // Trocar entre planejado/executado preserva o valor (previsão ou
+    // entregue) que já houvesse na célula — os dois estados usam o mesmo campo.
+    celulas.set(chave, { estado, valor: (antes && antes.valor) ?? null });
+  }
+  pintar(td);
+  const depois = celulas.get(chave);
+  fila.set(chave, { objetivo_id: Number(td.dataset.obj), semana: td.dataset.semana, estado: estado || null, valor: depois ? depois.valor : null });
+  recalcObjetivo(td.dataset.obj);
+}
+
+/**
+ * Duplo clique: digita o valor daquela semana. Se a célula já estiver
+ * 'planejado' (pincel 1), o número fica como PREVISÃO — não soma no
+ * executado, é só "está previsto entregar Z aqui". Se já for 'executado' ou
+ * ainda não tiver estado, mantém o comportamento antigo (vira executado).
+ */
+function editarValor(td) {
+  if (td.querySelector('input')) return;
+  const chave = td.dataset.obj + '|' + td.dataset.semana;
+  const c = celulas.get(chave);
+  const estado = c ? c.estado : 'executado';
+  const inp = el('input');
+  inp.type = 'number'; inp.step = '0.5'; inp.min = '0';
+  inp.value = c && c.valor !== null && c.valor !== undefined ? c.valor : '';
+  td.append(inp); inp.focus(); inp.select();
+
+  const encerrar = (salvar) => {
+    const bruto = inp.value.trim();
+    inp.remove();
+    if (!salvar) { pintar(td); return; }
+    let valor = null;
+    if (bruto !== '') {
+      const n = Number(bruto.replace(',', '.'));
+      if (!Number.isFinite(n) || n < 0) { toast('Valor inválido'); pintar(td); return; }
+      valor = n;
+    }
+    celulas.set(chave, { estado, valor });
+    pintar(td);
+    fila.set(chave, { objetivo_id: Number(td.dataset.obj), semana: td.dataset.semana, estado, valor });
+    recalcObjetivo(td.dataset.obj);
+    agendar();
+  };
+  inp.addEventListener('blur', () => encerrar(true));
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); encerrar(false); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const prox = e.shiftKey ? td.previousElementSibling : td.nextElementSibling;
+      inp.blur();
+      if (prox && prox.classList.contains('cel')) editarValor(prox);
+    }
+  });
+}
+
+/* --- gravação em lote (debounce) --- */
+function agendar() {
+  clearTimeout(temporizador);
+  temporizador = setTimeout(flush, 500);
+}
+async function flush() {
+  if (!fila.size) return;
+  const lote = [...fila.values()];
+  fila.clear();
+  try {
+    const d = await api('/celulas', { method: 'PUT', body: JSON.stringify({ celulas: lote }) });
+    // O servidor devolve os objetivos com a soma recalculada — usamos a dele.
+    for (const o of d.objetivos || []) {
+      const i = atual.objetivos.findIndex((x) => x.id === o.id);
+      if (i >= 0) atual.objetivos[i] = { ...atual.objetivos[i], ...o };
+    }
+    atualizarSecoes(); renderKpis();
+  } catch (e) {
+    toast('Não salvou: ' + e.message, 5000);
+    for (const c of lote) fila.set(c.objetivo_id + '|' + c.semana, c); // tenta de novo no próximo flush
+  }
+}
+window.addEventListener('beforeunload', (e) => {
+  if (fila.size) { flush(); e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ===========================================================================
+   Diálogos
+   =========================================================================== */
+function dialogoProjeto(p) {
+  const d = $('#dlgProjeto'), f = $('#formProjeto');
+  $('#dlgProjetoTit').textContent = p ? 'Editar projeto' : 'Novo projeto';
+  $('#erroProjeto').textContent = '';
+  const hoje = segunda(isoHoje()).toISOString().slice(0, 10);
+  const daqui = new Date(segunda(isoHoje())); daqui.setUTCDate(daqui.getUTCDate() + 7 * 25);
+  f.nome.value = p ? p.nome : '';
+  f.descricao.value = p ? (p.descricao || '') : '';
+  f.inicio.value = p ? p.inicio : hoje;
+  f.fim.value = p ? p.fim : daqui.toISOString().slice(0, 10);
+  f.cor.value = p ? (p.cor || '#0072ce') : '#0072ce';
+  f.ativo.value = p ? String(p.ativo) : '1';
+  f.owner.value = p && p.owner ? p.owner : '';
+  const squadSel = p ? splitSquad(p.squad) : [];
+  for (const opt of f.squad.options) opt.selected = squadSel.includes(opt.value);
+  $('#excluirProjeto').hidden = !p;
+  f.dataset.id = p ? p.id : '';
+  d.showModal();
+}
+
+$('#formProjeto').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const corpo = {
+    nome: f.nome.value, descricao: f.descricao.value, inicio: f.inicio.value,
+    fim: f.fim.value, cor: f.cor.value, ativo: Number(f.ativo.value),
+    owner: f.owner.value, squad: joinSquad([...f.squad.selectedOptions].map((o) => o.value)),
+  };
+  try {
+    if (f.dataset.id) {
+      await api('/projetos/' + f.dataset.id, { method: 'PATCH', body: JSON.stringify(corpo) });
+      $('#dlgProjeto').close(); await carregarProjetos(Number(f.dataset.id)); toast('Projeto atualizado');
+    } else {
+      const d = await api('/projetos', { method: 'POST', body: JSON.stringify(corpo) });
+      $('#dlgProjeto').close(); await carregarProjetos(d.id); toast('Projeto criado');
+    }
+  } catch (e) { $('#erroProjeto').textContent = e.message; }
+});
+
+$('#excluirProjeto').addEventListener('click', async () => {
+  const id = $('#formProjeto').dataset.id;
+  if (!id || !confirm('Excluir este projeto com TODOS os objetivos e a grade? Não dá para desfazer.')) return;
+  try {
+    await api('/projetos/' + id, { method: 'DELETE' });
+    $('#dlgProjeto').close(); atual = null; await carregarProjetos(); toast('Projeto excluído');
+  } catch (e) { $('#erroProjeto').textContent = e.message; }
+});
+
+function dialogoObjetivo(o) {
+  const d = $('#dlgObjetivo'), f = $('#formObjetivo');
+  $('#dlgObjetivoTit').textContent = o ? 'Editar objetivo' : 'Novo objetivo';
+  $('#erroObjetivo').textContent = '';
+  const secoes = [...new Set(atual.objetivos.map((x) => x.secao).filter(Boolean))];
+  const grupos = [...new Set(atual.objetivos.map((x) => x.grupo).filter(Boolean))];
+  $('#dlSecoes').innerHTML = secoes.map((s) => `<option value="${s.replace(/"/g, '&quot;')}">`).join('');
+  $('#dlGrupos').innerHTML = grupos.map((s) => `<option value="${s.replace(/"/g, '&quot;')}">`).join('');
+  const ult = atual.objetivos[atual.objetivos.length - 1] || {};
+  f.secao.value = o ? (o.secao || '') : (ult.secao || '');
+  f.grupo.value = o ? (o.grupo || '') : (ult.grupo || '');
+  f.nome.value = o ? o.nome : '';
+  f.peso.value = o && o.peso !== null ? o.peso : '';
+  f.concluido.value = o ? String(o.concluido) : '0';
+  f.obs.value = o ? (o.obs || '') : '';
+  $('#excluirObjetivo').hidden = !o;
+  f.dataset.id = o ? o.id : '';
+  d.showModal();
+}
+
+$('#formObjetivo').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const corpo = {
+    projeto_id: atual.projeto.id, secao: f.secao.value, grupo: f.grupo.value,
+    nome: f.nome.value, peso: f.peso.value, concluido: Number(f.concluido.value), obs: f.obs.value,
+  };
+  try {
+    if (f.dataset.id) await api('/objetivos/' + f.dataset.id, { method: 'PATCH', body: JSON.stringify(corpo) });
+    else await api('/objetivos', { method: 'POST', body: JSON.stringify(corpo) });
+    $('#dlgObjetivo').close();
+    await abrirProjeto(atual.projeto.id);
+    await carregarLista();
+    toast(f.dataset.id ? 'Objetivo atualizado' : 'Objetivo criado');
+  } catch (e) { $('#erroObjetivo').textContent = e.message; }
+});
+
+$('#excluirObjetivo').addEventListener('click', async () => {
+  const id = $('#formObjetivo').dataset.id;
+  if (!id || !confirm('Excluir este objetivo e as células dele?')) return;
+  try {
+    await api('/objetivos/' + id, { method: 'DELETE' });
+    $('#dlgObjetivo').close(); await abrirProjeto(atual.projeto.id); await carregarLista(); toast('Objetivo excluído');
+  } catch (e) { $('#erroObjetivo').textContent = e.message; }
+});
+
+/** Atualiza só a contagem da sidebar, sem trocar de projeto. */
+async function carregarLista() {
+  try { const d = await api('/projetos'); projetos = d.projetos || []; renderSidebar(); } catch { /* silencioso */ }
+}
+
+/* ===========================================================================
+   Ações da barra
+   =========================================================================== */
+for (const b of document.querySelectorAll('[data-pincel]')) {
+  b.addEventListener('click', () => {
+    pincel = b.dataset.pincel;
+    for (const o of document.querySelectorAll('[data-pincel]')) o.setAttribute('aria-pressed', String(o === b));
+  });
+}
+$('#abrirMenu').onclick = () => abrirMenu(true);
+$('#fecharMenu').onclick = () => abrirMenu(false);
+$('#velo').onclick = () => abrirMenu(false);
+$('#irHub').onclick = () => { top.location.href = '../../projetos.html'; };
+$('#novoProjeto').onclick = () => { abrirMenu(false); dialogoProjeto(null); };
+$('#btProjeto').onclick = () => atual && modo !== PORTFOLIO && dialogoProjeto(atual.projeto);
+$('#btObjetivo').onclick = () => atual && modo !== PORTFOLIO && dialogoObjetivo(null);
+$('#btHoje').onclick = () => irParaHoje(true);
+$('#btOcultos').onclick = () => { vista.verOcultos = !vista.verOcultos; renderGrade(); renderOcultos(); };
+$('#limparMeses').onclick = () => {
+  mesesSel.clear(); sincronizarFiltroMeses(); renderGrade(); renderKpis();
+};
+$('#btTudo').onclick = () => {
+  vista.secoes.clear(); vista.grupos.clear(); vista.objetivos.clear(); vista.verOcultos = false;
+  salvarVista(); renderGrade(); renderOcultos(); toast('Tudo visível de novo');
+};
+for (const b of document.querySelectorAll('[data-fechar]')) b.onclick = () => b.closest('dialog').close();
+
+function irParaHoje(avisar) {
+  const th = document.querySelector('th.sem.hoje');
+  const rol = $('#rolagem');
+  if (!th) { if (avisar) toast('A semana atual está fora da janela deste projeto'); return; }
+  rol.scrollTo({ left: Math.max(0, th.offsetLeft - 560), behavior: avisar ? 'smooth' : 'auto' });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input,textarea,select')) return;
+  if (e.key === '1') document.querySelector('[data-pincel="planejado"]').click();
+  if (e.key === '2') document.querySelector('[data-pincel="executado"]').click();
+  if (e.key === '3') document.querySelector('[data-pincel="limpar"]').click();
+  if (e.key.toLowerCase() === 'h') irParaHoje(true);
+  if (e.key.toLowerCase() === 'm') abrirMenu(!document.body.classList.contains('menu'));
+  if (e.key === 'Escape' && mesesSel.size) $('#limparMeses').click();
+});
+
+/* ===========================================================================
+   Início
+   =========================================================================== */
+(async () => {
+  try {
+    let ultimo = null;
+    try {
+      const guardado = localStorage.getItem('crono:ultimo');
+      ultimo = guardado === PORTFOLIO ? PORTFOLIO : (Number(guardado) || null);
+    } catch { /* modo privado */ }
+    await carregarProjetos(ultimo);
+  } catch (e) {
+    $('#rolagem').innerHTML = `<div class="aviso">Não foi possível carregar os cronogramas.<br><br><code>${e.message}</code></div>`;
+  }
+})();
+</script>
+</body>
+</html>

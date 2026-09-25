@@ -1,0 +1,3607 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Reunião OKR · 2026 (demo)</title>
+<meta name="description" content="Dashboard de acompanhamento de OKRs para reuniões semanais — demonstração com dados fictícios.">
+<meta name="robots" content="noindex">
+<!-- Demo: dados fictícios em memória no lugar do backend (Worker/D1/KV) -->
+<script src="mock-api.js"></script>
+<!-- React + ReactDOM (UMD, produção) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+<!-- prop-types (exigido pelo UMD do recharts) -->
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin></script>
+<!-- O UMD do lucide-react procura window.react (minúsculo); criamos o alias antes de carregá-lo -->
+<script>window.react = window.React;</script>
+<script src="https://unpkg.com/lucide-react@0.453.0/dist/umd/lucide-react.min.js" crossorigin></script>
+<!-- recharts (UMD; usa React/PropTypes/ReactDOM globais) -->
+<script src="https://unpkg.com/recharts@2.15.0/umd/Recharts.js" crossorigin></script>
+<!-- Tailwind (o componente usa classes utilitárias do Tailwind) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Babel Standalone: transforma o JSX no navegador (mesmo padrão dos outros dashboards) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>html,body,#root{height:100%}body{margin:0}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+/* ====== globais UMD -> bindings locais (substituem os imports do .jsx) ====== */
+const { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef, createContext, useContext } = React;
+const { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ComposedChart, Area, Line, PieChart, Pie, ReferenceLine } = Recharts;
+const { LayoutDashboard, Store, Megaphone, Ticket, FolderKanban, Instagram, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Target, Sparkles, Award, Flame, Zap, Calendar, Users, ArrowUpRight, ArrowDownRight, Activity, AlertCircle, PanelLeftClose, PanelLeftOpen, Filter, X, Play, ChevronLeft, ChevronRight, Maximize, Minimize, Pencil, Plus, Trash2, ImagePlus, Check, Type, Download } = LucideReact;
+
+/* ====== Dashboard (gerado a partir de intelidata-okr-dashboard.jsx) ====== */
+/* ============================================================
+   CAMADA DE DADOS — OKR via JSON publicado (GitHub raw)  [Anexo C]
+   ------------------------------------------------------------
+   1) define a URL do JSON publicado pelo Power Automate;
+   2) transforma o JSON (formato do Office Script) na estrutura
+      SECTIONS que o Dashboard já consome;
+   3) expõe um hook useOkrData() com loading / erro / atualizadoEm.
+
+   Requisitos do JSON de entrada (gerado pelo Office Script):
+     {
+       atualizadoEm: ISOString,
+       okrGeral: number,
+       secoes: [{ nome, krs: [{ owner, squad, titulo, sub,
+                                target, progress, meses:[abr,mai,jun] }] }]
+     }
+   ============================================================ */
+
+// Servido pelo Worker (proxy ao repo privado Dados, atrás de login + RBAC).
+const OKR_JSON_URL = '/dados/okr-data.json';
+
+/* ---- Mapa: nome da seção na planilha -> metadados do Dashboard ---- */
+const SECTION_META = {
+  'Revendas': {
+    id: 'revendas', icon: Store,
+    blurb: 'Geração de leads, seguidores e visualizações para clientes revendedores.',
+  },
+  'Funil ADS Intelidata': {
+    id: 'ads', icon: Megaphone,
+    // Era "Funil ADS Beemore" (no Q2 a seção tinha só o KR da Beemore). A partir
+    // do Q3 ela abriga também o SAL da Uniplus, então o nome volta a ser geral.
+    name: 'Funil ADS',
+    blurb: 'Performance paga e captação de leads pelos funis oficiais da Beemore e da Uniplus.',
+    // O funil ADS é, por definição, um KR de leads. Se o texto da KR não casar
+    // com a heurística (cair no default "% concluído"), tratamos como leads —
+    // assim ele ganha o mesmo gráfico/ritmo diário dos demais KRs de leads.
+    unitFallback: 'leads',
+  },
+  'Tickets Internos': {
+    id: 'tickets', icon: Ticket,
+    blurb: 'Demandas internas entregues pela squad de marketing.',
+  },
+  // Seções que aparecem no Q1 (a planilha muda de estrutura entre trimestres).
+  'Geração de Leads': {
+    id: 'geracao-leads', icon: Megaphone,
+    blurb: 'Ações de captação de leads fora do funil das revendas.',
+    unitFallback: 'leads',
+  },
+  'Site': {
+    id: 'site', icon: Zap,
+    blurb: 'Evolução das entregas dos sites (texto, técnico e visual).',
+  },
+  'Projetos': {
+    id: 'projetos', icon: FolderKanban,
+    blurb: 'Iniciativas estratégicas medidas em % de conclusão.',
+  },
+  'Instagram': {
+    id: 'instagram', icon: Instagram,
+    blurb: 'Performance orgânica das contas de Instagram gerenciadas.',
+  },
+  // Seção dos KRs editáveis no próprio dashboard (pendência 3, começa no Q3).
+  'Redes Sociais': {
+    id: 'redes-sociais', icon: Instagram,
+    blurb: 'Resultados de redes sociais acompanhados e editados direto no dashboard.',
+  },
+};
+
+/* ---- Helpers (camada de dados) ---- */
+const slug = (s) =>
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+// Deriva a "unit" (usada em rótulos) a partir do subtítulo da KR.
+const unitFromSub = (sub, titulo) => {
+  const s = (sub || titulo || '').toLowerCase();
+  if (s.includes('lead')) return 'leads';
+  if (s.includes('seguidor')) return 'seguidores';
+  if (s.includes('visualiza')) return 'visualizações';
+  if (s.includes('intera')) return 'interações';
+  if (s.includes('ticket') || s.includes('entregue')) return 'tickets';
+  if (s.includes('retenção') || s.includes('retencao')) return '% retenção';
+  return '% concluído'; // projetos e afins
+};
+
+const pct = (n) => Math.round((n || 0) * 100);
+
+/* ---- OBJETIVO MENSAL ------------------------------------------------------
+   O cadastro guarda só a META TRIMESTRAL (`target`) — o objetivo mensal não é um
+   campo, é DERIVADO dela, do mesmo jeito que o negócio informa ("MQL mensal: 20,
+   total: 60"). Duas regras, porque as métricas não agregam igual:
+     - métrica de FLUXO (leads, seguidores, visualizações): a meta trimestral é a
+       SOMA dos meses, então o objetivo mensal é `target ÷ 3`;
+     - métrica de TAXA (`percentValue`, ex.: conversão/retenção): a meta trimestral
+       é a MÉDIA dos meses, então o objetivo mensal é a PRÓPRIA meta — 20% no
+       trimestre quer dizer 20% em cada mês, não 6,7% por mês.
+   `normalizedTarget` já vem normalizada p/ a escala 0–100 nas taxas (ver aggTarget
+   no KRCard): a planilha guarda retenção como fração (0,5) e os meses como 49/88/99. */
+const monthlyGoalOf = (kr, normalizedTarget, monthCount) => {
+  if (kr.target == null || !(kr.target > 0)) return null;
+  return kr.percentValue ? normalizedTarget : kr.target / (monthCount || 3);
+};
+
+/* Arredondamento SÓ PARA EXIBIR: `target ÷ 3` produz dízima (80.000/3 =
+   26.666,667). A COMPARAÇÃO continua com o valor exato — arredondar o número
+   usado no teste mudaria o veredito de meses na fronteira. */
+const monthlyGoalShown = (goal) => (goal >= 100 ? Math.round(goal) : Math.round(goal * 10) / 10);
+
+/* Um mês bateu o objetivo? `null` = não avaliável (sem meta, ou mês sem dado —
+   convenção do dashboard: 0/null no slot do mês = ainda não lançado). Respeita
+   "quanto menor melhor" (a meta é um TETO). */
+const monthHitOf = (value, goal, lowerIsBetter) => {
+  if (goal == null || !(value > 0)) return null;
+  return lowerIsBetter ? value <= goal : value >= goal;
+};
+
+/* ---- META PERSONALIZADA POR MÊS -------------------------------------------
+   Por padrão o objetivo mensal é ÚNICO (monthlyGoalOf, derivado da meta
+   trimestral) — mesmo valor nos 3 meses. Quando o KR liga `metaPersonalizada`
+   (checkbox no editor, migration 0034), cada mês de trabalho pode ter seu
+   próprio alvo (`kr.metaMeses`, 3 posições); mês sem valor próprio ainda cai
+   no derivado, e mês fora da janela nunca tem meta. */
+const monthlyGoalsOf = (kr, normalizedTarget, monthCount, active) => {
+  const uniform = monthlyGoalOf(kr, normalizedTarget, monthCount);
+  return [0, 1, 2].map((i) => {
+    if (!active[i]) return null;
+    if (!kr.metaPersonalizada || !kr.metaMeses) return uniform;
+    const v = kr.metaMeses[i];
+    return (v === null || v === undefined || v === '') ? uniform : Number(v);
+  });
+};
+
+/* Texto do valor de "meta/mês" pronto p/ exibir: um número só quando as metas
+   ATIVAS forem todas iguais (caso comum); senão lista uma por mês, na ordem —
+   é o que a meta personalizada por mês pede para não mentir com um único
+   número. `null` quando não há meta alguma (KR sem meta trimestral). */
+const monthlyGoalValueText = (goals, fmtOne) => {
+  const vals = (goals || []).filter((v) => v != null);
+  if (!vals.length) return null;
+  const uniq = [...new Set(vals.map((v) => Math.round(v * 100) / 100))];
+  return uniq.length === 1 ? fmtOne(uniq[0]) : vals.map(fmtOne).join(' · ');
+};
+
+// Crescimento percentual entre dois meses (null-safe).
+const growthPct = (from, to) => {
+  if (from === null || to === null) return null;
+  if (from === 0) return to > 0 ? Infinity : 0;
+  return Math.round(((to - from) / from) * 100);
+};
+
+/* ---- MESES DE TRABALHO DO KR -----------------------------------------------
+   Nem todo KR roda os 3 meses do trimestre (projetos costumam começar no 2º mês
+   ou viver num único mês). O D1 guarda a janela em `mesesAtivos` (migration
+   0028); Q1/Q2 vêm de planilha e não têm o campo -> trimestre inteiro.
+   A janela muda três leituras: o objetivo mensal (target ÷ meses DE TRABALHO,
+   não ÷ 3), o veredito ✓/✗ (mês fora da janela não é fracasso) e o insight. */
+const activeMonthsOf = (raw) => {
+  if (Array.isArray(raw) && raw.length === 3) {
+    const a = raw.map((v) => !!v);
+    return a.some(Boolean) ? a : [true, true, true];
+  }
+  if (typeof raw === 'string' && /^[01]{3}$/.test(raw) && raw !== '000') {
+    return [raw[0] === '1', raw[1] === '1', raw[2] === '1'];
+  }
+  return [true, true, true];
+};
+const activeCount = (a) => (a || []).filter(Boolean).length;
+// Rótulo da janela ("jul–set", "ago", "jul/set") para a faixa de meta/mês.
+const windowLabel = (active, labels) => {
+  const on = labels.filter((_, i) => active[i]);
+  if (on.length === labels.length) return '';
+  if (on.length === 1) return on[0];
+  const idx = labels.map((_, i) => i).filter((i) => active[i]);
+  const seguido = idx.every((v, k) => k === 0 || v === idx[k - 1] + 1);
+  return seguido ? `${on[0]}–${on[on.length - 1]}` : on.join('/');
+};
+
+/* ---- Geração automática de insight a partir dos números ----
+   O insight é a LEITURA que o número não dá sozinho. Antes o corpo caía quase
+   sempre na mesma frase ("faltam N pp para os 70%"), que é justamente o que a
+   barra de progresso e o "%" gigante já dizem — repetição em todos os cards.
+   Agora o corpo escolhe, entre várias leituras, a que ainda não está na tela:
+     - KR que não começou  -> quando começa e qual é o objetivo mensal;
+     - meta já batida      -> de quanto foi a folga (e se ainda há mês por vir);
+     - janela encerrada    -> em quanto fechou e o que faltou;
+     - trimestre em curso  -> quanto falta POR MÊS restante vs. o ritmo atual;
+     - métrica de taxa (%) -> qual média os meses restantes precisam ter;
+     - "menor é melhor"    -> distância até o teto.
+   O headline continua sendo o MOVIMENTO (mês anterior -> mês em foco), que é o
+   que muda a cada reunião. Ambos respeitam a janela de meses do KR. */
+const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const plural = (n, sing, plur) => `${n} ${n === 1 ? sing : plur}`;
+
+/* Rótulo da unidade DENTRO de uma frase. Métricas em % são medidas em pontos
+   percentuais; as demais usam a própria unidade ("leads", "seguidores"…). */
+const unitWord = (unit) => {
+  if (!unit) return '';
+  if (unit === '% concluído' || unit === '% retenção') return 'pp';
+  return unit;
+};
+
+const buildInsight = (ctx) => {
+  const meses    = ctx.meses || [null, null, null];
+  const progress = ctx.progress ?? 0;          // valor real (pode passar de 1)
+  const lower    = !!ctx.lowerIsBetter;        // ex.: retenção — menor é melhor
+  const isPct    = !!ctx.percentValue;         // valores exibidos como %
+  const labels   = ctx.monthLabels || ['abr', 'mai', 'jun'];  // rótulos do trimestre
+  const active   = ctx.activeMonths || [true, true, true];    // janela do KR
+  const unit     = unitWord(ctx.unit);
+  const phase    = ctx.phase || 'current';
+  const cmi      = (ctx.currentMonthIndex == null) ? 2 : ctx.currentMonthIndex;
+  // Meta já na escala dos meses (taxas guardam a meta em fração: 0,5 -> 50).
+  const target   = (ctx.targetNorm != null && ctx.targetNorm > 0) ? ctx.targetNorm : null;
+  const monthlyGoal = ctx.monthlyGoal ?? null;
+
+  /* ---------- situação de cada mês DE TRABALHO ---------- */
+  const idx = [0, 1, 2];
+  const isClosed = (i) => active[i] && (phase === 'past' || (phase === 'current' && i < cmi));
+  const ativos    = idx.filter((i) => active[i]);
+  const fechados  = ativos.filter(isClosed);
+  const restantes = ativos.filter((i) => !isClosed(i));   // mês corrente + futuros
+  const lancados  = ativos.filter((i) => meses[i] > 0);
+  const somaDe = (arr) => arr.reduce((a, i) => a + (meses[i] || 0), 0);
+
+  // Agregado: SOMA nos fluxos, MÉDIA dos meses com valor nas taxas — sempre só
+  // dentro da janela do KR (o mesmo número que o card mostra em "Atual/Meta").
+  const agg = (ctx.aggregate != null) ? ctx.aggregate
+    : (isPct
+        ? (lancados.length ? somaDe(lancados) / lancados.length : 0)
+        : somaDe(ativos));
+
+  const fIdx = (ctx.focusIdx != null) ? ctx.focusIdx : 2;
+  const pIdx = (ctx.prevIdx != null) ? ctx.prevIdx : (fIdx - 1);
+  const cur  = (fIdx >= 0 && fIdx < meses.length) ? meses[fIdx] : null;
+  const prev = (pIdx >= 0 && pIdx < meses.length) ? meses[pIdx] : null;
+  const curLabel = cap(labels[fIdx] || '');
+  const curTem  = cur !== null && cur !== undefined && cur !== 0;
+  const prevTem = prev !== null && prev !== undefined;
+
+  const pReal = Math.round(progress * 100);    // % real (pode ser > 100)
+
+  // Formata um valor na unidade certa (% quando aplicável).
+  const f = (n) => (n === null || n === undefined) ? '—' : (isPct ? `${Math.round(n)}%` : fmt(n));
+  // Idem, arredondando ANTES: "faltam 1.500/7" viraria "214,2857/mês", que não
+  // se lê numa reunião. Acima de 100 vai inteiro; abaixo, uma decimal.
+  const fn = (n) => (n === null || n === undefined) ? '—'
+    : f(Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10);
+  const u = unit ? ` ${unit}` : '';
+  // Quantidade absoluta ("300 leads", "50%") e DISTÂNCIA entre dois valores
+  // ("20 leads", "10 pp"). Separados porque numa taxa a distância se mede em
+  // pontos percentuais: "10% pp de folga" não existe.
+  const qty = (n) => isPct ? f(n) : `${f(n)}${u}`;
+  const gap = (n) => isPct ? `${fn(n).replace('%', '')} pp` : `${fn(n)}${u}`;
+
+  const naoComecou = lancados.length === 0 && restantes.length > 0;
+
+  /* ---------- tom (status) ----------
+     70% é a meta de aprovação do trimestre: a partir daí o KR é uma vitória;
+     >= 100% (superou a própria meta cheia) vira destaque. Duas exceções para não
+     pintar de vermelho quem ainda não teve como pontuar: KR que não começou fica
+     "aguardando", e KR no PRIMEIRO mês (nenhum mês fechado) não passa de
+     "no caminho". */
+  let tone;
+  if (naoComecou)                                          tone = 'espera';
+  else if (progress >= 1)                                  tone = 'star';
+  else if (progress >= 0.7)                                tone = 'win';
+  // Janela encerrada abaixo da meta: não há mais mês para reagir, então não é
+  // "no caminho" — é o resultado final.
+  else if (restantes.length === 0)                         tone = progress >= 0.5 ? 'warn' : 'critical';
+  else if (progress >= 0.6)                                tone = 'near';
+  else if (fechados.length === 0)                          tone = 'caminho';
+  else if (progress >= 0.5)                                tone = 'caminho';
+  else if (progress >= 0.3)                                tone = 'warn';
+  else                                                     tone = 'critical';
+
+  /* ---------- headline: movimento {mês anterior} → {mês em foco} ---------- */
+  let headline;
+  if (lower && curTem && prevTem) {
+    // Quanto menor melhor: subir é piorar, cair é melhorar.
+    const delta = cur - prev;
+    if (delta === 0)      headline = `Estável em ${f(cur)} (${labels[pIdx]} → ${labels[fIdx]})`;
+    else if (delta < 0)   headline = `Melhorou: caiu de ${f(prev)} para ${f(cur)}`;
+    else                  headline = `Piorou: subiu de ${f(prev)} para ${f(cur)}`;
+  } else if (curTem && prevTem) {
+    const delta = cur - prev;
+    if (delta === 0) {
+      headline = `Estável: ${f(cur)} em ${labels[pIdx]} e ${labels[fIdx]}`;
+    } else if (prev === 0) {
+      headline = `Saiu do zero: ${f(cur)} em ${labels[fIdx]}`;
+    } else {
+      const sobe = delta > 0;
+      // Base pequena => o % engana (1→11 vira "+1000%"); use o absoluto.
+      const basePequena = Math.min(Math.abs(prev), Math.abs(cur)) < 10;
+      const rel = growthPct(prev, cur);
+      headline = (basePequena || rel === Infinity || Math.abs(rel) >= 1000)
+        ? `${sobe ? 'Subiu' : 'Caiu'} de ${f(prev)} para ${f(cur)} (${labels[pIdx]} → ${labels[fIdx]})`
+        : `${rel > 0 ? '+' : ''}${rel}% de ${labels[pIdx]} para ${labels[fIdx]}`;
+    }
+  } else if (curTem && !prevTem) {
+    headline = `Arrancou em ${labels[fIdx]}: ${f(cur)}`;
+  } else if (prevTem && !curTem) {
+    headline = `${curLabel} ainda sem dado · ${f(prev)} em ${labels[pIdx]}`;
+  } else if (ativos.length && ativos[0] > cmi && phase !== 'past') {
+    // A janela do KR ainda não chegou: isto não é atraso, é agenda.
+    headline = `Começa em ${cap(labels[ativos[0]])}`;
+  } else if (restantes.length === 0) {
+    headline = 'Encerrou sem lançamento';
+  } else {
+    headline = `${curLabel} ainda sem lançamento`;
+  }
+
+  /* ---------- body: a leitura que ainda NÃO está na tela ---------- */
+  let body;
+  const nRest = restantes.length;
+  const restLabel = restantes.map((i) => labels[i]).join('/');
+
+  if (lower) {
+    // Quanto menor melhor: "atual" = mês mais recente com dado.
+    const atual = curTem ? cur : (prevTem ? prev : null);
+    if (atual !== null && target != null) {
+      body = atual <= target
+        ? `Dentro da meta: ${f(atual)} (alvo ≤ ${f(target)})${nRest ? `, com ${plural(nRest, 'mês', 'meses')} por manter` : ''}.`
+        : `Acima do alvo de ${f(target)} — precisa cair ${gap(atual - target)}.`;
+    } else {
+      body = target != null ? `Meta: ficar abaixo de ${f(target)}.` : `${pReal}% da meta.`;
+    }
+  } else if (target == null) {
+    body = lancados.length
+      ? `Sem meta trimestral cadastrada: somou ${qty(agg)} em ${plural(lancados.length, 'mês', 'meses')}.`
+      : 'Sem meta trimestral cadastrada — o progresso não pode ser derivado.';
+  } else if (naoComecou) {
+    body = `Ainda sem lançamento: ${qty(target)} para entregar em ${plural(ativos.length, 'mês de trabalho', 'meses de trabalho')}`
+      + `${(monthlyGoal != null && ativos.length > 1) ? ` (${fn(monthlyGoal)}/mês)` : ''}.`;
+  } else if (agg >= target) {
+    const sobra = agg - target;
+    body = isPct
+      ? `Média de ${f(agg)} contra alvo de ${f(target)}${sobra > 0 ? ` — ${gap(sobra)} de folga` : ' — no alvo'}.`
+      : `Meta de ${f(target)}${u} batida com ${f(agg)}`
+        + `${sobra > 0 ? ` — ${fn(sobra)} de folga` : ''}`
+        + `${nRest ? ` e ainda ${plural(nRest, 'mês', 'meses')} por vir` : ''}.`;
+  } else if (nRest === 0) {
+    // Janela encerrada: o que importa é o placar final, não o que "falta".
+    body = `Fechou em ${Math.round((agg / target) * 100)}% da meta — faltaram ${gap(target - agg)}.`;
+  } else if (isPct) {
+    // Taxa: para a MÉDIA do trimestre fechar no alvo, os meses restantes têm de
+    // compensar os que já fecharam.
+    const need = (target * ativos.length - somaDe(fechados)) / nRest;
+    body = need > 100
+      ? `Média de ${f(agg)} contra alvo de ${f(target)} — o alvo já não é alcançável pela média do trimestre.`
+      // `fn` já põe o '%' nas métricas de taxa — repetir dava "90%%".
+      : `Média de ${f(agg)} contra alvo de ${f(target)} — precisa de ${fn(need)} em ${restLabel} para fechar no alvo.`;
+  } else {
+    const falta = target - agg;
+    const need = falta / nRest;
+    const ritmo = fechados.length ? somaDe(fechados) / fechados.length : null;
+    // A comparação com o ritmo já realizado é o que diz se "faltar tanto" é
+    // rotina ou virada de jogo.
+    const comp = (ritmo && ritmo > 0)
+      ? (need <= ritmo
+          ? ` — dentro do ritmo já feito (${fn(ritmo)}/mês).`
+          : ` — ${Math.round(((need / ritmo) - 1) * 100)}% acima do ritmo já feito (${fn(ritmo)}/mês).`)
+      : '.';
+    body = nRest === 1
+      ? `Faltam ${fn(falta)}${u} para a meta, tudo em ${labels[restantes[0]]}${comp}`
+      : `Faltam ${fn(falta)}${u}: ${fn(need)}/mês em ${restLabel}${comp}`;
+  }
+
+  return { tone, headline, body };
+};
+
+/* Índice do mês em foco (último com dado) e o anterior, para o insight.
+   Só considera meses DE TRABALHO: num KR que roda ago–set, o "mês anterior" de
+   agosto é nada — e não julho, que está fora da janela.
+   Fallback: mês corrente (trimestre em andamento) ou o último da janela. */
+function focusIndices(months, qMeta, active) {
+  const act = active || [true, true, true];
+  const ativos = months.map((_, i) => i).filter((i) => act[i]);
+  if (!ativos.length) return { focusIdx: months.length - 1, prevIdx: -1 };
+
+  let last = -1;
+  ativos.forEach((i) => {
+    const v = months[i];
+    if (v !== null && v !== undefined && v !== 0) last = i;
+  });
+
+  let focusIdx;
+  if (last >= 0) focusIdx = last;
+  else if (qMeta && qMeta.phase === 'current') {
+    // Mês corrente, se ele for de trabalho; senão o último já iniciado; senão
+    // o primeiro que ainda vem (KR que começa mais adiante).
+    const jaIniciados = ativos.filter((i) => i <= qMeta.currentMonthIndex);
+    focusIdx = jaIniciados.length ? jaIniciados[jaIniciados.length - 1] : ativos[0];
+  } else focusIdx = ativos[ativos.length - 1];
+
+  let prevIdx = -1;
+  for (let i = focusIdx - 1; i >= 0; i--) if (act[i]) { prevIdx = i; break; }
+  return { focusIdx, prevIdx };
+}
+
+/* ---- Transformação principal: JSON -> SECTIONS ----
+   `qMeta` (opcional) leva os rótulos de mês e a fase do trimestre para o insight
+   ficar dinâmico (não cravar maio/junho). Sem ele, cai no default Q2. */
+function transformar(data, qMeta) {
+  if (!data || !Array.isArray(data.secoes)) return { sections: [], okrGeral: 0, atualizadoEm: null };
+  const monthLabels = (qMeta && qMeta.months) || ['abr', 'mai', 'jun'];
+
+  const sections = data.secoes
+    .map((sec) => {
+      const meta = SECTION_META[sec.nome] || {
+        id: slug(sec.nome), icon: FolderKanban, blurb: '',
+      };
+
+      const krs = (sec.krs || []).map((kr) => {
+        const progress = kr.progress ?? 0;
+        // Janela de meses de trabalho do KR (o campo só existe nos KRs do D1).
+        const activeMonths = activeMonthsOf(kr.mesesAtivos);
+        // Dashboard espera months com 3 posições; null vira 0 para os gráficos.
+        // Mês fora da janela entra como 0 mesmo que tenha valor gravado antes de
+        // ser desmarcado — o backend zera na leitura, aqui é cinto de segurança.
+        const months = (kr.meses || [null, null, null])
+          .map((m) => (m === null ? 0 : m))
+          .map((m, i) => (activeMonths[i] ? m : 0));
+        // Unidade: usa a explícita (KRs editáveis do D1 trazem `unidade`); senão
+        // heurística pelo texto da KR e, se não casar, herda a padrão da seção
+        // (ex.: Funil ADS → leads).
+        const explicitUnit = kr.unidade ? String(kr.unidade).trim() : '';
+        let unit = explicitUnit || unitFromSub(kr.sub, kr.titulo);
+        if (!explicitUnit && unit === '% concluído' && meta.unitFallback) unit = meta.unitFallback;
+        // Taxa de retenção: "quanto menor, melhor". Não é fluxo acumulável —
+        // o número exibido em Atual/Meta é a MÉDIA dos meses, não a soma, e
+        // tanto Atual quanto Meta são percentuais (valores guardados em fração).
+        const isRetention = unit === '% retenção';
+        // KRs editáveis carregam flags EXPLÍCITAS (do modal); os demais (Q1/Q2)
+        // não as têm e caem na regra da retenção — comportamento inalterado.
+        const lowerIsBetter = kr.lowerIsBetter != null ? !!kr.lowerIsBetter : isRetention;
+        const percentValue = kr.percentValue != null ? !!kr.percentValue : isRetention;
+
+        // Números que o insight precisa ver com os MESMOS critérios do card.
+        const insTarget = (percentValue && kr.target != null && kr.target <= 1) ? kr.target * 100 : (kr.target ?? null);
+        const lancadosNaJanela = months.filter((m, i) => activeMonths[i] && m > 0);
+        const insAgg = percentValue
+          ? (lancadosNaJanela.length ? lancadosNaJanela.reduce((a, b) => a + b, 0) / lancadosNaJanela.length : 0)
+          : months.reduce((a, m, i) => a + (activeMonths[i] ? m : 0), 0);
+
+        return {
+          id: slug(`${sec.nome}-${kr.titulo}-${kr.sub}`),
+          dbId: kr.dbId ?? null,       // id numérico no D1 (só KRs editáveis, ex.: Q3); null nos demais
+          secao: sec.nome,             // seção de origem (usada na edição)
+          title: kr.titulo || '—',
+          sub: kr.sub || '',
+          owner: kr.owner || '',
+          squad: kr.squad || '',
+          target: kr.target ?? null,
+          unit,
+          unidade: explicitUnit,       // rótulo cru (para preencher o editor)
+          months,
+          metaPersonalizada: !!kr.metaPersonalizada,  // liga a meta mês a mês (migration 0034)
+          metaMeses: kr.metaMeses || null,            // [mes1, mes2, mes3] quando personalizada
+          displayMode: percentValue ? 'average' : 'sum',
+          percentValue,                // exibe Atual/Meta como %
+          lowerIsBetter,               // meta é ficar ABAIXO do alvo
+          progress: Math.min(progress, 1),   // barra não passa de 100%
+          progressRaw: progress,             // valor real (pode ser >1)
+          activeMonths,               // janela de meses de trabalho (ver activeMonthsOf)
+          insight: buildInsight({
+            meses: months,
+            progress,
+            lowerIsBetter,
+            percentValue,
+            unit,
+            monthLabels,
+            activeMonths,
+            phase: qMeta && qMeta.phase,
+            currentMonthIndex: qMeta && qMeta.currentMonthIndex,
+            // Meta e agregado JÁ normalizados (mesma conta do card): taxas
+            // guardam a meta em fração e agregam por média dos meses lançados.
+            targetNorm: insTarget,
+            aggregate: insAgg,
+            monthlyGoal: monthlyGoalOf({ target: kr.target, percentValue }, insTarget, activeCount(activeMonths)),
+            ...focusIndices(months, qMeta, activeMonths),
+          }),
+        };
+      });
+
+      // `secao` = nome de ORIGEM (coluna `secao` no D1). Guardado separado de
+      // `name` porque o SECTION_META pode renomear a página na exibição (ex.:
+      // "Funil ADS Intelidata" -> "Funil ADS") e um KR novo tem que nascer com
+      // o nome de origem, senão cai numa seção nova e some da página.
+      return { id: meta.id, secao: sec.nome, name: meta.name || sec.nome, icon: meta.icon, blurb: meta.blurb, krs };
+    })
+    .filter((s) => s.krs.length > 0);
+
+  return {
+    sections,
+    okrGeral: data.okrGeral ?? 0,
+    atualizadoEm: data.atualizadoEm ?? null,
+  };
+}
+
+/* ---- PÁGINAS FIXAS DO TRIMESTRE ------------------------------------------
+   Nos trimestres que vêm de planilha (Q1/Q2) o conjunto de páginas é o que o
+   JSON traz — seção sem KR simplesmente não existe. Nos trimestres EDITÁVEIS
+   (Q3, do D1) o dashboard é a própria ferramenta de cadastro, então as páginas
+   precisam existir ANTES do primeiro KR: é nelas que fica o botão "Novo KR".
+
+   Este registro fixa quais páginas o trimestre tem e em que ORDEM — o backend
+   devolve as seções em ordem alfabética, o que não bate com a ordem da planilha.
+   Nomes = nome da seção no D1 (coluna `secao`), igual ao usado no SECTION_META. */
+const QUARTER_PAGES = {
+  // Q3 = as páginas do Q2, com uma diferença: "Redes Sociais" ocupa o lugar do
+  // "Instagram" (é a mesma frente, com o nome novo). "Tickets Internos" voltou
+  // ao Q3 em 2026-08-10 (KR "Entregues" reintroduzido — ver migration 0018).
+  Q3: ['Revendas', 'Funil ADS Intelidata', 'Tickets Internos', 'Projetos', 'Redes Sociais'],
+};
+
+/* Aplica o registro acima: devolve as páginas na ordem definida, criando as que
+   ainda não têm nenhum KR (`krs: []`), e mantém no fim as seções que existem no
+   D1 mas não estão no registro (ex.: "Redes Sociais") — nada desaparece. */
+function withQuarterPages(sections, quarterId) {
+  const nomes = QUARTER_PAGES[quarterId];
+  if (!nomes) return sections;
+  // A seção já transformada perde o nome de origem, então casamos pelo id.
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const fixas = nomes.map((nome) => {
+    const meta = SECTION_META[nome] || { id: slug(nome), icon: FolderKanban, blurb: '' };
+    return byId.get(meta.id) || { id: meta.id, secao: nome, name: meta.name || nome, icon: meta.icon, blurb: meta.blurb, krs: [] };
+  });
+  const idsFixos = new Set(fixas.map((s) => s.id));
+  return [...fixas, ...sections.filter((s) => !idsFixos.has(s.id))];
+}
+
+/* ---- Dados estáticos do Q1 2026 (extraídos da planilha "Marketing OKR 2026",
+   aba Q1) ---- Q1 é um trimestre FECHADO, então os números não mudam; ficam
+   embutidos aqui (mesmo formato do okr-data.json) e passam pelo transformar().
+   Q2 continua vindo ao vivo do proxy; Q3/Q4 ainda não têm dados. */
+const OKR_Q1 = window.DEMO_OKR_Q1;
+
+/* ---- Hook de carregamento ----
+   Uso no componente:
+     const { sections, okrGeral, atualizadoEm, loading, erro, recarregar } = useOkrData();
+*/
+function useOkrData() {
+  const [state, setState] = useState({
+    sections: [], okrGeral: 0, atualizadoEm: null, loading: true, erro: null,
+  });
+
+  const recarregar = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, erro: null }));
+    try {
+      // ?t= evita cache do CDN do GitHub raw
+      const res = await fetch(`${OKR_JSON_URL}?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const { sections, okrGeral, atualizadoEm } = transformar(json, QUARTER_BY_ID.Q2);
+      setState({ sections, okrGeral, atualizadoEm, loading: false, erro: null });
+    } catch (e) {
+      setState((s) => ({ ...s, loading: false, erro: e.message }));
+    }
+  }, []);
+
+  useEffect(() => { recarregar(); }, [recarregar]);
+
+  return { ...state, recarregar };
+}
+
+/* ---- Hook dos KRs editáveis (pendência 3) ----
+   Busca /api/okr/krs?quarter=Qx (D1, via Worker) e passa pelo MESMO transformar()
+   do okr-data.json. Usado hoje só pelo Q3; Q1/Q2 seguem em suas fontes. */
+function useOkrQuarter(quarter, ano = OKR_YEAR) {
+  const [state, setState] = useState({
+    sections: [], okrGeral: 0, atualizadoEm: null, loading: true, erro: null,
+  });
+
+  const recarregar = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, erro: null }));
+    try {
+      const res = await fetch(`/api/okr/krs?quarter=${quarter}&ano=${ano}&t=${Date.now()}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const { sections, okrGeral, atualizadoEm } = transformar(json, QUARTER_BY_ID[quarter]);
+      setState({ sections, okrGeral, atualizadoEm, loading: false, erro: null });
+    } catch (e) {
+      setState((s) => ({ ...s, loading: false, erro: e.message }));
+    }
+  }, [quarter, ano]);
+
+  useEffect(() => { recarregar(); }, [recarregar]);
+
+  return { ...state, recarregar };
+}
+
+/* ---- Formata o carimbo de atualização para exibição ---- */
+function formatAtualizadoEm(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+/* ============================================================
+   AVATARES DO TIME — equipe fictícia da demonstração.
+   ============================================================ */
+const AVATARS = {
+  Bruno: "equipe/bruno.jpg",
+  Carla: "equipe/carla.jpg",
+  Diego: "equipe/diego.jpg",
+  Elisa: "equipe/elisa.jpg",
+  Fabio: "equipe/fabio.jpg",
+  Gabriela: "equipe/gabriela.jpg",
+  Helena: "equipe/helena.jpg",
+  Igor: "equipe/igor.jpg",
+};
+
+// Normalize a name (strip accents, remove spaces) to AVATARS key
+const avatarKey = (name) => {
+  if (!name) return null;
+  const k = name.trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '');
+  return k;
+};
+const getAvatar = (name) => {
+  const key = avatarKey(name);
+  return key && AVATARS[key] ? AVATARS[key] : null;
+};
+
+// Equipe selecionável nos comboboxes de Responsável/Squad do editor de KR.
+// Nomes de exibição que casam com getAvatar (via avatarKey).
+const TEAM = ['Bruno', 'Carla', 'Diego', 'Elisa', 'Fábio', 'Gabriela', 'Helena', 'Igor'];
+
+// Divide o valor de squad ("A · B") em nomes; junta de volta com " · ".
+const splitSquad = (s) => (s || '').split(/[·\n]/).map((x) => x.trim()).filter(Boolean);
+const joinSquad = (arr) => (arr || []).join(' · ');
+// União preservando ordem (equipe primeiro, depois quaisquer nomes já gravados
+// fora da lista — ex.: alguém sem foto — para não perder seleção existente).
+const withExtras = (base, extras) => {
+  const out = [...base];
+  (extras || []).forEach((n) => { if (n && !out.includes(n)) out.push(n); });
+  return out;
+};
+
+// Compact number formatter for chart labels
+const fmtCompact = (n) => {
+  if (n === null || n === undefined) return '';
+  if (n === 0) return '0';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + 'M';
+  if (abs >= 10_000) return Math.round(n / 1000) + ' mil';
+  if (abs >= 1000) return (n / 1000).toFixed(1).replace('.', ',') + ' mil';
+  return Number.isInteger(n) ? n.toString() : n.toFixed(1).replace('.', ',');
+};
+
+/* ============================================================
+   INTELIDATA · OKR Q2 2026 — DASHBOARD (LIGHT)
+   Paleta oficial: #0072ce · #de8d13 · #777777 · branco
+   ============================================================ */
+
+const C = {
+  // Surfaces
+  bg: '#f5f4f1',           // warm light neutral — slightly creamy
+  panel: '#ffffff',
+  panel2: '#fafaf8',
+  panel3: '#f0efeb',
+  border: '#e7e5e0',
+  borderStrong: '#d6d3cc',
+
+  // Brand (unchanged)
+  blue: '#0072ce',
+  blueText: '#005a9e',     // darker for legibility on light bg
+  blueSoft: 'rgba(0, 114, 206, 0.08)',
+  blueSofter: 'rgba(0, 114, 206, 0.04)',
+
+  orange: '#de8d13',
+  orangeText: '#9a6311',   // darker variant for small text on light bg
+  orangeSoft: 'rgba(222, 141, 19, 0.10)',
+  orangeSofter: 'rgba(222, 141, 19, 0.05)',
+
+  // Functional red for "risco" status
+  red: '#dc2626',
+  redText: '#991b1b',
+  redSoft: 'rgba(220, 38, 38, 0.08)',
+
+  // Neutrals
+  ink: '#0a0a0a',          // primary text
+  dim: '#262626',          // slightly dim primary
+  gray: '#737373',         // secondary text
+  grayLight: '#a8a29e',
+  grayMid: '#525252',
+  grayDeep: '#9a9a96',
+};
+
+/* ============================================================
+   TRIMESTRES (Q1–Q4 de 2026)
+   ------------------------------------------------------------
+   Cada trimestre tem seus meses e um "runtime" derivado de HOJE:
+   fase (passado / corrente / futuro), dias decorridos/restantes e o
+   índice do mês corrente. Um QuarterContext leva esse runtime aos
+   componentes (gráfico, cards, ritmo de leads) — que antes usavam as
+   constantes fixas de Q2. Assim o mesmo componente serve qualquer Q.
+   ============================================================ */
+const MS_DAY = 86_400_000;
+const TODAY = new Date();
+const OKR_YEAR = 2026;
+const QUARTER_DEFS = [
+  { id: 'Q1', months: ['jan', 'fev', 'mar'], startMonth: 0 },
+  { id: 'Q2', months: ['abr', 'mai', 'jun'], startMonth: 3 },
+  { id: 'Q3', months: ['jul', 'ago', 'set'], startMonth: 6 },
+  { id: 'Q4', months: ['out', 'nov', 'dez'], startMonth: 9 },
+];
+function quarterRuntime(def) {
+  const start = new Date(OKR_YEAR, def.startMonth, 1);
+  const end = new Date(OKR_YEAR, def.startMonth + 3, 0); // último dia do 3º mês
+  const totalDays = Math.round((end - start) / MS_DAY) + 1;
+  let phase, daysElapsed, daysRemaining, currentMonthIndex;
+  if (TODAY > end) {                 // trimestre encerrado
+    phase = 'past'; daysElapsed = totalDays; daysRemaining = 0; currentMonthIndex = 2;
+  } else if (TODAY < start) {        // ainda não começou
+    phase = 'future'; daysElapsed = 0; daysRemaining = totalDays; currentMonthIndex = -1;
+  } else {                            // em andamento
+    phase = 'current';
+    daysElapsed = Math.min(totalDays, Math.max(1, Math.floor((TODAY - start) / MS_DAY) + 1));
+    daysRemaining = Math.max(0, totalDays - daysElapsed);
+    currentMonthIndex = Math.min(2, Math.max(0, TODAY.getMonth() - def.startMonth));
+  }
+  return { ...def, year: OKR_YEAR, start, end, totalDays, daysElapsed, daysRemaining, currentMonthIndex, phase };
+}
+const QUARTERS = QUARTER_DEFS.map(quarterRuntime);
+
+// Último mês de cada trimestre, por extenso — usado no rodapé ("trimestre fecha
+// em setembro"), que antes cravava "junho" (fim do Q2) em qualquer trimestre.
+const QUARTER_END_MONTH = { Q1: 'março', Q2: 'junho', Q3: 'setembro', Q4: 'dezembro' };
+
+// Trimestre que o dashboard abre por padrão. Fica numa constante só porque o
+// default aparece em 4 lugares (estado inicial + 3 fallbacks) e antes estava
+// cravado como 'Q2' em cada um — trocar de trimestre era caçar todos.
+// NÃO confundir com o Q2 em useOkrData(): lá é o trimestre DA PLANILHA
+// (okr-data.json), não um default, e não muda junto.
+const DEFAULT_QUARTER = 'Q3';
+const QUARTER_BY_ID = Object.fromEntries(QUARTERS.map(q => [q.id, q]));
+
+// Contexto do trimestre ativo (DEFAULT_QUARTER). useQuarter() dá meses/dias/fase.
+const QuarterCtx = createContext(QUARTER_BY_ID[DEFAULT_QUARTER]);
+const useQuarter = () => useContext(QuarterCtx);
+
+/* ---- Contexto de edição de KRs (pendência 3) ----
+   Leva para os componentes internos (SectionPage, FocusToolbar) se o usuário
+   pode editar e se o trimestre atual é editável, além dos callbacks para abrir
+   o modal de criar/editar. `editable` só é true no(s) trimestre(s) vindos do D1
+   (hoje o Q3). */
+/* `canEdit`     = pode mexer em ALGO (nível "valores mensais") -> mostra o lápis.
+   `canCreate`   = pode criar/excluir KR (nível "estrutura") -> mostra "Novo KR".
+   `canEditConfig` = pode editar título/responsável/meta/seção… -> mostra esses
+                     campos no modal. Sem ele, o modal fica só com os 3 meses.
+   Os três vêm de /api/me e são reforçados no BACKEND (src/okr/krs.js). */
+const OkrEditCtx = createContext({
+  canEdit: false, canCreate: false, canEditConfig: false,
+  editable: false, quarter: null, ano: OKR_YEAR,
+  openCreate: () => {}, openEdit: () => {},
+});
+const useOkrEdit = () => useContext(OkrEditCtx);
+
+/* ---------- helpers ---------- */
+const fmt = (n) => {
+  if (n === null || n === undefined) return '—';
+  if (n >= 1000) return n.toLocaleString('pt-BR');
+  return Number.isInteger(n) ? n.toString() : n.toFixed(1).replace('.', ',');
+};
+const growth = (from, to) => {
+  if (!from || from === 0) return to > 0 ? Infinity : 0;
+  return (to - from) / from;
+};
+const statusOf = (progress) => {
+  // Classifica pelo percentual ARREDONDADO (mesmo número exibido na tela), para
+  // o status casar com o "%". Ex.: 0,695 exibe "70%" e agora conta como batido
+  // (azul) em vez de ficar amarelo por 0,695 < 0,7.
+  const pct = Math.round(progress * 100);
+  if (pct >= 70) return 'batido';
+  if (pct >= 50) return 'caminho';
+  return 'risco';
+};
+const statusColor = (s) => s === 'batido' ? C.blue : s === 'caminho' ? C.orange : C.red;
+const statusTextColor = (s) => s === 'batido' ? C.blueText : s === 'caminho' ? C.orangeText : C.redText;
+const statusLabel = (s) => s === 'batido' ? 'Meta batida' : s === 'caminho' ? 'No caminho' : 'Em risco';
+
+/* ============================================================
+   DADOS — agora carregados em runtime do JSON publicado.
+   O array SECTIONS e a constante Q2_TOTAL hard-coded foram
+   removidos: os dados vêm da CAMADA DE DADOS no topo (useOkrData),
+   conforme Anexo C / Etapa 4 do guia de automação.
+   ============================================================ */
+
+/* ============================================================
+   COMPONENTES DE UI
+   ============================================================ */
+
+function GlobalStyles() {
+  return (
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+      * { box-sizing: border-box; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: ${C.bg}; }
+      ::-webkit-scrollbar-thumb { background: ${C.borderStrong}; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: ${C.grayLight}; }
+      .id-app, .id-app * { font-family: 'Bricolage Grotesque', sans-serif; }
+      .id-app .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+      @keyframes idFadeUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes idFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes idGrow {
+        from { transform: scaleX(0); }
+        to { transform: scaleX(1); }
+      }
+      .id-fade-up { animation: idFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+      .id-fade-in { animation: idFadeIn 0.6s ease backwards; }
+      .id-bar { transform-origin: left; animation: idGrow 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+      .id-card {
+        transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), border-color 0.2s ease, box-shadow 0.25s ease, filter 0.28s ease, opacity 0.28s ease;
+      }
+      .id-card:hover {
+        border-color: ${C.borderStrong} !important;
+        box-shadow: 0 4px 16px rgba(20, 20, 20, 0.04), 0 1px 3px rgba(20, 20, 20, 0.03);
+      }
+      /* acessibilidade: respeita quem prefere menos movimento */
+      @media (prefers-reduced-motion: reduce) {
+        .id-card, .id-fade-up, .id-fade-in, .id-bar { transition: none !important; animation: none !important; }
+      }
+      .id-nav-item { transition: background 0.15s ease, color 0.15s ease; }
+      .id-nav-item:hover { background: ${C.panel3}; color: ${C.ink}; }
+      .id-tag { transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
+      .id-tag:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(20,20,20,0.06); }
+      .id-tag:active { transform: translateY(0); }
+      .id-grid-bg {
+        background-image:
+          linear-gradient(${C.border} 1px, transparent 1px),
+          linear-gradient(90deg, ${C.border} 1px, transparent 1px);
+        background-size: 64px 64px;
+        background-position: -1px -1px;
+      }
+    `}</style>
+  );
+}
+
+function StatusPill({ progress, waiting = false }) {
+  if (waiting) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px]"
+        style={{ background: C.panel2, color: C.gray, border: `1px solid ${C.border}`, fontWeight: 600 }}
+      >
+        <Calendar size={14} strokeWidth={2.4} />
+        Aguardando
+      </span>
+    );
+  }
+  return <StatusPillReal progress={progress} />;
+}
+
+function StatusPillReal({ progress }) {
+  const s = statusOf(progress);
+  const bg = s === 'batido' ? C.blueSoft : s === 'caminho' ? C.orangeSoft : C.redSoft;
+  const color = statusTextColor(s);
+  const borderColor = s === 'batido' ? 'rgba(0,114,206,0.2)' : s === 'caminho' ? 'rgba(222,141,19,0.25)' : 'rgba(220,38,38,0.2)';
+  const Icon = s === 'batido' ? CheckCircle2 : s === 'caminho' ? Activity : AlertTriangle;
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] uppercase tracking-wider"
+      style={{ background: bg, color, border: `1px solid ${borderColor}` }}>
+      <Icon size={13} strokeWidth={2.5} />
+      <span style={{ fontWeight: 600 }}>{statusLabel(s)}</span>
+    </div>
+  );
+}
+
+function ProgressTrack({ progress, target = 0.7, height = 8, showLabel = true }) {
+  const s = statusOf(progress);
+  const color = statusColor(s);
+  const display = Math.min(progress, 1);
+  return (
+    <div className="relative w-full" style={{ height }}>
+      <div className="absolute inset-0 rounded-full" style={{ background: C.panel3 }} />
+      <div
+        className="absolute top-0 left-0 h-full rounded-full id-bar"
+        style={{
+          width: `${display * 100}%`,
+          background: `linear-gradient(90deg, ${color}, ${color}d9)`,
+        }}
+      />
+      <div
+        className="absolute top-1/2 -translate-y-1/2 w-px"
+        style={{
+          left: `${target * 100}%`,
+          height: height + 8,
+          background: C.ink,
+          opacity: 0.45,
+        }}
+      />
+      {showLabel && (
+        <div
+          className="absolute top-full mt-1 -translate-x-1/2 text-[9px] uppercase tracking-widest"
+          style={{ left: `${target * 100}%`, color: C.gray, fontWeight: 600 }}
+        >
+          70%
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonthlyChart({ months, color, valueSuffix = '', monthlyGoals = null, monthHit = null, activeMonths = null, fmtGoal = null }) {
+  const q = useQuarter();
+  // Meses fora da janela do KR não são plotados nem julgados (ver activeMonthsOf).
+  const active = activeMonths || [true, true, true];
+  const MONTHS = q.months;
+  const CURRENT_MONTH_INDEX = q.currentMonthIndex;
+  // Um mês é "futuro" (sem dado) só se o trimestre ainda não chegou nele:
+  // trimestre passado = todos os meses reais; corrente = meses após o atual.
+  // MAS: se um mês (mesmo futuro) já tem valor lançado, ele deixa de ser "vazio"
+  // e é plotado normalmente — assim editar um valor adiantado preenche o gráfico.
+  const hasValue = (i) => months[i] !== null && months[i] !== undefined && months[i] !== 0;
+  const isFutureMonth = (i) => (q.phase === 'future' || (q.phase === 'current' && i > CURRENT_MONTH_INDEX)) && !hasValue(i);
+  // Só julga (✓/✗) mês que já VIROU — o mês corrente ainda está em andamento
+  // (ver mesma lógica/motivo em KRCard).
+  const isMonthOver = (i) => q.phase === 'past' || (q.phase === 'current' && i < CURRENT_MONTH_INDEX);
+  const data = MONTHS.map((m, i) => {
+    const out = !active[i];
+    const future = !out && isFutureMonth(i);
+    return {
+      name: m,
+      // Mês fora da janela vira buraco na série (connectNulls=false), do mesmo
+      // jeito que um mês futuro — mas sem rótulo e sem veredito.
+      value: (out || future) ? null : (months[i] || 0),
+      // Objetivo mensal DESTE mês — pode variar mês a mês (meta personalizada
+      // por mês); vira degrau na régua tracejada, não mais uma linha reta.
+      meta: out ? null : (monthlyGoals ? monthlyGoals[i] : null),
+      isFuture: future,
+      isOut: out,
+      label: (out || future) ? '' : fmtCompact(months[i] || 0) + valueSuffix,
+      hit: (out || !isMonthOver(i) || !monthHit) ? null : monthHit(i),
+    };
+  });
+  // A linha do objetivo mensal entra no cálculo do topo: senão, num KR ainda sem
+  // resultado (todos os meses em 0) ela cairia fora da área visível do gráfico.
+  const max = Math.max(...months, ...(monthlyGoals || []).filter((v) => v != null), 1);
+  const goalLabel = fmtGoal
+    ? monthlyGoalValueText(monthlyGoals, (v) => fmtGoal(monthlyGoalShown(v)))
+    : monthlyGoalValueText(monthlyGoals, (v) => fmtCompact(v) + valueSuffix);
+
+  // O tick do eixo recebe o NOME do mês, não o índice — daí os mapas.
+  const hitByMonth = {};
+  const outByMonth = {};
+  data.forEach((d) => { hitByMonth[d.name] = d.hit; outByMonth[d.name] = d.isOut; });
+
+  // Rótulo numérico acima de cada ponto. Os pontos das pontas (abr / jun) ficam
+  // na borda do gráfico: ancoramos o 1º à esquerda e o último à direita para que
+  // o número não seja cortado pela margem. O mês corrente sai maior, em negrito e
+  // na cor do KR — destaque que troca sozinho conforme o mês.
+  const lastIdx = data.length - 1;
+  const ValueLabel = ({ x, y, value, index }) => {
+    if (value === null || value === undefined) return null;
+    const anchor = index === 0 ? 'start' : index === lastIdx ? 'end' : 'middle';
+    const isCurrent = q.phase === 'current' && index === CURRENT_MONTH_INDEX;
+    // Afasta o rótulo do ponto e dá um halo branco (contorno) — assim o número
+    // continua legível mesmo quando a linha passa logo atrás dele.
+    return (
+      <text
+        x={x}
+        y={y - (isCurrent ? 24 : 20)}
+        fill={isCurrent ? color : C.ink}
+        fontSize={isCurrent ? 19 : 15}
+        fontFamily="JetBrains Mono"
+        fontWeight={isCurrent ? 700 : 600}
+        textAnchor={anchor}
+        stroke={C.panel}
+        strokeWidth={4}
+        strokeLinejoin="round"
+        paintOrder="stroke"
+      >
+        {data[index].label}
+      </text>
+    );
+  };
+
+  // Ponto: cheio nos meses reais, oco/tracejado no mês futuro. O mês corrente
+  // ganha um halo + ponto sólido maior para se destacar na série.
+  const Dot = (props) => {
+    const { cx, cy, payload, index } = props;
+    if (cx === null || cx === undefined || payload.value === null) return null;
+    if (q.phase === 'current' && index === CURRENT_MONTH_INDEX) {
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={9} fill={color} opacity={0.18} />
+          <circle cx={cx} cy={cy} r={5.5} fill={color} stroke={C.panel} strokeWidth={2.5} />
+        </g>
+      );
+    }
+    return <circle cx={cx} cy={cy} r={4} fill={C.panel} stroke={color} strokeWidth={2.5} />;
+  };
+
+  // Rótulo do eixo X: o mês corrente em negrito + cor do KR — marca "você está
+  // aqui" mesmo quando o mês ainda não tem dado.
+  const MonthTick = ({ x, y, payload }) => {
+    const isOut = outByMonth[payload.value];
+    const isCurrent = !isOut && q.phase === 'current' && payload.value === MONTHS[CURRENT_MONTH_INDEX];
+    return (
+      <text
+        x={x}
+        y={y}
+        dy={12}
+        textAnchor="middle"
+        opacity={isOut ? 0.45 : 1}
+        fill={isCurrent ? color : C.gray}
+        fontSize={isCurrent ? 12 : 10}
+        fontFamily="Bricolage Grotesque"
+        fontWeight={isCurrent ? 700 : 500}
+        style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
+      >
+        {payload.value}
+        {/* Veredito do mês contra o objetivo mensal: ✓ bateu, ✗ não bateu.
+            Vai no TICK, não no rótulo do ponto: o rótulo do ponto é desenhado
+            só quando a animação do Recharts termina, e num preview headless
+            (rAF throttlado) ele nunca aparece. O tick é imune a isso. */}
+        {hitByMonth[payload.value] != null && (
+          <tspan
+            fill={hitByMonth[payload.value] ? C.blueText : C.redText}
+            fontWeight={800}
+            style={{ letterSpacing: 0 }}
+          >
+            {hitByMonth[payload.value] ? ' ✓' : ' ✗'}
+          </tspan>
+        )}
+      </text>
+    );
+  };
+
+  const gid = `grad-${color.replace('#', '')}`;
+
+  return (
+    <div style={{ width: '100%', height: 150, position: 'relative' }}>
+      {/* "meta/mês" centralizado no TOPO da área do gráfico — não depende da
+          altura da meta (uma régua em degrau não tem uma altura só) nem do
+          Recharts, então nunca fica torto quando a meta varia por mês. */}
+      {goalLabel && (
+        <div
+          className="mono"
+          style={{
+            position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)',
+            fontSize: 10, fontWeight: 700, color: C.gray, letterSpacing: '0.02em',
+            whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 1,
+          }}
+        >
+          meta/mês {goalLabel}
+        </div>
+      )}
+      <ResponsiveContainer>
+        <ComposedChart data={data} margin={{ top: 38, right: 16, left: 16, bottom: 6 }}>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="name"
+            axisLine={false}
+            tickLine={false}
+            tick={<MonthTick />}
+          />
+          <YAxis hide domain={[0, max * 1.52]} />
+          {/* Objetivo mensal: régua tracejada em DEGRAU (stepAfter), não mais uma
+              linha reta — a meta personalizada por mês pode variar de mês a mês.
+              O número (goalLabel) NÃO vai mais aqui: é um overlay HTML centralizado
+              no topo da área do gráfico (ver abaixo do ResponsiveContainer),
+              pedido do usuário 2026-09-02 p/ legibilidade — um <text> preso à
+              régua ficava ancorado na ALTURA da meta, não no topo do card. */}
+          {data.some((d) => d.meta != null) && (
+            <Line
+              type="stepAfter"
+              dataKey="meta"
+              stroke={C.grayLight}
+              strokeDasharray="5 4"
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={false}
+              isAnimationActive={false}
+              connectNulls={false}
+              legendType="none"
+            />
+          )}
+          <Tooltip
+            cursor={{ stroke: C.borderStrong, strokeWidth: 1 }}
+            contentStyle={{
+              background: C.panel,
+              border: `1px solid ${C.borderStrong}`,
+              borderRadius: 8,
+              fontFamily: 'Bricolage Grotesque',
+              fontSize: 12,
+              color: C.ink,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+            }}
+            labelStyle={{ color: C.gray, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.1em' }}
+            formatter={(v) => v === null ? ['—', 'sem dado'] : [`${fmt(v)}${valueSuffix}`, 'valor']}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={color}
+            strokeWidth={2.5}
+            fill={`url(#${gid})`}
+            connectNulls={false}
+            dot={<Dot />}
+            activeDot={{ r: 5, fill: color, stroke: C.panel, strokeWidth: 2 }}
+            label={<ValueLabel />}
+            isAnimationActive={true}
+            animationDuration={700}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/* ---------- Objetivo mensal: veredito ----------
+   O gráfico mostra a régua e o ✓/✗ de cada mês; esta faixa fecha a conta em uma
+   frase ("bateu 1 de 2 meses"), que é a leitura pedida na reunião. Conta só os
+   meses AVALIÁVEIS (com dado lançado) — mês vazio não conta como fracasso. */
+function MonthlyGoalVerdict({ goals, fmtGoal, hits, windowText, emAndamento = false }) {
+  const goalValue = monthlyGoalValueText(goals, (v) => fmtGoal(monthlyGoalShown(v)));
+  if (goalValue == null) return null;
+  const avaliados = hits.filter((h) => h !== null).length;
+  const batidos = hits.filter((h) => h === true).length;
+
+  // avaliados === 0 tem duas leituras bem diferentes: KR que ainda nem começou
+  // (vazio de verdade) vs. mês corrente já com valor lançado, só ainda não
+  // julgado (✓/✗ fica p/ o mês fechar — ver isMonthOver). Sem separar os dois,
+  // o texto dizia "nenhum mês lançado ainda" com o chip do mês atual mostrando
+  // valor > 0 logo acima.
+  const tone = avaliados > 0 ? (batidos === avaliados ? 'todos' : batidos === 0 ? 'nenhum' : 'parcial')
+    : emAndamento ? 'andamento'
+    : 'vazio';
+  const fg = { vazio: C.gray, andamento: C.blueText, todos: C.blueText, parcial: C.orangeText, nenhum: C.redText }[tone];
+  const bg = { vazio: C.panel2, andamento: C.blueSoft, todos: C.blueSoft, parcial: C.orangeSoft, nenhum: C.redSoft }[tone];
+  const Icon = { vazio: Calendar, andamento: Activity, todos: CheckCircle2, parcial: Activity, nenhum: AlertTriangle }[tone];
+  const texto = avaliados > 0
+    ? `bateu ${batidos} de ${avaliados} ${avaliados === 1 ? 'mês' : 'meses'}`
+    : emAndamento ? 'mês atual em andamento'
+    : 'nenhum mês lançado ainda';
+
+  return (
+    <div
+      className="mt-3 rounded-lg px-3 py-2 flex items-center justify-between gap-3"
+      style={{ background: bg, border: `1px solid ${C.border}` }}
+    >
+      <span className="flex items-baseline gap-2 flex-shrink-0">
+        <span className="text-[9px] uppercase tracking-widest" style={{ color: C.grayLight, fontWeight: 700 }}>
+          Meta/mês
+        </span>
+        <span className="mono text-[15px]" style={{ color: C.dim, fontWeight: 700 }}>
+          {goalValue}
+        </span>
+        {/* KR que não roda o trimestre inteiro: mostra a janela, senão o
+            objetivo mensal parece calculado errado (target ÷ 2, não ÷ 3). */}
+        {windowText && (
+          <span className="text-[11px]" style={{ color: C.grayLight, fontWeight: 600 }}>
+            · {windowText}
+          </span>
+        )}
+      </span>
+      <span className="flex items-center gap-1.5 flex-shrink-0" style={{ color: fg }}>
+        <Icon size={14} strokeWidth={2.4} />
+        <span className="text-[13px]" style={{ fontWeight: 700 }}>{texto}</span>
+      </span>
+    </div>
+  );
+}
+
+/* ---------- Avatares & Squad ---------- */
+
+function Avatar({ name, size = 22, ring = false }) {
+  const src = getAvatar(name);
+  const initials = (name || '?').split(/\s+/).map(s => s[0]).join('').slice(0, 2).toUpperCase();
+  const style = {
+    width: size,
+    height: size,
+    borderRadius: '50%',
+    flexShrink: 0,
+    border: ring ? `2px solid ${C.panel}` : `1px solid ${C.border}`,
+    boxShadow: ring ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+    objectFit: 'cover',
+    display: 'inline-block',
+  };
+  if (src) {
+    return <img src={src} alt={name} title={name} style={style} />;
+  }
+  // Fallback to initials when no photo
+  return (
+    <span
+      title={name}
+      style={{
+        ...style,
+        background: C.panel3,
+        color: C.grayMid,
+        fontSize: Math.round(size * 0.38),
+        fontWeight: 700,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'Bricolage Grotesque',
+      }}
+    >
+      {initials}
+    </span>
+  );
+}
+
+function SquadStackOverlap({ squad, owner, size = 20 }) {
+  if (!squad || squad.trim() === '-' || squad.trim() === '') {
+    return <span style={{ color: C.grayLight }}>—</span>;
+  }
+  let raw = squad.split(/[·\n]/).map(s => s.trim()).filter(Boolean);
+  // "Todos" = a squad inteira: mostra a foto de todos os colaboradores. O owner é excluído — já aparece como Responsável no card.
+  if (raw.some(n => n.toLowerCase() === 'todos')) {
+    const ownerKey = avatarKey(owner);
+    raw = Object.keys(AVATARS).filter(k => k !== ownerKey);
+  }
+  const knownNames = raw.filter(n => getAvatar(n));
+  const labels = raw.filter(n => !getAvatar(n));
+  const overlap = Math.round(size * 0.35);
+
+  return (
+    <span className="flex items-center gap-1.5 min-w-0">
+      {knownNames.length > 0 && (
+        <span className="flex items-center flex-shrink-0">
+          {knownNames.map((n, i) => (
+            <span key={n + i} style={{ marginLeft: i === 0 ? 0 : -overlap }}>
+              <Avatar name={n} size={size} ring />
+            </span>
+          ))}
+        </span>
+      )}
+      {labels.length > 0 && (
+        <span style={{ color: C.gray, fontSize: 13, fontWeight: 500 }} className="truncate">
+          {labels.join(' · ')}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ---------- Métricas diárias para KRs de Leads ---------- */
+
+/* Dias da JANELA do KR dentro do trimestre: total, decorridos e restantes.
+   Com os 3 meses de trabalho ativos o resultado é idêntico ao do trimestre
+   inteiro; num KR de um mês só, o ritmo passa a ser medido dentro desse mês —
+   senão "leads/dia" divide por dias em que o KR nem existia. */
+function monthWindow(q, active) {
+  const act = active || [true, true, true];
+  if (act.every(Boolean)) {
+    return {
+      totalDays: q.totalDays,
+      daysElapsed: q.daysElapsed,
+      daysRemaining: q.daysRemaining,
+      ended: q.phase !== 'current' || q.daysRemaining <= 0,
+    };
+  }
+  let total = 0, elapsed = 0;
+  for (let i = 0; i < 3; i++) {
+    if (!act[i]) continue;
+    const ini = new Date(q.year, q.startMonth + i, 1);
+    const fim = new Date(q.year, q.startMonth + i + 1, 0);   // último dia do mês
+    total += fim.getDate();
+    if (TODAY > fim) elapsed += fim.getDate();
+    else if (TODAY >= ini) elapsed += TODAY.getDate();
+  }
+  const daysRemaining = Math.max(0, total - elapsed);
+  return { totalDays: total, daysElapsed: Math.max(1, elapsed), daysRemaining, ended: daysRemaining <= 0 };
+}
+
+function DailyLeadsStats({ totalSoFar, target, activeMonths }) {
+  const q = useQuarter();
+  const w = monthWindow(q, activeMonths);
+  // "Encerrado" = trimestre passado OU sem dias restantes. Nesse caso NÃO faz
+  // sentido projetar "leads/dia p/ bater a meta" (daria divisão por zero =
+  // Infinity); mostramos o RESULTADO FINAL (% da meta / quanto faltou).
+  const ended = w.ended;
+  const elapsed = w.daysElapsed || w.totalDays || 1;
+  const dailyAvg = totalSoFar / elapsed;
+  const leadsRemaining = Math.max(0, target - totalSoFar);
+  const achieved = totalSoFar >= target;
+  const dailyNeeded = (!ended && leadsRemaining > 0) ? leadsRemaining / w.daysRemaining : 0;
+  const offPace = !ended && !achieved && dailyAvg < dailyNeeded;
+  const pctFinal = target > 0 ? Math.round((totalSoFar / target) * 100) : 0;
+  const endSt = statusOf(target > 0 ? totalSoFar / target : 0);
+
+  const fmtRate = (n) => {
+    if (!isFinite(n) || n === 0) return '0';
+    if (n < 1) return n.toFixed(2).replace('.', ',');
+    return n.toFixed(1).replace('.', ',');
+  };
+
+  const rightBg = achieved ? C.blueSoft
+    : ended ? (endSt === 'batido' ? C.blueSoft : endSt === 'caminho' ? C.orangeSoft : C.redSoft)
+    : (offPace ? C.orangeSoft : C.panel2);
+  const rightBorder = achieved ? 'rgba(0,114,206,0.2)'
+    : ended ? (endSt === 'batido' ? 'rgba(0,114,206,0.2)' : endSt === 'caminho' ? 'rgba(222,141,19,0.25)' : 'rgba(220,38,38,0.2)')
+    : (offPace ? 'rgba(222,141,19,0.25)' : C.border);
+  const rightHead = achieved ? C.blueText : ended ? statusTextColor(endSt) : (offPace ? C.orangeText : C.gray);
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="rounded-lg px-3 py-2.5" style={{ background: C.panel2, border: `1px solid ${C.border}` }}>
+        <div className="text-[9px] uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: C.gray, fontWeight: 700 }}>
+          <Activity size={9} strokeWidth={2.5} />
+          <span>{ended ? 'Ritmo médio' : 'Ritmo atual'}</span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="mono text-[16px]" style={{ color: C.ink, fontWeight: 600 }}>
+            {fmtRate(dailyAvg)}
+          </span>
+          <span className="text-[10px]" style={{ color: C.gray }}>leads/dia</span>
+        </div>
+        <div className="text-[10px] mt-0.5" style={{ color: C.grayLight }}>
+          {totalSoFar} em {elapsed} dias
+        </div>
+      </div>
+
+      <div className="rounded-lg px-3 py-2.5" style={{ background: rightBg, border: `1px solid ${rightBorder}` }}>
+        <div className="text-[9px] uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: rightHead, fontWeight: 700 }}>
+          <Target size={9} strokeWidth={2.5} />
+          <span>{achieved ? 'Meta atingida' : ended ? 'Resultado final' : 'Para bater a meta'}</span>
+        </div>
+        {achieved ? (
+          <>
+            <div className="text-[14px] flex items-center gap-1" style={{ color: C.blueText, fontWeight: 600 }}>
+              <CheckCircle2 size={13} strokeWidth={2.5} />
+              <span>{totalSoFar - target > 0 ? `+${totalSoFar - target} acima` : 'no alvo'}</span>
+            </div>
+            <div className="text-[10px] mt-0.5" style={{ color: C.grayLight }}>
+              {ended ? 'Trimestre encerrado' : `${w.daysRemaining} dias restantes`}
+            </div>
+          </>
+        ) : ended ? (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="mono text-[16px]" style={{ color: statusTextColor(endSt), fontWeight: 600 }}>
+                {pctFinal}%
+              </span>
+              <span className="text-[10px]" style={{ color: C.gray }}>da meta</span>
+            </div>
+            <div className="text-[10px] mt-0.5" style={{ color: C.grayLight }}>
+              Faltaram {leadsRemaining} leads
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="mono text-[16px]" style={{ color: offPace ? C.orangeText : C.blueText, fontWeight: 600 }}>
+                {fmtRate(dailyNeeded)}
+              </span>
+              <span className="text-[10px]" style={{ color: C.gray }}>leads/dia</span>
+            </div>
+            <div className="text-[10px] mt-0.5" style={{ color: C.grayLight }}>
+              {leadsRemaining} em {w.daysRemaining} dias
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InsightBadge({ insight }) {
+  const palette = {
+    // KR cuja janela de meses ainda não chegou: neutro, não vermelho — não é
+    // atraso, é agenda (ver tom 'espera' em buildInsight).
+    espera:   { bg: C.panel2,     fg: C.gray,       border: C.border,               Icon: Calendar,      label: 'Aguardando' },
+    star:     { bg: C.blueSoft,   fg: C.blueText,   border: 'rgba(0,114,206,0.2)',  Icon: Award,         label: 'Destaque' },
+    win:      { bg: C.blueSoft,   fg: C.blueText,   border: 'rgba(0,114,206,0.2)',  Icon: TrendingUp,    label: 'Vitória' },
+    near:     { bg: C.orangeSoft, fg: C.orangeText, border: 'rgba(222,141,19,0.25)', Icon: Target,       label: 'Quase lá' },
+    caminho:  { bg: C.orangeSoft, fg: C.orangeText, border: 'rgba(222,141,19,0.25)', Icon: Activity,     label: 'No caminho' },
+    warn:     { bg: C.orangeSoft, fg: C.orangeText, border: 'rgba(222,141,19,0.25)', Icon: AlertTriangle, label: 'Atenção' },
+    critical: { bg: C.redSoft,    fg: C.redText,    border: 'rgba(220,38,38,0.2)',   Icon: AlertCircle,   label: 'Em risco' },
+  };
+  const p = palette[insight.tone] || palette.warn;
+  const Icon = p.Icon;
+  return (
+    <div
+      className="rounded-lg p-3.5 mt-3"
+      style={{ background: p.bg, border: `1px solid ${p.border}` }}
+    >
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <Icon size={14} style={{ color: p.fg }} strokeWidth={2.4} />
+        <span className="text-[11px] uppercase tracking-widest" style={{ color: p.fg, fontWeight: 700 }}>
+          {p.label}
+        </span>
+        <span className="text-[14px]" style={{ color: C.ink, fontWeight: 500, lineHeight: 1.2 }}>
+          {insight.headline}
+        </span>
+      </div>
+      <p className="text-[13px] leading-relaxed" style={{ color: C.grayMid, marginLeft: 22 }}>
+        {insight.body}
+      </p>
+    </div>
+  );
+}
+
+function KRCard({ kr, index, focused = false, dimmed = false, onFocus, variant }) {
+  const q = useQuarter();
+  const MONTHS = q.months;
+  const CURRENT_MONTH_INDEX = q.currentMonthIndex;
+  // Meses de trabalho do KR (ver activeMonthsOf): mês fora da janela não recebe
+  // valor, não é julgado e não entra na divisão do objetivo mensal.
+  const active = kr.activeMonths || [true, true, true];
+  const janela = windowLabel(active, MONTHS);
+  // Mês futuro (vazio) só conta como tal se ainda não tiver valor lançado.
+  const isFutureMonth = (i) => (q.phase === 'future' || (q.phase === 'current' && i > CURRENT_MONTH_INDEX)) && !(kr.months[i] > 0);
+  // Só julga (✓/✗) mês que já VIROU — o mês corrente ainda está em andamento,
+  // então o ✗ é adiado até o mês fechar (senão desanima ver "não bateu" logo
+  // no início do mês, quando o valor ainda mal começou a subir).
+  const isMonthOver = (i) => active[i] && (q.phase === 'past' || (q.phase === 'current' && i < CURRENT_MONTH_INDEX));
+  const s = statusOf(kr.progress);
+  // KR cuja janela ainda não chegou não é "em risco": fica neutro (cinza) até
+  // ter mês de trabalho corrido. O veredito é o do insight (tone 'espera').
+  const aguardando = !!kr.insight && kr.insight.tone === 'espera';
+  const color = aguardando ? C.grayLight : statusColor(s);
+  const validMonths = kr.months.filter(m => m > 0);
+  const isAvg = kr.displayMode === 'average';
+  const aggValue = isAvg
+    ? (validMonths.length ? validMonths.reduce((a, b) => a + b, 0) / validMonths.length : 0)
+    : kr.months.reduce((a, b) => a + b, 0);
+  const aggLabel = isAvg ? 'Média / Meta' : 'Atual / Meta';
+  // KRs percentuais (ex.: taxa de retenção): os meses vêm na escala 0–100, mas a
+  // meta vem em fração (0,5). Normalizamos a meta p/ 0–100 e exibimos ambos com '%'.
+  const aggTarget = (kr.percentValue && kr.target != null && kr.target <= 1) ? kr.target * 100 : kr.target;
+  const fmtAgg = (n) => kr.percentValue ? `${Math.round(n)}%` : `${fmt(n)}${valueSuffix}`;
+  const valueSuffix = kr.valueSuffix || '';
+  // Apenas KRs de "% concluído" (projetos) são progresso-cumulativo-contra-meta,
+  // não série de fluxo: a barra de progresso já é a melhor leitura. Os demais
+  // (inclusive % de retenção, que é medido mês a mês) mantêm o gráfico de área.
+  const isPercent = kr.unit === '% concluído';
+
+  // Objetivo mensal, um por mês de trabalho (ver monthlyGoalsOf): derivado da
+  // meta trimestral, ou o valor próprio de cada mês quando o KR liga "meta
+  // personalizada por mês". `aggTarget` já está na escala 0–100 nas taxas.
+  const monthlyGoals = monthlyGoalsOf(kr, aggTarget, activeCount(active), active);
+  const monthHit = (i) => monthHitOf(kr.months[i], monthlyGoals[i], kr.lowerIsBetter);
+  // Mês futuro sem dado não é fracasso: fica fora da conta.
+  const monthHits = kr.months.map((_, i) => (isMonthOver(i) ? monthHit(i) : null));
+  // O mês corrente não entra em `monthHits` (ainda não "virou" — ver isMonthOver
+  // acima), mas pode já ter valor lançado (ex.: chip "AGO +35"). Sem isso, o
+  // veredito abaixo dizia "nenhum mês lançado ainda" contradizendo o próprio
+  // chip do mês atual logo acima.
+  const emAndamento = q.phase === 'current' && active[CURRENT_MONTH_INDEX] && kr.months[CURRENT_MONTH_INDEX] > 0;
+
+  // Modo foco: o card em análise cresce e ganha anel (azul da marca); os demais
+  // recuam (esmaecem + blur). 'spotlight' = card ampliado no overlay, sem recuo.
+  const isSpotlight = variant === 'spotlight';
+  const focusStyle = isSpotlight ? {}
+    : focused ? { transform: 'scale(1.03)', boxShadow: `0 0 0 2px ${C.blue}, 0 18px 50px rgba(20,20,20,0.16)`, zIndex: 5 }
+    : dimmed ? { opacity: 0.32, filter: 'blur(3px) grayscale(0.45)', transform: 'scale(0.985)' }
+    : {};
+
+  return (
+    <div
+      className="id-card id-fade-up rounded-xl p-5 relative overflow-hidden"
+      onClick={onFocus}
+      style={{
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        animationDelay: `${index * 60}ms`,
+        cursor: (!isSpotlight && onFocus) ? 'pointer' : 'default',
+        ...focusStyle,
+      }}
+    >
+      {/* subtle accent */}
+      <div
+        className="absolute top-0 right-0 w-32 h-32 rounded-full pointer-events-none"
+        style={{
+          background: `radial-gradient(circle, ${color}14 0%, transparent 70%)`,
+          transform: 'translate(40%, -40%)',
+        }}
+      />
+
+      <div className="flex items-start justify-between mb-2.5 relative">
+        <div>
+          <h3 className="text-[22px] tracking-tight" style={{ color: C.ink, fontWeight: 600, lineHeight: 1.1 }}>
+            {kr.title}
+          </h3>
+          <p className="text-[14px] mt-0.5" style={{ color: C.grayMid }}>{kr.sub}</p>
+        </div>
+        <StatusPill progress={kr.progress} waiting={aguardando} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mb-3 min-w-0 rounded-xl px-3 py-2" style={{ background: C.panel2, border: `1px solid ${C.border}` }}>
+        <span className="flex items-center gap-2.5 flex-shrink-0 min-w-0">
+          <Avatar name={kr.owner} size={40} ring />
+          <span className="min-w-0">
+            <span className="block text-[9px] uppercase tracking-widest" style={{ color: C.grayLight, fontWeight: 700 }}>Responsável</span>
+            <span className="block text-[15px] truncate" style={{ color: C.dim, fontWeight: 700 }}>{kr.owner}</span>
+          </span>
+        </span>
+        <span className="flex flex-col items-end gap-1 min-w-0">
+          <span className="text-[9px] uppercase tracking-widest" style={{ color: C.grayLight, fontWeight: 700 }}>Squad</span>
+          <SquadStackOverlap squad={kr.squad} owner={kr.owner} size={34} />
+        </span>
+      </div>
+
+      <div className="flex items-end justify-between mb-2">
+        <div>
+          <div className="mono text-[48px] leading-none tracking-tight" style={{ color: C.ink, fontWeight: 500 }}>
+            {Math.round(kr.progress * 100)}<span style={{ color, fontSize: 24 }}>%</span>
+          </div>
+          {kr.progressRaw > 1 && (
+            <div className="text-[13px] mt-1.5 flex items-center gap-1" style={{ color: C.blueText }}>
+              <Sparkles size={13} />
+              <span style={{ fontWeight: 600 }}>{Math.round(kr.progressRaw * 100)}% real</span>
+            </div>
+          )}
+        </div>
+        <div className="text-right" style={{ color: C.gray }}>
+          <div className="uppercase tracking-widest mb-1" style={{ fontSize: 11, fontWeight: 600 }}>{aggLabel}</div>
+          <div className="mono text-[22px] leading-none" style={{ color: C.dim, fontWeight: 600 }}>
+            {fmtAgg(aggValue)} <span style={{ color: C.grayDeep, fontWeight: 400 }}>/</span> {fmtAgg(aggTarget)}
+          </div>
+          <div className="mt-1.5" style={{ color: C.grayLight, fontSize: 13 }}>{kr.unit}</div>
+        </div>
+      </div>
+
+      <ProgressTrack progress={kr.progress} />
+
+      {isPercent ? (
+        <div className="mt-4">
+          <span className="text-[9px] uppercase tracking-widest" style={{ color: C.gray, fontWeight: 600 }}>
+            Avanço por mês (rumo a 70%)
+          </span>
+          <div className="mt-4 flex items-start gap-2">
+            {MONTHS.map((m, i) => {
+              const v = kr.months[i] || 0;
+              const out = !active[i];
+              if (out) {
+                // Mês fora da janela: chip apagado, sem número e sem ✓/✗.
+                return (
+                  <div key={m} className="flex-1 rounded-lg px-3 py-2 text-center"
+                    style={{ background: 'transparent', border: `1px dashed ${C.border}`, opacity: 0.6 }}>
+                    <div className="text-[10px] uppercase tracking-widest" style={{ color: C.grayLight, fontWeight: 700 }}>{m}</div>
+                    <div className="text-[10px] mt-1.5" style={{ color: C.grayLight }}>fora do escopo</div>
+                  </div>
+                );
+              }
+              const future = isFutureMonth(i);
+              const isGain = !future && v > 0;
+              const isCurrent = q.phase === 'current' && i === CURRENT_MONTH_INDEX;
+              return (
+                <div
+                  key={m}
+                  className="flex-1 rounded-lg px-3 py-2 text-center relative"
+                  style={{
+                    background: isCurrent ? C.blueSoft : (future ? C.panel2 : (isGain ? C.blueSofter : C.panel2)),
+                    borderStyle: (future && !isCurrent) ? 'dashed' : 'solid',
+                    borderWidth: isCurrent ? 1.5 : 1,
+                    borderColor: isCurrent ? C.blue : (future ? C.borderStrong : C.border),
+                    boxShadow: isCurrent ? '0 6px 16px rgba(0,114,206,0.14)' : 'none',
+                    transform: isCurrent ? 'translateY(-3px)' : 'none',
+                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  }}
+                >
+                  {isCurrent && (
+                    <span
+                      className="absolute left-1/2 -translate-x-1/2 uppercase rounded-full"
+                      style={{ top: -10, background: C.blue, color: '#fff', fontSize: 8, fontWeight: 800, letterSpacing: '0.12em', padding: '2px 8px', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,114,206,0.3)' }}
+                    >
+                      Mês atual
+                    </span>
+                  )}
+                  <div className="text-[10px] uppercase tracking-widest" style={{ color: isCurrent ? C.blueText : C.grayLight, fontWeight: 700 }}>{m}</div>
+                  <div className="mono text-[22px] mt-0.5 leading-none" style={{ color: future ? C.grayLight : (isCurrent || isGain ? C.blueText : C.gray), fontWeight: 700 }}>
+                    {future ? '·' : (v > 0 ? `+${fmt(v)}` : '0')}
+                  </div>
+                  {!future && isGain && (
+                    <div className="text-[10px] mt-0.5" style={{ color: C.grayLight }}>pp</div>
+                  )}
+                  {/* Estes KRs não têm gráfico, então o ✓/✗ do objetivo mensal
+                      entra no próprio chip do mês. */}
+                  {monthHits[i] !== null && (
+                    <div className="text-[12px] mt-0.5" style={{ color: monthHits[i] ? C.blueText : C.redText, fontWeight: 800 }}>
+                      {monthHits[i] ? '✓' : '✗'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4">
+          <MonthlyChart
+            months={kr.months}
+            color={color}
+            valueSuffix={valueSuffix}
+            monthlyGoals={monthlyGoals}
+            monthHit={monthHit}
+            activeMonths={active}
+            fmtGoal={fmtAgg}
+          />
+        </div>
+      )}
+
+      <MonthlyGoalVerdict goals={monthlyGoals} fmtGoal={fmtAgg} hits={monthHits} windowText={janela} emAndamento={emAndamento} />
+
+      {kr.unit === 'leads' && (
+        <DailyLeadsStats totalSoFar={kr.months.reduce((a, b) => a + b, 0)} target={kr.target} activeMonths={active} />
+      )}
+
+      <InsightBadge insight={kr.insight} />
+    </div>
+  );
+}
+
+/* ---------- Tamanho da área de conteúdo (v2) ----------
+   A área de CONTEÚDO é ampliada via CSS `zoom` (a navegação e o Modo
+   Apresentação não são afetados). O seletor Padrão/Grande/Máximo foi
+   removido; o tamanho fica fixo em "Grande" (1.15), que cabe no notebook
+   1360×768. O modo Foco (Spotlight) tem ampliação própria e dinâmica. */
+const CONTENT_ZOOM = 1.15;
+
+/* ---------- Seletor de trimestre (Q1–Q4) ---------- */
+function QuarterTabs({ value, onChange }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-2">
+      {QUARTERS.map(q => {
+        const on = q.id === value;
+        return (
+          <button
+            key={q.id}
+            onClick={() => onChange(q.id)}
+            title={`Ver ${q.id} · ${q.year}`}
+            className="id-nav-item"
+            style={{
+              width: 34, height: 30, borderRadius: 8, fontSize: 12, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: on ? C.blue : C.panel2,
+              color: on ? '#fff' : C.grayMid,
+              border: `1px solid ${on ? C.blue : C.border}`,
+              cursor: 'pointer',
+            }}
+          >
+            {q.id}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- Sidebar ---------- */
+
+function Sidebar({ active, onSelect, sections, overall, atualizadoEm, collapsed, onToggle, onStartMeeting, canStartMeeting, quarterId, onQuarter, canExport, onExport }) {
+  const navItems = [
+    { id: 'overview', name: 'Visão Geral', icon: LayoutDashboard, count: sections.reduce((a, s) => a + s.krs.length, 0) },
+    // `avg: undefined` em página sem KR — a linha do menu esconde o % em vez de
+    // mostrar NaN (páginas fixas do Q3 começam vazias).
+    ...sections.map(s => ({
+      id: s.id, name: s.name, icon: s.icon, count: s.krs.length,
+      avg: s.krs.length ? s.krs.reduce((a, k) => a + k.progress, 0) / s.krs.length : undefined,
+    })),
+  ];
+
+  const W = collapsed ? 84 : 320;
+
+  return (
+    <aside
+      className="flex flex-col h-full id-sidebar"
+      style={{ width: W, background: C.panel, borderRight: `1px solid ${C.border}`, transition: 'width 260ms cubic-bezier(0.4,0,0.2,1)' }}
+    >
+      {/* Logo + toggle */}
+      <div
+        className="py-6 flex items-center gap-2"
+        style={{
+          borderBottom: `1px solid ${C.border}`, minHeight: 92,
+          paddingLeft: collapsed ? 0 : 20, paddingRight: collapsed ? 0 : 20,
+          justifyContent: collapsed ? 'center' : 'space-between',
+        }}
+      >
+        {!collapsed && (
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2">
+              <div className="w-3.5 h-3.5 rounded-sm flex-shrink-0" style={{ background: C.blue }} />
+              <span className="text-[22px] tracking-tight" style={{ color: C.ink, fontWeight: 700 }}>
+                Intelidata
+              </span>
+              <span className="text-[11px] uppercase tracking-widest" style={{ color: C.gray, fontWeight: 600 }}>
+                OKR
+              </span>
+            </div>
+            <div className="text-[12px] mt-1 uppercase tracking-widest" style={{ color: C.gray, fontWeight: 600 }}>
+              {quarterId} · {QUARTER_BY_ID[quarterId] ? QUARTER_BY_ID[quarterId].year : OKR_YEAR}
+            </div>
+            <QuarterTabs value={quarterId} onChange={onQuarter} />
+          </div>
+        )}
+        <button
+          onClick={onToggle}
+          title={collapsed ? 'Expandir menu' : 'Retrair menu'}
+          className="id-nav-item flex items-center justify-center rounded-lg flex-shrink-0"
+          style={{ width: 38, height: 38, background: C.panel2, border: `1px solid ${C.border}`, color: C.gray }}
+        >
+          {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+        </button>
+      </div>
+
+      {/* Q2 indicator */}
+      {!collapsed ? (
+        <div className="px-6 py-5" style={{ borderBottom: `1px solid ${C.border}` }}>
+          <div className="text-[11px] uppercase tracking-widest mb-2" style={{ color: C.gray, fontWeight: 600 }}>
+            Desempenho geral
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="mono text-[44px] leading-none tracking-tight" style={{ color: C.ink, fontWeight: 500 }}>
+              {Math.round(overall * 100)}
+            </span>
+            <span className="text-[20px]" style={{ color: statusColor(statusOf(overall)) }}>%</span>
+          </div>
+          <div className="mt-3">
+            <ProgressTrack progress={overall} height={5} showLabel={false} />
+          </div>
+          <div className="text-[12px] mt-3" style={{ color: C.gray }}>
+            Meta do trimestre: <span style={{ color: C.ink, fontWeight: 600 }}>70%</span>
+          </div>
+        </div>
+      ) : (
+        <div className="py-4 flex flex-col items-center" style={{ borderBottom: `1px solid ${C.border}` }}>
+          <div className="mono text-[22px] leading-none" style={{ color: C.ink, fontWeight: 600 }}>
+            {Math.round(overall * 100)}<span style={{ fontSize: 12, color: statusColor(statusOf(overall)) }}>%</span>
+          </div>
+          <div className="text-[8px] uppercase tracking-widest mt-1" style={{ color: C.grayLight, fontWeight: 700 }}>Geral</div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        {/* Iniciar Reunião — abre o Modo Apresentação (Destaques · Desafios · Avisos).
+            Escondido de quem só tem `okr-valores` (lança valor mensal, não conduz reunião). */}
+        {canStartMeeting && (
+          <button
+            onClick={onStartMeeting}
+            title="Iniciar Reunião — apresentação em tela cheia"
+            className="id-nav-item w-full rounded-lg flex items-center mb-4"
+            style={{
+              background: C.blue, color: '#fff',
+              paddingLeft: collapsed ? 0 : 14, paddingRight: collapsed ? 0 : 14,
+              paddingTop: 12, paddingBottom: 12,
+              gap: collapsed ? 0 : 11,
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              boxShadow: '0 2px 8px rgba(0,114,206,0.25)',
+            }}
+          >
+            <Play size={collapsed ? 22 : 18} strokeWidth={2.5} fill="#fff" style={{ flexShrink: 0 }} />
+            {!collapsed && <span className="text-[15px]" style={{ fontWeight: 700 }}>Iniciar Reunião</span>}
+          </button>
+        )}
+
+        {!collapsed && (
+          <div className="text-[10px] uppercase tracking-widest px-3 mb-2" style={{ color: C.grayLight, fontWeight: 700 }}>
+            Páginas
+          </div>
+        )}
+        {navItems.map(item => {
+          const Icon = item.icon;
+          const isActive = item.id === active;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onSelect(item.id)}
+              title={collapsed ? item.name : undefined}
+              className="id-nav-item w-full text-left rounded-lg flex items-center mb-1.5"
+              style={{
+                background: isActive ? C.blueSoft : 'transparent',
+                color: isActive ? C.ink : C.grayMid,
+                borderLeft: collapsed ? 'none' : (isActive ? `3px solid ${C.blue}` : '3px solid transparent'),
+                paddingLeft: collapsed ? 0 : 10,
+                paddingRight: collapsed ? 0 : 12,
+                paddingTop: 11, paddingBottom: 11,
+                gap: collapsed ? 0 : 12,
+                justifyContent: collapsed ? 'center' : 'flex-start',
+              }}
+            >
+              <Icon size={collapsed ? 24 : 19} strokeWidth={isActive ? 2.5 : 2} style={{ color: isActive ? C.blue : C.gray, flexShrink: 0 }} />
+              {!collapsed && (
+                <>
+                  <span className="text-[15px] flex-1" style={{ fontWeight: isActive ? 600 : 500 }}>
+                    {item.name}
+                  </span>
+                  {item.avg !== undefined && (
+                    <span className="mono text-[12px]" style={{ color: statusTextColor(statusOf(item.avg)), fontWeight: 600 }}>
+                      {Math.round(item.avg * 100)}%
+                    </span>
+                  )}
+                  <span className="text-[12px]" style={{ color: C.grayLight, fontWeight: 600 }}>
+                    {item.count}
+                  </span>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      {!collapsed && (
+        <div className="px-6 py-4 text-[11px]" style={{ borderTop: `1px solid ${C.border}`, color: C.grayLight }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Calendar size={12} style={{ flexShrink: 0 }} />
+              <span>Atualizado em {formatAtualizadoEm(atualizadoEm)} · trimestre fecha em {QUARTER_END_MONTH[quarterId] || '—'}</span>
+            </div>
+            {canExport && (
+              <button
+                onClick={onExport}
+                title="Exportar dados do OKR (.md)"
+                className="id-nav-item flex items-center justify-center rounded-lg flex-shrink-0"
+                style={{ width: 26, height: 26, background: C.panel2, border: `1px solid ${C.border}`, color: C.gray }}
+              >
+                <Download size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/* ---------- Overview ---------- */
+
+function StatusDonut({ batidos, caminho, risco }) {
+  const total = batidos + caminho + risco;
+  const slices = [
+    { key: 'batido',  label: 'Batidos',    desc: '70%+',        value: batidos, color: C.blue,   text: C.blueText },
+    { key: 'caminho', label: 'No caminho', desc: '50–69%',      value: caminho, color: C.orange, text: C.orangeText },
+    { key: 'risco',   label: 'Em risco',   desc: 'abaixo 50%',  value: risco,   color: C.red,    text: C.redText },
+  ].filter(s => s.value > 0);
+
+  return (
+    <div className="flex items-center gap-6 flex-wrap">
+      <div style={{ width: 168, height: 168, position: 'relative', flexShrink: 0 }}>
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              data={slices}
+              dataKey="value"
+              nameKey="label"
+              cx="50%" cy="50%"
+              innerRadius={52} outerRadius={80}
+              paddingAngle={3}
+              startAngle={90} endAngle={-270}
+              stroke="none"
+              isAnimationActive={true}
+              animationDuration={700}
+            >
+              {slices.map(s => <Cell key={s.key} fill={s.color} />)}
+            </Pie>
+            <Tooltip
+              wrapperStyle={{ zIndex: 50 }}
+              contentStyle={{
+                background: C.panel, border: `1px solid ${C.borderStrong}`, borderRadius: 8,
+                fontFamily: 'Bricolage Grotesque', fontSize: 12, color: C.ink,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+              }}
+              formatter={(v, n) => [`${v} de ${total} KRs`, n]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="mono text-[34px] leading-none" style={{ color: C.ink, fontWeight: 600 }}>{total}</span>
+          <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.gray, fontWeight: 700 }}>KRs</span>
+        </div>
+      </div>
+
+      <div className="flex-1 min-w-[140px] space-y-3">
+        {slices.map(s => (
+          <div key={s.key} className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2.5 min-w-0">
+              <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+              <span className="text-[15px]" style={{ color: C.ink, fontWeight: 600 }}>{s.label}</span>
+              <span className="text-[11px]" style={{ color: C.grayLight }}>{s.desc}</span>
+            </span>
+            <span className="flex items-baseline gap-1.5 flex-shrink-0">
+              <span className="mono text-[22px] leading-none" style={{ color: s.text, fontWeight: 600 }}>{s.value}</span>
+              <span className="mono text-[12px]" style={{ color: C.grayLight }}>{Math.round((s.value / total) * 100)}%</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OverviewPage({ sections, overall }) {
+  const q = useQuarter();
+  const lastMonthName = { jan:'março', abr:'junho', jul:'setembro', out:'dezembro' }[q.months[0]] || q.months[2];
+  const allKRs = sections.flatMap(s => s.krs);
+  const batidos = allKRs.filter(k => k.progress >= 0.7);
+  const risco = allKRs.filter(k => k.progress < 0.5);
+  const caminho = allKRs.filter(k => k.progress >= 0.5 && k.progress < 0.7);
+
+  // Página sem KR (páginas fixas do Q3 recém-criadas) entra com média 0 em vez
+  // de NaN — a barra fica vazia e o contador mostra "0 KR".
+  const sectionData = sections.map(s => ({
+    name: s.name,
+    avg: s.krs.length ? s.krs.reduce((a, k) => a + k.progress, 0) / s.krs.length : 0,
+    krs: s.krs.length,
+  }));
+
+  // Destaques derivados dos próprios números (a planilha não traz curadoria):
+  //  - metas batidas = progresso real >= 100% da meta;
+  //  - prioridades   = os menores progressos do trimestre.
+  const monthsToHit = (kr) => {
+    if (!kr.target || kr.target <= 0 || !Array.isArray(kr.months)) return null;
+    let cum = 0;
+    for (let i = 0; i < kr.months.length; i++) {
+      cum += kr.months[i] || 0;
+      if (cum >= kr.target) return i + 1;
+    }
+    return null;
+  };
+  const batidas = allKRs.filter(k => k.progressRaw >= 1).sort((a, b) => b.progressRaw - a.progressRaw);
+  // KR cuja janela de meses ainda não começou (tom 'espera') fica FORA de
+  // "precisam de atenção": 0% num KR que só roda em setembro não é alerta, e ele
+  // ocuparia o lugar de quem realmente está atrasado.
+  const prioridades = allKRs
+    .filter(k => !k.insight || k.insight.tone !== 'espera')
+    .sort((a, b) => a.progress - b.progress)
+    .slice(0, 3);
+
+  return (
+    <div className="id-fade-in">
+      {/* Hero */}
+      <div className="mb-10 relative">
+        <div className="text-[13px] uppercase tracking-[0.3em] mb-3" style={{ color: C.orangeText, fontWeight: 700 }}>
+          {q.id} · {q.year} · Reunião de OKR
+        </div>
+        <h1 className="text-[56px] tracking-tight mb-2" style={{ color: C.ink, fontWeight: 500, lineHeight: 1.05 }}>
+          Visão geral do trimestre
+        </h1>
+        <p className="text-[18px] max-w-3xl" style={{ color: C.grayMid, lineHeight: 1.5 }}>
+          Acompanhamento dos {allKRs.length} resultados-chave que compõem o OKR de marketing.
+          {q.phase === 'past' ? ` Trimestre encerrado em ${lastMonthName}.` : ` Trimestre se encerra em ${lastMonthName}.`} Meta de aprovação: <span style={{ color: C.ink, fontWeight: 600 }}>70%</span>.
+        </p>
+      </div>
+
+      {/* Big metric strip */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-10">
+        <div
+          className="rounded-2xl p-6 relative overflow-hidden id-card lg:col-span-1"
+          style={{ background: C.panel, border: `1px solid ${C.border}` }}
+        >
+          <div
+            className="absolute top-0 right-0 w-40 h-40 rounded-full pointer-events-none"
+            style={{ background: `radial-gradient(circle, ${statusColor(statusOf(overall))}1a 0%, transparent 70%)`, transform: 'translate(30%, -30%)' }}
+          />
+          <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: C.gray, fontWeight: 600 }}>
+            OKR Geral
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="mono text-[64px] leading-none tracking-tighter" style={{ color: C.ink, fontWeight: 500 }}>
+              {Math.round(overall * 100)}
+            </span>
+            <span className="text-[24px]" style={{ color: statusColor(statusOf(overall)), fontWeight: 500 }}>%</span>
+          </div>
+          <div className="mt-4">
+            <ProgressTrack progress={overall} height={6} />
+          </div>
+          <div className="text-[11px] mt-6" style={{ color: C.gray }}>
+            Faltam <span style={{ color: C.ink, fontWeight: 600 }}>{Math.round((0.7 - overall) * 100)} pp</span> para atingir a meta
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-6 id-card lg:col-span-2" style={{ background: C.panel, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-2 mb-5">
+            <Target size={14} style={{ color: C.blue }} />
+            <span className="text-[10px] uppercase tracking-widest" style={{ color: C.gray, fontWeight: 600 }}>
+              Distribuição dos {allKRs.length} KRs por status
+            </span>
+          </div>
+          <StatusDonut batidos={batidos.length} caminho={caminho.length} risco={risco.length} />
+        </div>
+      </div>
+
+      {/* Section breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-2 gap-5 mb-10">
+        <div
+          className="lg:col-span-2 2xl:col-span-1 rounded-2xl p-6"
+          style={{ background: C.panel, border: `1px solid ${C.border}` }}
+        >
+          <div className="flex items-baseline justify-between mb-6">
+            <div>
+              <h2 className="text-[20px] tracking-tight" style={{ color: C.ink, fontWeight: 600 }}>
+                Desempenho por área
+              </h2>
+              <p className="text-[12px] mt-1" style={{ color: C.gray }}>
+                Média ponderada dos KRs em cada grupo
+              </p>
+            </div>
+          </div>
+          <div className="space-y-5">
+            {sectionData.map((s, i) => {
+              const sec = sections.find(x => x.name === s.name);
+              const Icon = sec.icon;
+              const color = statusColor(statusOf(s.avg));
+              const textColor = statusTextColor(statusOf(s.avg));
+              return (
+                <div key={s.name} className="id-fade-up" style={{ animationDelay: `${i * 80}ms` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <Icon size={15} style={{ color: C.grayMid }} />
+                      <span className="text-[14px]" style={{ color: C.ink, fontWeight: 500 }}>{s.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: C.gray, background: C.panel3, fontWeight: 600 }}>
+                        {s.krs} KR{s.krs === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <span className="mono text-[16px]" style={{ color: textColor, fontWeight: 700 }}>
+                      {Math.round(s.avg * 100)}%
+                    </span>
+                  </div>
+                  <ProgressTrack progress={s.avg} height={6} showLabel={false} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Highlights */}
+        <div className="rounded-2xl p-6" style={{ background: C.panel, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-2 mb-5">
+            <Flame size={16} style={{ color: C.orange }} />
+            <h2 className="text-[14px] uppercase tracking-widest" style={{ color: C.ink, fontWeight: 700 }}>
+              Destaques do trimestre
+            </h2>
+          </div>
+
+          <div className="2xl:grid 2xl:grid-cols-2 2xl:gap-5">
+            <div className="mb-5 2xl:mb-0">
+              <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: C.blueText, fontWeight: 700 }}>
+                Metas batidas · {batidas.length}
+              </div>
+              {batidas.length === 0 ? (
+                <div className="text-[12px]" style={{ color: C.gray }}>Nenhuma meta batida ainda.</div>
+              ) : batidas.map(k => {
+                const m = monthsToHit(k);
+                return (
+                  <div key={k.id} className="rounded-lg p-3 mb-2" style={{ background: C.blueSoft, border: `1px solid rgba(0,114,206,0.2)` }}>
+                    <div className="text-[13px]" style={{ color: C.ink, fontWeight: 600 }}>
+                      {k.title}{k.sub ? <span style={{ color: C.gray, fontWeight: 400 }}> · {k.sub}</span> : null}
+                    </div>
+                    <div className="text-[11px] mt-1 mono" style={{ color: C.blueText, fontWeight: 600 }}>
+                      {Math.round(k.progressRaw * 100)}% da meta{m ? ` · batida em ${m} ${m > 1 ? 'meses' : 'mês'}` : ''}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div>
+              <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: C.redText, fontWeight: 700 }}>
+                Precisam de atenção
+              </div>
+              {prioridades.map(k => (
+                <div key={k.id} className="rounded-lg p-3 mb-2" style={{ background: C.redSoft, border: `1px solid rgba(220,38,38,0.2)` }}>
+                  <div className="text-[13px]" style={{ color: C.ink, fontWeight: 600 }}>
+                    {k.title}{k.sub ? <span style={{ color: C.gray, fontWeight: 400 }}> · {k.sub}</span> : null}
+                  </div>
+                  <div className="text-[11px] mt-1 mono" style={{ color: C.redText, fontWeight: 600 }}>
+                    {Math.round(k.progress * 100)}% da meta
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* All KRs strip */}
+      <div className="rounded-2xl p-6" style={{ background: C.panel, border: `1px solid ${C.border}` }}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-[20px] tracking-tight" style={{ color: C.ink, fontWeight: 600 }}>
+            Todos os KRs · ordenados por progresso
+          </h2>
+          <span className="text-[11px]" style={{ color: C.gray }}>
+            {allKRs.length} resultados-chave
+          </span>
+        </div>
+        <div className="space-y-2">
+          {[...allKRs].sort((a, b) => b.progress - a.progress).map((k, i) => {
+            const color = statusTextColor(statusOf(k.progress));
+            return (
+              <div
+                key={k.id}
+                className="flex items-center gap-4 py-2 px-1"
+                style={{ borderBottom: i < allKRs.length - 1 ? `1px solid ${C.border}` : 'none' }}
+              >
+                <span className="text-[10px] mono w-6" style={{ color: C.grayLight, fontWeight: 600 }}>{String(i + 1).padStart(2, '0')}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] truncate" style={{ color: C.ink, fontWeight: 500 }}>
+                    {k.title} <span style={{ color: C.gray, fontWeight: 400 }}>· {k.sub}</span>
+                  </div>
+                </div>
+                <div className="hidden md:block w-48 lg:w-64 xl:w-96 2xl:w-[28rem]">
+                  <ProgressTrack progress={k.progress} height={4} showLabel={false} />
+                </div>
+                <span className="mono text-[14px] w-12 text-right" style={{ color, fontWeight: 700 }}>
+                  {Math.round(k.progress * 100)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Section page ---------- */
+
+/* Filtros por aba: qual campo do KR usar como critério e os rótulos.
+   - revendas/instagram filtram por `title`; projetos filtra por `owner`. */
+const FILTER_CONFIG = {
+  revendas:  { field: 'title', label: 'Revenda',     all: 'Todas', empty: 'Nenhuma Revenda selecionada.' },
+  instagram: { field: 'title', label: 'Perfil',      all: 'Todos', empty: 'Nenhum perfil selecionado.' },
+  projetos:  { field: 'owner', label: 'Responsável', all: 'Todos', empty: 'Nenhum responsável selecionado.' },
+  // Funil ADS e Redes Sociais também têm um KR por marca (Beemore/Uniplus/
+  // Intelidata) — as opções saem sozinhas dos títulos, como nas Revendas.
+  ads:              { field: 'title', label: 'Marca',  all: 'Todas', empty: 'Nenhuma marca selecionada.' },
+  'redes-sociais':  { field: 'title', label: 'Perfil', all: 'Todos', empty: 'Nenhum perfil selecionado.' },
+};
+
+/* Barra flutuante do modo foco — navega entre os KRs, abre a tela cheia e sai.
+   Quando o usuário pode editar E o trimestre é editável (Q3), ganha o lápis
+   (editar este KR) — o gancho da pendência 3. */
+function FocusToolbar({ pos, total, onPrev, onNext, onSpotlight, onClose, canEdit, onEdit }) {
+  const btn = { width: 40, height: 40, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.panel2, border: `1px solid ${C.border}`, color: C.grayMid, cursor: 'pointer' };
+  // Wrapper externo: fixa e centraliza (transform estático). Wrapper interno: a
+  // animação de entrada (translateY) — separados para a animação não sobrescrever
+  // o translateX(-50%) e fazer a barra "pular" para o centro depois de aparecer.
+  return (
+    <div className="id-focus-ui" style={{ position: 'fixed', bottom: 26, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
+      <div className="id-fade-up" style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 999, padding: '8px 12px', boxShadow: '0 10px 34px rgba(20,20,20,0.18)' }}>
+        <button onClick={onPrev} className="id-nav-item" style={btn} title="KR anterior (←)"><ChevronLeft size={20} /></button>
+        <span className="mono text-[13px]" style={{ color: C.dim, fontWeight: 600, minWidth: 58, textAlign: 'center' }}>{pos} / {total}</span>
+        <button onClick={onNext} className="id-nav-item" style={btn} title="Próximo KR (→)"><ChevronRight size={20} /></button>
+        <div style={{ width: 1, height: 26, background: C.border, margin: '0 2px' }} />
+        {canEdit && (
+          <button onClick={onEdit} className="id-nav-item" style={{ ...btn, color: C.blueText, borderColor: 'rgba(0,114,206,0.35)', background: C.blueSoft }} title="Editar este KR (E)"><Pencil size={19} strokeWidth={2.2} /></button>
+        )}
+        <button onClick={onSpotlight} className="id-nav-item" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 40, borderRadius: 999, background: C.blue, color: '#fff', border: `1px solid ${C.blue}`, fontWeight: 700, fontSize: 14, cursor: 'pointer' }} title="Tela cheia neste KR (F)">
+          <Maximize size={17} strokeWidth={2.4} /> Tela cheia
+        </button>
+        <button onClick={onClose} className="id-nav-item" style={btn} title="Sair do foco (Esc)"><X size={20} /></button>
+      </div>
+    </div>
+  );
+}
+
+/* Spotlight — o KR ampliado e centralizado, com o resto do dashboard desfocado.
+   Navega ← →, sai com ✕ / Esc / clique no fundo.
+   Ampliação dinâmica: o card é medido no tamanho natural e escalado (CSS `zoom`,
+   que re-rasteriza — texto nítido) para PREENCHER o espaço livre da tela. Assim
+   aproveita a área vazia e deixa até os textos pequenos legíveis numa TV. */
+const SPOTLIGHT_MAX_ZOOM = 2.2;   // teto p/ cards curtos não ficarem gigantes
+function KRSpotlight({ kr, pos, total, onPrev, onNext, onClose }) {
+  const btn = { borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.panel, border: `1px solid ${C.border}`, color: C.grayMid, cursor: 'pointer', flexShrink: 0 };
+
+  // Base do card (largura natural antes do zoom). Base menor => mais folga p/ ampliar.
+  const cardRef = useRef(null);
+  const [zoom, setZoom] = useState(null);   // null = ainda não medido -> renderiza natural
+
+  // Ao trocar de KR ou redimensionar, remede no tamanho natural (zoom 1).
+  useLayoutEffect(() => { setZoom(null); }, [kr]);
+  useEffect(() => {
+    const onResize = () => setZoom(null);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Passo de medição: só roda quando zoom===null (card renderizado em escala 1,
+  // então offsetHeight/Width são os naturais). Calcula o fator que preenche a área
+  // disponível (altura e largura) e reaplica antes da pintura (useLayoutEffect).
+  useLayoutEffect(() => {
+    if (zoom !== null) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const nh = el.offsetHeight, nw = el.offsetWidth;
+    if (!nh || !nw) return;
+    const availH = window.innerHeight - 104;   // respiro p/ contador/topo + margem
+    const availW = window.innerWidth - 240;     // espaço p/ as setas laterais
+    setZoom(Math.min(availH / nh, availW / nw, SPOTLIGHT_MAX_ZOOM));
+  }, [zoom, kr]);
+
+  return (
+    <div
+      className="id-fade-in id-focus-ui"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20,20,20,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 96px' }}
+    >
+      <button onClick={onClose} className="id-nav-item" title="Fechar (Esc)" style={{ ...btn, position: 'absolute', top: 22, right: 24, width: 44, height: 44, zIndex: 2 }}><X size={22} /></button>
+      <button onClick={onPrev} className="id-nav-item" title="Anterior (←)" style={{ ...btn, position: 'absolute', left: 26, top: '50%', transform: 'translateY(-50%)', width: 52, height: 52, zIndex: 2 }}><ChevronLeft size={28} /></button>
+      <div
+        ref={cardRef}
+        className="id-fade-up"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 'min(680px, 90vw)', zoom: zoom ?? 1, visibility: zoom === null ? 'hidden' : 'visible' }}
+      >
+        <KRCard kr={kr} index={0} variant="spotlight" />
+      </div>
+      <button onClick={onNext} className="id-nav-item" title="Próximo (→)" style={{ ...btn, position: 'absolute', right: 26, top: '50%', transform: 'translateY(-50%)', width: 52, height: 52, zIndex: 2 }}><ChevronRight size={28} /></button>
+      <div className="mono text-[14px]" style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(20,20,20,0.5)', padding: '6px 18px', borderRadius: 999, fontWeight: 600 }}>{pos} / {total}</div>
+    </div>
+  );
+}
+
+/* ============================================================
+   MODAL DE EDIÇÃO DE KR (pendência 3)
+   ------------------------------------------------------------
+   Criar/editar um KR "ao vivo": título, subtítulo, responsável, squad, seção,
+   unidade, meta trimestral, os 3 valores mensais e o tipo de progressão
+   (maior é melhor / menor é melhor). Salva via /api/okr/krs (POST/PATCH) e pode
+   excluir (DELETE). Autocontido: guarda o rascunho localmente e chama
+   onSubmit(draft)/onDelete(draft), que devolvem { ok, error }.
+   ============================================================ */
+/* Combobox de pessoas por chips com avatar. multi=true (Squad) marca vários;
+   multi=false (Responsável) escolhe um (clicar de novo limpa). */
+function PersonChips({ people, selected, multi, onChange }) {
+  const isSel = (n) => multi ? (selected || []).includes(n) : selected === n;
+  const toggle = (n) => {
+    if (multi) {
+      const cur = selected || [];
+      onChange(cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]);
+    } else {
+      onChange(selected === n ? '' : n);
+    }
+  };
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {people.map((n) => {
+        const on = isSel(n);
+        return (
+          <button key={n} type="button" onClick={() => toggle(n)} className="id-nav-item"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 5px 5px', borderRadius: 999, cursor: 'pointer',
+              background: on ? C.blueSoft : C.panel2, border: `1.5px solid ${on ? C.blue : C.border}`, color: on ? C.blueText : C.grayMid, fontWeight: 600, fontSize: 14 }}>
+            <Avatar name={n} size={24} ring />
+            <span>{n}</span>
+            {on && <Check size={15} strokeWidth={2.6} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function KREditorModal({ mode, initial, monthsLabels, quarterLabel, onSubmit, onDelete, onClose }) {
+  // Sem o nível `config`, o modal vira um lançador de valores mensais: os campos
+  // de estrutura nem são renderizados (e o backend poda o PATCH de todo jeito).
+  const okrEdit = useOkrEdit();
+  const showConfig = okrEdit.canEditConfig;
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [confirmDel, setConfirmDel] = useState(false);
+  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+
+  /* Meses de trabalho do KR. Nem todo KR roda o trimestre inteiro (projetos
+     começam no 2º mês, ou vivem num único mês) — desmarcar um mês tira ele da
+     conta do objetivo mensal e do veredito ✓/✗ do card, além de zerar o valor
+     (mês fora do escopo não guarda número). Pelo menos um mês fica sempre
+     marcado: um KR sem mês nenhum não tem como ser medido. */
+  const ativos = activeMonthsOf(draft.mesesAtivos);
+  const nAtivos = activeCount(ativos);
+  const toggleMes = (i) => {
+    if (ativos[i] && nAtivos === 1) return;         // não deixa zerar a janela
+    const next = ativos.map((v, k) => (k === i ? !v : v));
+    setDraft((d) => ({
+      ...d,
+      mesesAtivos: next,
+      // Desmarcou => zera o valor daquele mês (o backend zera de todo jeito).
+      [`mes${i + 1}`]: next[i] ? d[`mes${i + 1}`] : 0,
+    }));
+  };
+
+  /* Checkbox "Período personalizado" — sem ela, os interruptores de mês nem
+     aparecem (o KR roda o trimestre inteiro, comportamento padrão). Desligar
+     a checkbox reativa os 3 meses de uma vez: não faria sentido guardar uma
+     janela customizada "escondida" atrás de uma checkbox desmarcada. */
+  const setPeriodoPersonalizado = (on) => {
+    setDraft((d) => ({ ...d, periodoPersonalizado: on, ...(on ? {} : { mesesAtivos: [true, true, true] }) }));
+  };
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !saving) { e.preventDefault(); onClose(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+
+  const save = async () => {
+    if (!String(draft.titulo || '').trim()) { setError('Informe um título.'); return; }
+    if (!String(draft.secao || '').trim()) { setError('Informe a seção.'); return; }
+    const t = Number(draft.target);
+    if (!Number.isFinite(t) || t < 0) { setError('Meta trimestral inválida.'); return; }
+    setSaving(true); setError('');
+    const res = await onSubmit(draft);
+    setSaving(false);
+    if (!res || !res.ok) setError((res && res.error) || 'Não foi possível salvar.');
+  };
+
+  const del = async () => {
+    setSaving(true); setError('');
+    const res = await onDelete(draft);
+    setSaving(false);
+    if (!res || !res.ok) setError((res && res.error) || 'Não foi possível excluir.');
+  };
+
+  const fieldS = { width: '100%', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '11px 13px', fontSize: 15, color: C.ink, outline: 'none', fontFamily: 'inherit' };
+  const labelS = { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.12em', color: C.gray, fontWeight: 700, marginBottom: 7, display: 'block' };
+  const num = (v) => (v === '' || v === null || v === undefined) ? '' : v;
+
+  // Comboboxes de pessoas: equipe + quaisquer nomes já gravados fora dela.
+  const squadSel = splitSquad(draft.squad);
+  const ownerPeople = withExtras(TEAM, draft.owner ? [draft.owner] : []);
+  const squadPeople = withExtras(TEAM, squadSel);
+
+  return ReactDOM.createPortal(
+    <div
+      className="id-fade-in id-focus-ui"
+      onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(20,20,20,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
+      <div className="id-fade-up" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 20, padding: 28, boxShadow: '0 16px 50px rgba(20,20,20,0.20)', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Pencil size={18} style={{ color: C.blue }} />
+            <span style={{ fontSize: 18, fontWeight: 700 }}>{mode === 'new' ? 'Novo KR' : 'Editar KR'}</span>
+            {quarterLabel && <span className="text-[12px] uppercase tracking-widest" style={{ color: C.gray, fontWeight: 700 }}>· {quarterLabel}</span>}
+          </div>
+          <button onClick={() => !saving && onClose()} className="id-nav-item" style={{ width: 36, height: 36, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.panel2, border: `1px solid ${C.border}`, color: C.grayMid, cursor: 'pointer' }} title="Fechar (Esc)"><X size={18} /></button>
+        </div>
+
+        {showConfig && <>
+        {/* Título + subtítulo */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+          <div>
+            <label style={labelS}>Título</label>
+            <input value={draft.titulo} onChange={(e) => set('titulo', e.target.value)} placeholder="Ex.: Beemore" maxLength={120} style={{ ...fieldS, fontWeight: 600 }} />
+          </div>
+          <div>
+            <label style={labelS}>Subtítulo / métrica</label>
+            <input value={draft.sub} onChange={(e) => set('sub', e.target.value)} placeholder="Ex.: Seguidores" maxLength={160} style={fieldS} />
+          </div>
+        </div>
+
+        {/* Responsável — combobox de uma pessoa */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelS}>Responsável <span style={{ textTransform: 'none', letterSpacing: 0, color: C.grayLight, fontWeight: 500 }}>· escolha uma pessoa</span></label>
+          <PersonChips people={ownerPeople} selected={draft.owner} multi={false} onChange={(v) => set('owner', v)} />
+        </div>
+
+        {/* Squad — combobox de várias pessoas */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelS}>Squad <span style={{ textTransform: 'none', letterSpacing: 0, color: C.grayLight, fontWeight: 500 }}>· marque quem participa</span></label>
+          <PersonChips people={squadPeople} selected={squadSel} multi={true} onChange={(arr) => set('squad', joinSquad(arr))} />
+        </div>
+
+        {/* Seção + unidade */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+          <div>
+            <label style={labelS}>Seção</label>
+            <input value={draft.secao} onChange={(e) => set('secao', e.target.value)} placeholder="Ex.: Redes Sociais" maxLength={120} style={fieldS} />
+          </div>
+          <div>
+            <label style={labelS}>Unidade (rótulo)</label>
+            <input value={draft.unidade} onChange={(e) => set('unidade', e.target.value)} placeholder="Ex.: seguidores, leads…" maxLength={40} style={fieldS} />
+          </div>
+        </div>
+
+        {/* Meta trimestral */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelS}>Meta trimestral</label>
+          <input type="number" value={num(draft.target)} onChange={(e) => set('target', e.target.value)} placeholder="Ex.: 500" step="any" style={{ ...fieldS, maxWidth: 220 }} className="mono" />
+        </div>
+
+        </>}
+
+        {/* Sem permissão de configuração, o card em edição precisa ficar
+            identificado — senão a pessoa vê três campos numéricos sem contexto. */}
+        {!showConfig && (
+          <div style={{ marginBottom: 18, padding: '12px 14px', borderRadius: 12, background: C.panel2, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>{draft.titulo || '—'}</div>
+            {draft.sub && <div style={{ fontSize: 14, color: C.grayMid, marginTop: 2 }}>{draft.sub}</div>}
+            <div style={{ fontSize: 12, color: C.grayLight, marginTop: 6 }}>
+              Meta trimestral: <span className="mono" style={{ color: C.dim, fontWeight: 700 }}>{num(draft.target)}</span>
+              {draft.unidade ? ` ${draft.unidade}` : ''}
+            </div>
+          </div>
+        )}
+
+        {/* Valores mensais + MESES DE TRABALHO
+            O rótulo de cada mês é o botão que liga/desliga o mês: com config, o
+            cabeçalho da coluna vira um interruptor; sem config, é só rótulo (a
+            janela é estrutura, e o backend poda o PATCH de quem só lança valor). */}
+        <div style={{ marginBottom: 18 }}>
+          <label style={labelS}>
+            Valores mensais
+            {showConfig && draft.periodoPersonalizado && (
+              <span style={{ textTransform: 'none', letterSpacing: 0, color: C.grayLight, fontWeight: 500 }}>
+                {' '}· clique no mês para tirá-lo do escopo deste KR
+              </span>
+            )}
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            {['mes1', 'mes2', 'mes3'].map((k, i) => {
+              const on = ativos[i];
+              const rotulo = monthsLabels[i] || `Mês ${i + 1}`;
+              const metaKey = `metaMes${i + 1}`;
+              return (
+                <div key={k}>
+                  {showConfig && draft.periodoPersonalizado ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleMes(i)}
+                      className="id-nav-item"
+                      title={on ? 'Mês de trabalho — clique para tirar do escopo' : 'Fora do escopo — clique para incluir'}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        marginBottom: 6, padding: '6px 8px', borderRadius: 9, cursor: 'pointer',
+                        background: on ? C.blueSoft : C.panel2,
+                        border: `1.5px ${on ? 'solid' : 'dashed'} ${on ? C.blue : C.borderStrong}`,
+                        color: on ? C.blueText : C.grayLight,
+                        fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
+                      }}
+                    >
+                      {on ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                      {rotulo}
+                    </button>
+                  ) : (
+                    <div className="text-[11px] uppercase tracking-widest mb-1.5" style={{ color: on ? C.grayLight : C.borderStrong, fontWeight: 700 }}>
+                      {rotulo}{!on && ' · fora'}
+                    </div>
+                  )}
+                  <input
+                    type="number"
+                    disabled={!on}
+                    value={on ? num(draft[k]) : ''}
+                    placeholder={on ? '' : '—'}
+                    onChange={(e) => set(k, e.target.value)}
+                    step="any"
+                    className="mono"
+                    style={{ ...fieldS, opacity: on ? 1 : 0.45, cursor: on ? 'text' : 'not-allowed', borderStyle: on ? 'solid' : 'dashed' }}
+                  />
+                  {/* Meta personalizada por mês: um campo a mais logo abaixo do
+                      valor lançado. Vazio = usa o objetivo derivado (target ÷
+                      meses) NESTE mês — não precisa preencher os 3. */}
+                  {showConfig && draft.metaPersonalizada && (
+                    <input
+                      type="number"
+                      disabled={!on}
+                      value={on ? num(draft[metaKey]) : ''}
+                      placeholder={on ? 'meta do mês' : '—'}
+                      onChange={(e) => set(metaKey, e.target.value)}
+                      step="any"
+                      title={`Meta de ${rotulo} — vazio usa a meta derivada da trimestral`}
+                      className="mono"
+                      style={{ ...fieldS, marginTop: 6, padding: '8px 13px', fontSize: 13, opacity: on ? 1 : 0.45, cursor: on ? 'text' : 'not-allowed', borderStyle: 'dashed', color: C.grayMid }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* A janela muda a conta do objetivo mensal — deixar isso explícito é
+              o que evita a pergunta "por que a meta/mês não é a meta ÷ 3?". */}
+          {nAtivos < 3 && (
+            <p style={{ fontSize: 12, color: C.grayMid, marginTop: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Calendar size={13} style={{ color: C.blue, flexShrink: 0 }} />
+              <span>
+                KR de {plural(nAtivos, 'mês de trabalho', 'meses de trabalho')}
+                {` (${monthsLabels.filter((_, i) => ativos[i]).join(' · ')})`}
+                {Number(draft.target) > 0 && !draft.percentValue
+                  ? ` — meta/mês = ${fmt(Math.round((Number(draft.target) / nAtivos) * 10) / 10)}`
+                  : ''}
+              </span>
+            </p>
+          )}
+        </div>
+
+        {showConfig && <>
+        {/* Tipo de progressão */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelS}>Tipo de progressão</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[
+              { v: false, label: 'Maior é melhor', Icon: TrendingUp, hint: 'meta = atingir' },
+              { v: true, label: 'Menor é melhor', Icon: TrendingDown, hint: 'meta = ficar abaixo' },
+            ].map((opt) => {
+              const on = !!draft.lowerIsBetter === opt.v;
+              const Ico = opt.Icon;
+              return (
+                <button key={String(opt.v)} onClick={() => set('lowerIsBetter', opt.v)} className="id-nav-item"
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
+                    background: on ? C.blueSoft : C.panel2, border: `1.5px solid ${on ? C.blue : C.border}`, color: on ? C.blueText : C.grayMid }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 14 }}><Ico size={16} strokeWidth={2.3} /> {opt.label}</span>
+                  <span style={{ fontSize: 11, color: C.grayLight }}>{opt.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Valores em % (agrega por média) */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 6 }}>
+          <input type="checkbox" checked={!!draft.percentValue} onChange={(e) => set('percentValue', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.blue }} />
+          <span style={{ fontSize: 14, color: C.dim, fontWeight: 500 }}>Valores em porcentagem (%)</span>
+        </label>
+        <p style={{ fontSize: 12, color: C.grayLight, margin: '0 0 14px 26px' }}>Agrega por média dos meses. O progresso é derivado dos valores mensais ÷ meta trimestral.</p>
+
+        {/* Período personalizado — sem ela o KR roda o trimestre inteiro (padrão);
+            ligada, revela os interruptores de mês na seção "Valores mensais"
+            acima, para tirar um ou dois meses do escopo do KR. */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 6 }}>
+          <input type="checkbox" checked={!!draft.periodoPersonalizado} onChange={(e) => setPeriodoPersonalizado(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.blue }} />
+          <span style={{ fontSize: 14, color: C.dim, fontWeight: 500 }}>Período personalizado</span>
+        </label>
+        <p style={{ fontSize: 12, color: C.grayLight, margin: '0 0 14px 26px' }}>Marque em qual período o KR estará ativo.</p>
+
+        {/* Meta personalizada por mês — sem ela, o objetivo mensal é sempre a
+            meta trimestral ÷ meses de trabalho (igual nos 3 meses). Ligada, cada
+            mês ganha um campo de meta próprio logo abaixo do valor lançado. */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 6 }}>
+          <input type="checkbox" checked={!!draft.metaPersonalizada} onChange={(e) => set('metaPersonalizada', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.blue }} />
+          <span style={{ fontSize: 14, color: C.dim, fontWeight: 500 }}>Meta personalizada por mês</span>
+        </label>
+        <p style={{ fontSize: 12, color: C.grayLight, margin: '0 0 8px 26px' }}>Define o valor de meta de cada mês.</p>
+        </>}
+
+        {error && <div style={{ color: C.redText, fontSize: 14, marginTop: 14, fontWeight: 600 }}>{error}</div>}
+
+        {/* Ações */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
+          {mode === 'edit' && okrEdit.canCreate ? (
+            confirmDel ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: C.redText, fontWeight: 600 }}>Excluir?</span>
+                <button onClick={del} disabled={saving} className="id-nav-item" style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.red}`, background: C.redSoft, color: C.redText, fontWeight: 700, cursor: 'pointer' }}>Sim, excluir</button>
+                <button onClick={() => setConfirmDel(false)} disabled={saving} className="id-nav-item" style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.grayMid, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmDel(true)} disabled={saving} className="id-nav-item" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.redText, fontWeight: 600, cursor: 'pointer' }}>
+                <Trash2 size={16} /> Excluir
+              </button>
+            )
+          ) : <span />}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => !saving && onClose()} disabled={saving} className="id-nav-item" style={{ padding: '10px 18px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.grayMid, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={save} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', borderRadius: 10, border: `1px solid ${C.blue}`, background: C.blue, color: '#fff', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+              <Check size={16} /> {saving ? 'Salvando…' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function SectionPage({ section }) {
+  const okrEdit = useOkrEdit();
+  const canEditHere = okrEdit.canEdit && okrEdit.editable;
+  // "Novo KR" é nível estrutura; editar valores é bem mais amplo.
+  const canCreateHere = okrEdit.canCreate && okrEdit.editable;
+  const filterCfg = FILTER_CONFIG[section.id] || null;
+  // Página sem nenhum KR (páginas fixas do trimestre editável) não mostra a barra
+  // de filtro: não há o que filtrar, e o espaço é do convite a cadastrar.
+  const hasFilter = !!filterCfg && section.krs.length > 0;
+
+  // Opções do filtro = valores únicos do campo configurado, na ordem de aparição.
+  const options = useMemo(() => {
+    if (!filterCfg) return [];
+    const seen = [];
+    section.krs.forEach(k => {
+      const v = k[filterCfg.field];
+      if (v && !seen.includes(v)) seen.push(v);
+    });
+    return seen;
+  }, [section, filterCfg]);
+
+  // Conjunto vazio = "todos"
+  const [selected, setSelected] = useState(() => new Set());
+
+  // Modo foco / Spotlight do KR em análise (índice dentro de visibleKRs).
+  const [focusIdx, setFocusIdx] = useState(null);
+  const [spotlight, setSpotlight] = useState(false);
+
+  const toggle = (name) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
+  const showAll = selected.size === 0;
+
+  const visibleKRs = useMemo(() => {
+    if (!filterCfg || showAll) return section.krs;
+    return section.krs.filter(k => selected.has(k[filterCfg.field]));
+  }, [section, filterCfg, selected, showAll]);
+
+  // Mudou o filtro → some o foco (os índices deixam de valer).
+  useEffect(() => { setFocusIdx(null); setSpotlight(false); }, [selected]);
+  // Mantém o foco dentro do alcance se a lista encolher.
+  useEffect(() => {
+    if (focusIdx !== null && focusIdx >= visibleKRs.length) { setFocusIdx(null); setSpotlight(false); }
+  }, [visibleKRs.length, focusIdx]);
+
+  // Teclado no modo foco: ← → troca de KR · F abre/fecha a tela cheia ·
+  // Esc fecha a tela cheia (ou sai do foco).
+  useEffect(() => {
+    if (focusIdx === null) return;
+    const n = visibleKRs.length;
+    const onKey = (e) => {
+      // Ignora quando o foco está num campo de formulário (ex.: modal de edição
+      // aberto) — senão digitar 'f'/'e' dispararia os atalhos do modo foco.
+      const tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); setFocusIdx(i => (i + 1) % n); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); setFocusIdx(i => (i - 1 + n) % n); }
+      else if (e.key === 'Escape') { e.preventDefault(); if (spotlight) setSpotlight(false); else setFocusIdx(null); }
+      else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); setSpotlight(s => !s); }
+      else if ((e.key === 'e' || e.key === 'E') && canEditHere && !spotlight && visibleKRs[focusIdx]) { e.preventDefault(); okrEdit.openEdit(visibleKRs[focusIdx]); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focusIdx, spotlight, visibleKRs.length, canEditHere, okrEdit, visibleKRs]);
+
+  // Clicar fora de um card de KR (e fora da UI de foco — barra/Spotlight) sai do
+  // modo foco. O clique que ENTRA no foco não dispara aqui: o listener só é
+  // anexado depois, quando focusIdx deixa de ser null.
+  useEffect(() => {
+    if (focusIdx === null) return;
+    const onDocClick = (e) => {
+      const t = e.target;
+      if (t && t.closest && (t.closest('.id-card') || t.closest('.id-focus-ui'))) return;
+      setFocusIdx(null);
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [focusIdx]);
+
+  const avg = visibleKRs.length ? visibleKRs.reduce((a, k) => a + k.progress, 0) / visibleKRs.length : 0;
+  const batidos = visibleKRs.filter(k => k.progress >= 0.7).length;
+  const Icon = section.icon;
+
+  return (
+    <div className="id-fade-in">
+      {/* header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Icon size={18} style={{ color: C.blue }} />
+          <span className="text-[13px] uppercase tracking-[0.3em]" style={{ color: C.orangeText, fontWeight: 700 }}>
+            Página
+          </span>
+        </div>
+        <div className="flex items-end justify-between flex-wrap gap-6">
+          <div>
+            <h1 className="text-[56px] tracking-tight mb-2" style={{ color: C.ink, fontWeight: 500, lineHeight: 1 }}>
+              {section.name}
+            </h1>
+            <p className="text-[18px] max-w-2xl" style={{ color: C.grayMid }}>
+              {section.blurb}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            {canCreateHere && (
+              <button onClick={() => okrEdit.openCreate({ secao: section.secao || section.name })} className="id-nav-item"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 20px', borderRadius: 12, background: C.blue, color: '#fff', border: `1px solid ${C.blue}`, fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,114,206,0.25)' }}
+                title="Criar um novo KR nesta seção">
+                <Plus size={18} strokeWidth={2.5} /> Novo KR
+              </button>
+            )}
+            <div className="flex items-center gap-8 px-8 py-5 rounded-xl" style={{ background: C.panel, border: `1px solid ${C.border}` }}>
+              <div>
+                <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: C.gray, fontWeight: 600 }}>{hasFilter && !showAll ? 'Média (filtro)' : 'Média da área'}</div>
+                <div className="mono text-[40px] leading-none" style={{ color: statusTextColor(statusOf(avg)), fontWeight: 600 }}>
+                  {Math.round(avg * 100)}<span style={{ fontSize: 20 }}>%</span>
+                </div>
+              </div>
+              <div className="w-px h-12" style={{ background: C.border }} />
+              <div>
+                <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: C.gray, fontWeight: 600 }}>KRs batidos</div>
+                <div className="mono text-[40px] leading-none" style={{ color: C.ink, fontWeight: 500 }}>
+                  {batidos}<span style={{ color: C.grayLight, fontSize: 20 }}>/{visibleKRs.length}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filtro por aba (Revendas/Instagram por nome, Projetos por responsável) */}
+      {hasFilter && (
+        <div className="mb-8 rounded-xl p-5" style={{ background: C.panel, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Filter size={16} style={{ color: C.blue }} strokeWidth={2.4} />
+            <span className="text-[13px] uppercase tracking-widest" style={{ color: C.grayMid, fontWeight: 700 }}>
+              Filtrar por {filterCfg.label}
+            </span>
+            {!showAll && (
+              <span className="text-[13px] ml-1" style={{ color: C.gray }}>
+                · {selected.size} de {options.length} selecionado{selected.size > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              onClick={() => setSelected(new Set())}
+              className="id-tag rounded-full flex items-center gap-2"
+              style={{
+                padding: '10px 20px',
+                fontSize: 16, fontWeight: 700,
+                background: showAll ? C.blue : C.panel2,
+                color: showAll ? '#fff' : C.grayMid,
+                border: `1.5px solid ${showAll ? C.blue : C.border}`,
+              }}
+            >
+              {showAll && <CheckCircle2 size={18} strokeWidth={2.5} />}
+              {filterCfg.all}
+            </button>
+            {options.map(name => {
+              const on = selected.has(name);
+              return (
+                <button
+                  key={name}
+                  onClick={() => toggle(name)}
+                  className="id-tag rounded-full flex items-center gap-2"
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: 16, fontWeight: 700,
+                    background: on ? C.blueSoft : C.panel2,
+                    color: on ? C.blueText : C.grayMid,
+                    border: `1.5px solid ${on ? C.blue : C.border}`,
+                  }}
+                >
+                  {on && <X size={16} strokeWidth={2.6} style={{ opacity: 0.7 }} />}
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* KR grid */}
+      {visibleKRs.length > 0 ? (
+        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+          {visibleKRs.map((kr, i) => (
+            <KRCard
+              key={kr.id}
+              kr={kr}
+              index={i}
+              focused={focusIdx === i}
+              dimmed={focusIdx !== null && focusIdx !== i}
+              onFocus={() => setFocusIdx(i)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl p-12 text-center" style={{ background: C.panel, border: `1px dashed ${C.borderStrong}` }}>
+          {/* Página SEM NENHUM KR (páginas fixas do trimestre editável) é
+              diferente de filtro que não casou: aqui o caminho é cadastrar. */}
+          {section.krs.length === 0 ? (
+            <>
+              <div className="text-[16px]" style={{ color: C.gray }}>
+                {canCreateHere
+                  ? 'Esta página ainda não tem KRs. Use "Novo KR" para cadastrar o primeiro.'
+                  : 'Esta página ainda não tem KRs cadastrados.'}
+              </div>
+              {canCreateHere && (
+                <button onClick={() => okrEdit.openCreate({ secao: section.secao || section.name })} className="id-nav-item"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 20, padding: '13px 20px', borderRadius: 12, background: C.blue, color: '#fff', border: `1px solid ${C.blue}`, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+                  title="Criar o primeiro KR desta seção">
+                  <Plus size={18} strokeWidth={2.5} /> Novo KR
+                </button>
+              )}
+            </>
+          ) : (
+            <span className="text-[16px]" style={{ color: C.gray }}>{filterCfg ? filterCfg.empty : 'Nenhum item para exibir.'}</span>
+          )}
+        </div>
+      )}
+
+      {/* Modo foco: barra de navegação flutuante (←/→, tela cheia, sair).
+          Portada p/ o <body> — assim escapa do `zoom` da área de conteúdo e
+          fica sempre no tamanho real da tela (como o Modo Apresentação). */}
+      {focusIdx !== null && !spotlight && visibleKRs[focusIdx] && ReactDOM.createPortal(
+        <FocusToolbar
+          pos={focusIdx + 1}
+          total={visibleKRs.length}
+          onPrev={() => setFocusIdx((focusIdx - 1 + visibleKRs.length) % visibleKRs.length)}
+          onNext={() => setFocusIdx((focusIdx + 1) % visibleKRs.length)}
+          onSpotlight={() => setSpotlight(true)}
+          onClose={() => setFocusIdx(null)}
+          canEdit={canEditHere}
+          onEdit={() => okrEdit.openEdit(visibleKRs[focusIdx])}
+        />, document.body
+      )}
+
+      {/* Spotlight: KR ampliado com fundo desfocado (também portado p/ o body,
+          para caber inteiro mesmo com o zoom das informações em "Máximo"). */}
+      {focusIdx !== null && spotlight && visibleKRs[focusIdx] && ReactDOM.createPortal(
+        <KRSpotlight
+          kr={visibleKRs[focusIdx]}
+          pos={focusIdx + 1}
+          total={visibleKRs.length}
+          onPrev={() => setFocusIdx((focusIdx - 1 + visibleKRs.length) % visibleKRs.length)}
+          onNext={() => setFocusIdx((focusIdx + 1) % visibleKRs.length)}
+          onClose={() => setSpotlight(false)}
+        />, document.body
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   MODO APRESENTAÇÃO — abertura da reunião setorial
+   ------------------------------------------------------------
+   Três momentos em sequência: Destaques · Desafios · Avisos.
+   - Destaques/Desafios são slides-título FIXOS (sem conteúdo:
+     cada um fala e compartilha na mesa).
+   - Avisos é uma sequência de slides EDITÁVEIS pelo gestor, dentro
+     do próprio dashboard. São carregados de /api/avisos (Cloudflare
+     KV) e persistem entre sessões. Editáveis só por admin/gestor.
+   ============================================================ */
+
+// Capas fixas (não editáveis). A capa de "Avisos" abre o bloco editável.
+const COVER_SLIDES = [
+  { type: 'cover', id: 'destaques', title: 'Destaques', subtitle: 'O que foi bem nesta semana — cada um compartilha um ponto positivo.', icon: Sparkles, accent: C.blue, soft: C.blueSoft },
+  { type: 'cover', id: 'desafios', title: 'Desafios', subtitle: 'As dificuldades da semana — o que travou ou pode melhorar.', icon: Flame, accent: C.orange, soft: C.orangeSoft },
+];
+const AVISOS_COVER = { type: 'cover', id: 'avisos', title: 'Avisos', subtitle: 'Novidades, regulamentos e notícias do setor.', icon: Megaphone, accent: C.blueText, soft: C.blueSoft };
+
+// Monta o deck completo: capas fixas + capa de avisos + avisos dinâmicos.
+function buildDeck(avisos) {
+  return [
+    ...COVER_SLIDES,
+    AVISOS_COVER,
+    ...(avisos || []).map(a => ({ type: 'aviso', kicker: 'Aviso', ...a })),
+  ];
+}
+
+// Layout do slide de aviso, derivado do conteúdo (sem o editor escolher).
+function avisoLayout(a) {
+  if (a.image && (a.title || a.body)) return 'image-text';
+  if (a.image) return 'image';
+  return 'text';
+}
+
+// Reduz a imagem no navegador antes de salvar (base64 leve no KV).
+function fileToDownscaledDataURL(file, maxDim = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo de imagem inválido.'));
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function newAvisoId() {
+  return (crypto.randomUUID ? crypto.randomUUID() : 'a' + Date.now() + Math.random().toString(36).slice(2, 7));
+}
+
+const HEADING_FONT = "'Bricolage Grotesque', system-ui, sans-serif";
+
+function CoverSlide({ slide }) {
+  const Icon = slide.icon;
+  return (
+    <div className="id-fade-up" style={{ textAlign: 'center', maxWidth: 1000, padding: '0 24px' }}>
+      <div style={{ width: 84, height: 84, borderRadius: 24, background: slide.soft, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 36px', border: `1px solid ${C.border}` }}>
+        <Icon size={38} style={{ color: slide.accent }} strokeWidth={1.8} />
+      </div>
+      <h1 style={{ fontFamily: HEADING_FONT, fontSize: 'clamp(64px, 13vw, 168px)', fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 0.95, color: C.ink, margin: 0 }}>
+        {slide.title}
+      </h1>
+      {slide.subtitle && (
+        <p style={{ fontSize: 'clamp(18px, 2.2vw, 28px)', color: C.gray, marginTop: 28, fontWeight: 500, maxWidth: 780, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.4 }}>
+          {slide.subtitle}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AvisoSlide({ slide }) {
+  const layout = slide.layout || avisoLayout(slide);
+
+  if (layout === 'image') {
+    return (
+      <div className="id-fade-in" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <img src={slide.image} alt={slide.title || 'Aviso'} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 16 }} />
+      </div>
+    );
+  }
+
+  if (layout === 'image-text') {
+    return (
+      <div className="id-fade-up" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, alignItems: 'center', maxWidth: 1320, width: '100%', padding: '0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img src={slide.image} alt={slide.title || 'Aviso'} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 16, border: `1px solid ${C.border}` }} />
+        </div>
+        <div>
+          {slide.kicker && <div style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.2em', color: C.blueText, fontWeight: 700, marginBottom: 16 }}>{slide.kicker}</div>}
+          {slide.title && <h2 style={{ fontFamily: HEADING_FONT, fontSize: 'clamp(32px, 4vw, 56px)', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.05, color: C.ink, margin: '0 0 20px' }}>{slide.title}</h2>}
+          {slide.body && <p style={{ fontSize: 'clamp(17px, 1.7vw, 24px)', color: C.dim, lineHeight: 1.5, fontWeight: 450 }}>{slide.body}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // layout 'text' (padrão)
+  return (
+    <div className="id-fade-up" style={{ textAlign: 'center', maxWidth: 1100, padding: '0 24px' }}>
+      {slide.kicker && <div style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.22em', color: C.blueText, fontWeight: 700, marginBottom: 24 }}>{slide.kicker}</div>}
+      {slide.title && <h2 style={{ fontFamily: HEADING_FONT, fontSize: 'clamp(40px, 5.5vw, 80px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.02, color: C.ink, margin: '0 0 28px' }}>{slide.title}</h2>}
+      {slide.body && <p style={{ fontSize: 'clamp(20px, 2.4vw, 34px)', color: C.dim, lineHeight: 1.45, fontWeight: 450, maxWidth: 900, marginLeft: 'auto', marginRight: 'auto' }}>{slide.body}</p>}
+    </div>
+  );
+}
+
+// Índices fixos dentro do deck.
+const AVISOS_COVER_INDEX = COVER_SLIDES.length; // capa "Avisos"
+const AVISOS_START = COVER_SLIDES.length + 1;   // 1º slide de aviso
+
+function AvisoEditor({ draft, mode, onField, onPickImage, onRemoveImage, onSave, onCancel, onDelete, onMoveBack, onMoveForward, canMoveBack, canMoveForward, posLabel, saving, error }) {
+  const fileRef = useRef(null);
+  const fieldS = { width: '100%', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 16, color: C.ink, outline: 'none', fontFamily: 'inherit' };
+  const labelS = { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.12em', color: C.gray, fontWeight: 700, marginBottom: 8, display: 'block' };
+  const secBtn = { padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.grayMid, fontWeight: 600, cursor: 'pointer', fontSize: 14 };
+
+  return (
+    <div className="id-fade-up" style={{ width: '100%', maxWidth: 760, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 20, padding: 28, boxShadow: '0 12px 40px rgba(20,20,20,0.10)', maxHeight: '88vh', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+        <Pencil size={18} style={{ color: C.blue }} />
+        <span style={{ fontSize: 18, fontWeight: 700 }}>{mode === 'new' ? 'Novo aviso' : 'Editar aviso'}</span>
+      </div>
+
+      <label style={labelS}>Título</label>
+      <input value={draft.title} onChange={e => onField('title', e.target.value)} placeholder="Título do aviso (opcional)" maxLength={200} style={{ ...fieldS, marginBottom: 18, fontWeight: 600 }} />
+
+      <label style={labelS}>Texto</label>
+      <textarea value={draft.body} onChange={e => onField('body', e.target.value)} placeholder="Escreva o aviso, regulamento ou notícia… (opcional)" maxLength={4000} rows={5} style={{ ...fieldS, marginBottom: 18, resize: 'vertical', lineHeight: 1.5 }} />
+
+      <label style={labelS}>Imagem</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {draft.image ? (
+          <>
+            <img src={draft.image} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 12, border: `1px solid ${C.border}` }} />
+            <button onClick={() => fileRef.current && fileRef.current.click()} className="id-nav-item" style={secBtn}>Trocar</button>
+            <button onClick={onRemoveImage} className="id-nav-item" style={{ ...secBtn, color: C.redText }}>Remover</button>
+          </>
+        ) : (
+          <button onClick={() => fileRef.current && fileRef.current.click()} className="id-nav-item" style={{ ...secBtn, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ImagePlus size={18} /> Adicionar imagem
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onPickImage(f); e.target.value = ''; }} />
+      </div>
+
+      {mode === 'edit' && (
+        <div style={{ marginTop: 22, paddingTop: 22, borderTop: `1px solid ${C.border}` }}>
+          <label style={labelS}>Ordem na apresentação</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={onMoveBack} disabled={saving || !canMoveBack} className="id-nav-item" style={{ ...secBtn, display: 'flex', alignItems: 'center', gap: 6, cursor: (saving || !canMoveBack) ? 'default' : 'pointer', opacity: (saving || !canMoveBack) ? 0.4 : 1 }}>
+              <ChevronLeft size={16} /> Mover para trás
+            </button>
+            <button onClick={onMoveForward} disabled={saving || !canMoveForward} className="id-nav-item" style={{ ...secBtn, display: 'flex', alignItems: 'center', gap: 6, cursor: (saving || !canMoveForward) ? 'default' : 'pointer', opacity: (saving || !canMoveForward) ? 0.4 : 1 }}>
+              Mover para frente <ChevronRight size={16} />
+            </button>
+            {posLabel && <span style={{ fontSize: 13, color: C.gray, fontWeight: 600, marginLeft: 4 }}>{posLabel}</span>}
+          </div>
+        </div>
+      )}
+
+      {error && <div style={{ color: C.redText, fontSize: 14, marginTop: 16, fontWeight: 600 }}>{error}</div>}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 26 }}>
+        <button onClick={onDelete} disabled={saving || mode === 'new'} className="id-nav-item" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.redText, fontWeight: 600, cursor: mode === 'new' ? 'default' : 'pointer', opacity: mode === 'new' ? 0.4 : 1 }}>
+          <Trash2 size={16} /> Excluir
+        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} disabled={saving} className="id-nav-item" style={{ padding: '10px 18px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.grayMid, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={onSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', borderRadius: 10, border: `1px solid ${C.blue}`, background: C.blue, color: '#fff', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <Check size={16} /> {saving ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tela cheia (Fullscreen API) — usada na apresentação e na área externa.
+function useFullscreen() {
+  const [isFs, setIsFs] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  const toggle = useCallback(() => {
+    if (!document.fullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+  return { isFs, toggle };
+}
+
+function Presentation({ avisos, canEdit, onPersist, onExit }) {
+  const deck = useMemo(() => buildDeck(avisos), [avisos]);
+  const total = deck.length;
+  const [i, setI] = useState(0);
+  const { isFs, toggle: toggleFullscreen } = useFullscreen();
+  const [editing, setEditing] = useState(null); // null | { mode:'edit'|'new', draft }
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  // Mantém o índice válido se a lista encolher (ex.: excluir aviso).
+  useEffect(() => { if (i > total - 1) setI(Math.max(0, total - 1)); }, [total, i]);
+
+  const idx = Math.min(i, total - 1);
+  const slide = deck[idx];
+  const inAvisosArea = idx >= AVISOS_COVER_INDEX;
+  const currentAviso = idx >= AVISOS_START ? avisos[idx - AVISOS_START] : null;
+
+  const go = useCallback((d) => setI(prev => Math.min(total - 1, Math.max(0, prev + d))), [total]);
+
+  // --- Edição de avisos ---
+  const startEdit = useCallback(() => { if (currentAviso) { setSaveError(''); setEditing({ mode: 'edit', draft: { ...currentAviso } }); } }, [currentAviso]);
+  const startNew = useCallback(() => { setSaveError(''); setEditing({ mode: 'new', draft: { id: newAvisoId(), title: '', body: '', image: null } }); }, []);
+  const onField = useCallback((k, v) => setEditing(e => ({ ...e, draft: { ...e.draft, [k]: v } })), []);
+  const onPickImage = useCallback(async (file) => {
+    try { const url = await fileToDownscaledDataURL(file); setEditing(e => ({ ...e, draft: { ...e.draft, image: url } })); }
+    catch (err) { setSaveError(err.message || 'Falha ao processar a imagem.'); }
+  }, []);
+  const onRemoveImage = useCallback(() => setEditing(e => ({ ...e, draft: { ...e.draft, image: null } })), []);
+
+  const persist = useCallback(async (next, gotoId) => {
+    setSaving(true); setSaveError('');
+    const res = await onPersist(next);
+    setSaving(false);
+    if (!res || !res.ok) { setSaveError((res && res.error) || 'Não foi possível salvar.'); return; }
+    setEditing(null);
+    if (gotoId) {
+      const newIdx = buildDeck(next).findIndex(s => s.type === 'aviso' && s.id === gotoId);
+      if (newIdx >= 0) setI(newIdx);
+    }
+  }, [onPersist]);
+
+  const saveEdit = useCallback(() => {
+    const d = editing.draft;
+    if (!d.title && !d.body && !d.image) { setSaveError('Adicione um texto ou uma imagem.'); return; }
+    const next = editing.mode === 'new' ? [...avisos, d] : avisos.map(a => a.id === d.id ? d : a);
+    persist(next, d.id);
+  }, [editing, avisos, persist]);
+
+  const deleteAviso = useCallback(() => {
+    if (!editing || editing.mode === 'new') return;
+    persist(avisos.filter(a => a.id !== editing.draft.id));
+  }, [editing, avisos, persist]);
+
+  // Reordena o aviso em edição (troca com o vizinho) e grava — junto de
+  // qualquer alteração pendente de título/texto/imagem. O editor segue aberto
+  // no mesmo aviso, agora na nova posição.
+  const moveAviso = useCallback(async (dir) => {
+    if (!editing || editing.mode !== 'edit') return;
+    const d = editing.draft;
+    const base = avisos.map(a => a.id === d.id ? d : a);
+    const from = base.findIndex(a => a.id === d.id);
+    const to = from + dir;
+    if (from < 0 || to < 0 || to >= base.length) return;
+    const next = base.slice();
+    [next[from], next[to]] = [next[to], next[from]];
+    setSaving(true); setSaveError('');
+    const res = await onPersist(next);
+    setSaving(false);
+    if (!res || !res.ok) { setSaveError((res && res.error) || 'Não foi possível salvar.'); return; }
+    const newIdx = buildDeck(next).findIndex(s => s.type === 'aviso' && s.id === d.id);
+    if (newIdx >= 0) setI(newIdx);
+  }, [editing, avisos, onPersist]);
+
+  const editIndex = (editing && editing.mode === 'edit') ? avisos.findIndex(a => a.id === editing.draft.id) : -1;
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editing) { if (e.key === 'Escape') { e.preventDefault(); setEditing(null); } return; }
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+      else if (e.key === 'Home') setI(0);
+      else if (e.key === 'End') setI(total - 1);
+      else if (e.key.toLowerCase() === 'f') toggleFullscreen();
+      else if (e.key === 'Escape' && !document.fullscreenElement) onExit();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, go, onExit, total, toggleFullscreen]);
+
+  // Auto-ocultar os controles: somem com o mouse parado; reaparecem ao mover.
+  const [showControls, setShowControls] = useState(true);
+  const hideTimer = useRef(null);
+  const IDLE_MS = 2500;
+  const revealControls = useCallback((keepOpen) => {
+    setShowControls(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (!keepOpen) hideTimer.current = setTimeout(() => setShowControls(false), IDLE_MS);
+  }, []);
+  useEffect(() => {
+    revealControls(false);
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, [revealControls]);
+  const onMouseMove = useCallback((e) => {
+    revealControls(e.clientY > window.innerHeight - 150 || e.clientY < 90);
+  }, [revealControls]);
+
+  const navBtn = { width: 48, height: 48, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.panel, border: `1px solid ${C.border}`, color: C.grayMid, cursor: 'pointer' };
+  // Enquanto edita, controles ficam sempre visíveis (mas escondemos a navegação).
+  const controlsOn = showControls || !!editing;
+  const fade = { transition: 'opacity 0.35s ease', opacity: controlsOn ? 1 : 0, pointerEvents: controlsOn ? 'auto' : 'none' };
+  const emptyAvisos = canEdit && avisos.length === 0 && idx === AVISOS_COVER_INDEX;
+
+  return (
+    <div className="id-app id-fade-in" onMouseMove={onMouseMove} style={{ position: 'fixed', inset: 0, zIndex: 60, background: C.bg, color: C.ink, display: 'flex', flexDirection: 'column' }}>
+      {/* Fundo decorativo sutil */}
+      <div className="absolute inset-0 id-grid-bg pointer-events-none" style={{ opacity: 0.35 }} />
+      <div className="absolute top-0 left-0 w-full pointer-events-none" style={{ height: 320, background: `radial-gradient(ellipse at top, ${C.blueSoft} 0%, transparent 60%)` }} />
+
+      {/* Barra superior */}
+      <div className="relative" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 28px', ...fade }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <div style={{ width: 14, height: 14, borderRadius: 4, background: C.blue }} />
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>Intelidata</span>
+          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.18em', color: C.gray, fontWeight: 600 }}>Reunião setorial</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={toggleFullscreen} title={isFs ? 'Sair da tela cheia (F)' : 'Tela cheia (F)'} className="id-nav-item" style={{ ...navBtn, width: 40, height: 40 }}>
+            {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
+          </button>
+          <button onClick={onExit} title="Encerrar apresentação (Esc)" className="id-nav-item" style={{ ...navBtn, width: 40, height: 40 }}>
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Área do slide (ou editor) */}
+      <div key={editing ? 'edit' : idx} className="relative" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, padding: '12px 72px 24px' }}>
+        {editing ? (
+          <AvisoEditor
+            draft={editing.draft} mode={editing.mode} saving={saving} error={saveError}
+            onField={onField} onPickImage={onPickImage} onRemoveImage={onRemoveImage}
+            onSave={saveEdit} onCancel={() => setEditing(null)} onDelete={deleteAviso}
+            onMoveBack={() => moveAviso(-1)} onMoveForward={() => moveAviso(1)}
+            canMoveBack={editIndex > 0} canMoveForward={editIndex >= 0 && editIndex < avisos.length - 1}
+            posLabel={editIndex >= 0 ? `Posição ${editIndex + 1} de ${avisos.length}` : ''}
+          />
+        ) : emptyAvisos ? (
+          <div className="id-fade-up" style={{ textAlign: 'center', maxWidth: 720, padding: '0 24px' }}>
+            <CoverSlide slide={slide} />
+            <button onClick={startNew} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12, border: `1px solid ${C.blue}`, background: C.blue, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              <Plus size={18} /> Adicionar primeiro aviso
+            </button>
+          </div>
+        ) : (
+          slide.type === 'cover' ? <CoverSlide slide={slide} /> : <AvisoSlide slide={slide} />
+        )}
+      </div>
+
+      {/* Controles inferiores — anterior/próximo (+ lápis/＋ para editores) */}
+      {!editing && (
+        <div className="relative" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '16px 28px 28px', ...fade }}>
+          <button onClick={() => go(-1)} disabled={idx === 0} className="id-nav-item" style={{ ...navBtn, opacity: idx === 0 ? 0.35 : 1, cursor: idx === 0 ? 'default' : 'pointer' }} title="Anterior (←)">
+            <ChevronLeft size={24} />
+          </button>
+
+          {canEdit && inAvisosArea && (
+            <>
+              <button onClick={startEdit} disabled={!currentAviso} className="id-nav-item" style={{ ...navBtn, opacity: currentAviso ? 1 : 0.35, cursor: currentAviso ? 'pointer' : 'default', color: C.blueText }} title="Editar este aviso">
+                <Pencil size={20} />
+              </button>
+              <button onClick={startNew} className="id-nav-item" style={{ ...navBtn, color: C.blueText }} title="Adicionar aviso">
+                <Plus size={22} />
+              </button>
+            </>
+          )}
+
+          <button onClick={() => go(1)} disabled={idx === total - 1} className="id-nav-item" style={{ ...navBtn, opacity: idx === total - 1 ? 0.35 : 1, cursor: idx === total - 1 ? 'default' : 'pointer' }} title="Próximo (→)">
+            <ChevronRight size={24} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   APP
+   ============================================================ */
+
+function Dashboard() {
+  const [active, setActive] = useState('overview');
+  const [collapsed, setCollapsed] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+
+  const { isFs, toggle: toggleFullscreen } = useFullscreen();
+
+  // Botão de tela cheia: oculto por padrão, aparece quando o mouse se
+  // aproxima do canto superior-direito da área externa.
+  const [showFsBtn, setShowFsBtn] = useState(false);
+  const onAreaMouseMove = useCallback((e) => {
+    setShowFsBtn(e.clientY < 140 && e.clientX > window.innerWidth - 240);
+  }, []);
+
+  // Trimestre ativo (DEFAULT_QUARTER). Q1 é estático (planilha); Q2 vem ao vivo
+  // do proxy; Q3 vem do D1 e é o editável; Q4 ainda não tem dados.
+  const [quarterId, setQuarterId] = useState(DEFAULT_QUARTER);
+  const qRuntime = QUARTER_BY_ID[quarterId] || QUARTER_BY_ID[DEFAULT_QUARTER];
+
+  const live = useOkrData();                                   // Q2 ao vivo
+  const q1 = useMemo(() => transformar(OKR_Q1, QUARTER_BY_ID.Q1), []); // Q1 estático
+  const q3 = useOkrQuarter('Q3');                              // Q3 editável (D1)
+
+  const dataByQ = {
+    Q1: { sections: q1.sections, okrGeral: q1.okrGeral, atualizadoEm: q1.atualizadoEm, loading: false, erro: null },
+    Q2: { sections: live.sections, okrGeral: live.okrGeral, atualizadoEm: live.atualizadoEm, loading: live.loading, erro: live.erro },
+    // Q3 é editável: as páginas do trimestre são fixas (QUARTER_PAGES), então
+    // existem no menu mesmo antes do primeiro KR ser cadastrado.
+    Q3: { sections: withQuarterPages(q3.sections, 'Q3'), okrGeral: q3.okrGeral, atualizadoEm: q3.atualizadoEm, loading: q3.loading, erro: q3.erro },
+    Q4: { sections: [], okrGeral: 0, atualizadoEm: null, loading: false, erro: null },
+  };
+  const cur = dataByQ[quarterId] || dataByQ[DEFAULT_QUARTER];
+  const { sections, okrGeral, atualizadoEm } = cur;
+
+  const changeQuarter = useCallback((id) => { setQuarterId(id); setActive('overview'); }, []);
+
+  // --- Edição de KRs (pendência 3) ---
+  // Trimestres cujos KRs vêm do D1 e são editáveis no dashboard (hoje só o Q3).
+  const EDITABLE_QUARTERS = { Q3: true };
+  const [canEditOkr, setCanEditOkr] = useState(false);
+  const [canCreateOkr, setCanCreateOkr] = useState(false);
+  const [canEditOkrConfig, setCanEditOkrConfig] = useState(false);
+  const [canStartMeeting, setCanStartMeeting] = useState(false);
+  const [canExportOkr, setCanExportOkr] = useState(false);
+  const [editingKr, setEditingKr] = useState(null); // null | { mode:'new'|'edit', initial }
+
+  const openCreate = useCallback((prefill) => {
+    setEditingKr({ mode: 'new', initial: {
+      dbId: null, secao: (prefill && prefill.secao) || '', titulo: '', sub: '', owner: '', squad: '',
+      unidade: '', target: '', mes1: 0, mes2: 0, mes3: 0, mesesAtivos: [true, true, true],
+      lowerIsBetter: false, percentValue: false,
+      periodoPersonalizado: false, metaPersonalizada: false, metaMes1: '', metaMes2: '', metaMes3: '',
+    } });
+  }, []);
+  const openEdit = useCallback((kr) => {
+    if (!kr) return;
+    const janela = activeMonthsOf(kr.activeMonths);
+    setEditingKr({ mode: 'edit', initial: {
+      dbId: kr.dbId, secao: kr.secao || '', titulo: kr.title || '', sub: kr.sub || '', owner: kr.owner || '',
+      squad: kr.squad || '', unidade: kr.unidade || '', target: kr.target ?? '',
+      mes1: kr.months[0] ?? 0, mes2: kr.months[1] ?? 0, mes3: kr.months[2] ?? 0,
+      mesesAtivos: janela,
+      lowerIsBetter: !!kr.lowerIsBetter, percentValue: !!kr.percentValue,
+      // Checkbox nasce marcada quando o KR já tem janela/meta customizada
+      // (ex.: gravada antes de as checkboxes existirem) — nunca esconde dado já salvo.
+      periodoPersonalizado: activeCount(janela) < 3,
+      metaPersonalizada: !!kr.metaPersonalizada,
+      metaMes1: (kr.metaMeses && kr.metaMeses[0] != null) ? kr.metaMeses[0] : '',
+      metaMes2: (kr.metaMeses && kr.metaMeses[1] != null) ? kr.metaMeses[1] : '',
+      metaMes3: (kr.metaMeses && kr.metaMeses[2] != null) ? kr.metaMeses[2] : '',
+    } });
+  }, []);
+
+  // Monta o corpo da API a partir do rascunho + trimestre/ano atuais.
+  const draftToBody = useCallback((d) => ({
+    quarter: quarterId, ano: OKR_YEAR,
+    secao: d.secao, titulo: d.titulo, sub: d.sub, owner: d.owner, squad: d.squad, unidade: d.unidade,
+    target: Number(d.target) || 0,
+    mes1: Number(d.mes1) || 0, mes2: Number(d.mes2) || 0, mes3: Number(d.mes3) || 0,
+    mesesAtivos: activeMonthsOf(d.mesesAtivos),
+    lowerIsBetter: !!d.lowerIsBetter, percentValue: !!d.percentValue,
+    metaPersonalizada: !!d.metaPersonalizada,
+    metaMes1: (d.metaMes1 === '' || d.metaMes1 == null) ? null : Number(d.metaMes1),
+    metaMes2: (d.metaMes2 === '' || d.metaMes2 == null) ? null : Number(d.metaMes2),
+    metaMes3: (d.metaMes3 === '' || d.metaMes3 == null) ? null : Number(d.metaMes3),
+  }), [quarterId]);
+
+  const submitKr = useCallback(async (draft) => {
+    try {
+      const isNew = !draft.dbId;
+      const url = isNew ? '/api/okr/krs' : `/api/okr/krs/${draft.dbId}`;
+      const r = await fetch(url, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draftToBody(draft)),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) return { ok: false, error: j.error || ('Erro ' + r.status) };
+      await q3.recarregar();
+      setEditingKr(null);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Falha de rede ao salvar.' };
+    }
+  }, [draftToBody, q3]);
+
+  const deleteKr = useCallback(async (draft) => {
+    try {
+      if (!draft.dbId) return { ok: false, error: 'KR sem identificador.' };
+      const r = await fetch(`/api/okr/krs/${draft.dbId}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) return { ok: false, error: j.error || ('Erro ' + r.status) };
+      await q3.recarregar();
+      setEditingKr(null);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Falha de rede ao excluir.' };
+    }
+  }, [q3]);
+
+  const okrEditValue = {
+    canEdit: canEditOkr,
+    canCreate: canCreateOkr,
+    canEditConfig: canEditOkrConfig,
+    editable: !!EDITABLE_QUARTERS[quarterId],
+    quarter: quarterId,
+    ano: OKR_YEAR,
+    openCreate,
+    openEdit,
+  };
+
+  // Avisos da reunião (do Worker/KV) + se o usuário atual pode editá-los.
+  const [avisos, setAvisos] = useState([]);
+  const [canEditAvisos, setCanEditAvisos] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const opts = { headers: { Accept: 'application/json' } };
+    fetch('/api/me', opts).then(r => r.ok ? r.json() : null).then(d => { if (alive && d) { setCanEditAvisos(!!d.canEditAvisos); setCanEditOkr(!!d.canEditOkr); setCanCreateOkr(!!d.canCreateOkr); setCanEditOkrConfig(!!d.canEditOkrConfig); setCanStartMeeting(!!d.canStartMeeting); setCanExportOkr(!!d.isSuper); } }).catch(() => {});
+    fetch('/api/avisos', opts).then(r => r.ok ? r.json() : null).then(d => { if (alive && d && Array.isArray(d.avisos)) setAvisos(d.avisos); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const persistAvisos = useCallback(async (next) => {
+    try {
+      const r = await fetch('/api/avisos', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avisos: next }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: d.error || ('Erro ' + r.status) };
+      setAvisos(Array.isArray(d.avisos) ? d.avisos : next);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Falha de rede ao salvar.' };
+    }
+  }, []);
+
+  const activeSection = sections.find(s => s.id === active);
+  const noData = !cur.loading && !cur.erro && sections.length === 0;
+
+  // Exportação (só admin/gestor) — um .md com cada KR (atual, meta mensal,
+  // meses batidos/falhos, % atual) e o valor geral do OKR do trimestre aberto.
+  const exportOkrMarkdown = useCallback(() => {
+    const monthLabels = (qRuntime.months || []).map(m => (m || '').toUpperCase());
+    const isMonthOver = (active, i) =>
+      active[i] && (qRuntime.phase === 'past' || (qRuntime.phase === 'current' && i < qRuntime.currentMonthIndex));
+
+    const linhas = [];
+    linhas.push(`# OKR Marketing — ${quarterId} ${qRuntime.year}`);
+    linhas.push('');
+    linhas.push(`- **Resultado geral do OKR:** ${Math.round(okrGeral * 100)}%`);
+    linhas.push(`- **Atualizado em:** ${formatAtualizadoEm(atualizadoEm)}`);
+    linhas.push('');
+
+    sections.forEach((sec) => {
+      linhas.push(`## ${sec.name}`);
+      linhas.push('');
+      sec.krs.forEach((kr) => {
+        const active = kr.activeMonths || [true, true, true];
+        const lancados = kr.months.filter((m, i) => active[i] && m > 0);
+        const aggregate = kr.percentValue
+          ? (lancados.length ? lancados.reduce((a, b) => a + b, 0) / lancados.length : 0)
+          : kr.months.reduce((a, m, i) => a + (active[i] ? m : 0), 0);
+        const targetNorm = (kr.percentValue && kr.target != null && kr.target <= 1) ? kr.target * 100 : kr.target;
+        const monthlyGoals = monthlyGoalsOf(kr, targetNorm, activeCount(active), active);
+        const monthHits = kr.months.map((_, i) => (isMonthOver(active, i) ? monthHitOf(kr.months[i], monthlyGoals[i], kr.lowerIsBetter) : null));
+        const batidos = monthHits.filter((h) => h === true).length;
+        const falhos = monthHits.filter((h) => h === false).length;
+        const metaMensalTexto = monthlyGoalValueText(monthlyGoals, (v) => kr.percentValue ? `${monthlyGoalShown(v)}%` : fmt(monthlyGoalShown(v))) || '—';
+        const atualTexto = kr.percentValue ? `${Math.round(aggregate)}%` : fmt(aggregate);
+        const metaTrimestreTexto = kr.target != null ? (kr.percentValue ? `${Math.round(targetNorm)}%` : fmt(kr.target)) : '—';
+        const mesesDetalhe = monthLabels.map((m, i) => `${m}: ${monthHits[i] === true ? 'batido' : monthHits[i] === false ? 'falhou' : '—'}`).join(' · ');
+
+        linhas.push(`### ${kr.title}${kr.sub ? ' — ' + kr.sub : ''}`);
+        linhas.push(`- Owner: ${kr.owner || '—'}${kr.squad ? ` · Squad: ${kr.squad}` : ''}`);
+        linhas.push(`- Valor atual: ${atualTexto}${kr.unit ? ` ${kr.unit}` : ''}`);
+        linhas.push(`- Meta do trimestre: ${metaTrimestreTexto}`);
+        linhas.push(`- Meta mensal: ${metaMensalTexto}`);
+        linhas.push(`- % atual: ${Math.round(kr.progress * 100)}%`);
+        linhas.push(`- Meses batidos/falhos: ${batidos}/${falhos} (${mesesDetalhe})`);
+        linhas.push('');
+      });
+    });
+
+    const blob = new Blob([linhas.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `okr-${quarterId.toLowerCase()}-${qRuntime.year}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [sections, okrGeral, atualizadoEm, quarterId, qRuntime]);
+
+  return (
+    <QuarterCtx.Provider value={qRuntime}>
+    <OkrEditCtx.Provider value={okrEditValue}>
+    <div className="id-app" style={{ minHeight: '100vh', background: C.bg, color: C.ink }}>
+      <GlobalStyles />
+      {presenting && <Presentation avisos={avisos} canEdit={canEditAvisos} onPersist={persistAvisos} onExit={() => setPresenting(false)} />}
+      {editingKr && (
+        <KREditorModal
+          mode={editingKr.mode}
+          initial={editingKr.initial}
+          monthsLabels={(qRuntime.months || []).map(m => (m || '').toUpperCase())}
+          quarterLabel={`${quarterId} · ${qRuntime.year}`}
+          onSubmit={submitKr}
+          onDelete={deleteKr}
+          onClose={() => setEditingKr(null)}
+        />
+      )}
+      <div className="flex h-screen">
+        <Sidebar
+          active={active}
+          onSelect={setActive}
+          sections={sections}
+          overall={okrGeral}
+          atualizadoEm={atualizadoEm}
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(c => !c)}
+          onStartMeeting={() => setPresenting(true)}
+          canStartMeeting={canStartMeeting}
+          quarterId={quarterId}
+          onQuarter={changeQuarter}
+          canExport={canExportOkr}
+          onExport={exportOkrMarkdown}
+        />
+
+        <main className="flex-1 overflow-y-auto relative" onMouseMove={onAreaMouseMove} onMouseLeave={() => setShowFsBtn(false)}>
+          {/* Decorative grid bg */}
+          <div className="absolute inset-0 id-grid-bg pointer-events-none" style={{ opacity: 0.4 }} />
+          <div
+            className="absolute top-0 left-0 w-full h-64 pointer-events-none"
+            style={{ background: `radial-gradient(ellipse at top, ${C.blueSoft} 0%, transparent 60%)` }}
+          />
+
+          {/* Tela cheia da área externa (o dashboard inteiro) */}
+          <button
+            onClick={toggleFullscreen}
+            title={isFs ? 'Sair da tela cheia' : 'Tela cheia'}
+            className="id-nav-item flex items-center justify-center rounded-lg"
+            style={{ position: 'fixed', top: 20, right: 22, zIndex: 30, width: 40, height: 40, background: C.panel, border: `1px solid ${C.border}`, color: C.gray, boxShadow: '0 2px 10px rgba(20,20,20,0.08)', opacity: showFsBtn ? 1 : 0, pointerEvents: showFsBtn ? 'auto' : 'none', transition: 'opacity 0.3s ease' }}
+          >
+            {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
+          </button>
+
+          <div className="relative px-10 py-10 2xl:px-14" style={{ zoom: CONTENT_ZOOM }}>
+            {cur.loading ? (
+              <div className="id-fade-in" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div className="w-4 h-4 rounded-sm mx-auto mb-4" style={{ background: C.blue }} />
+                  <div className="text-[15px]" style={{ color: C.gray, fontWeight: 600 }}>Carregando OKRs…</div>
+                </div>
+              </div>
+            ) : cur.erro ? (
+              <div className="id-fade-in" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="rounded-xl p-8" style={{ background: C.panel, border: `1px solid ${C.border}`, textAlign: 'center', maxWidth: 440 }}>
+                  <AlertCircle size={28} style={{ color: C.redText, margin: '0 auto 12px' }} />
+                  <div className="text-[16px] mb-1" style={{ color: C.ink, fontWeight: 700 }}>Não foi possível carregar os dados</div>
+                  <div className="text-[13px] mb-5" style={{ color: C.gray }}>{cur.erro}</div>
+                  <button onClick={live.recarregar} className="id-tag rounded-full" style={{ padding: '10px 22px', fontSize: 14, fontWeight: 700, background: C.blue, color: '#fff', border: `1.5px solid ${C.blue}` }}>
+                    Tentar novamente
+                  </button>
+                </div>
+              </div>
+            ) : noData ? (
+              <div className="id-fade-in" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="rounded-xl p-10" style={{ background: C.panel, border: `1px dashed ${C.borderStrong}`, textAlign: 'center', maxWidth: 480 }}>
+                  <Calendar size={30} style={{ color: C.grayLight, margin: '0 auto 14px' }} />
+                  <div className="text-[18px] mb-1" style={{ color: C.ink, fontWeight: 700 }}>{quarterId} · {qRuntime.year}</div>
+                  <div className="text-[14px]" style={{ color: C.gray }}>
+                    {qRuntime.phase === 'future'
+                      ? 'Trimestre ainda não iniciado — sem dados para exibir.'
+                      : 'Ainda não há dados cadastrados para este trimestre.'}
+                  </div>
+                  {canCreateOkr && EDITABLE_QUARTERS[quarterId] && (
+                    <button onClick={() => openCreate({ secao: 'Redes Sociais' })}
+                      style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12, border: `1px solid ${C.blue}`, background: C.blue, color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,114,206,0.25)' }}>
+                      <Plus size={18} strokeWidth={2.5} /> Criar primeiro KR
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : active === 'overview' ? (
+              <OverviewPage sections={sections} overall={okrGeral} />
+            ) : activeSection ? (
+              <SectionPage key={activeSection.id} section={activeSection} />
+            ) : null}
+
+            <div className="mt-16 pt-6 text-[10px] flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}`, color: C.grayLight }}>
+              <div style={{ fontWeight: 600 }}>Intelidata · Dashboard de Reunião OKR · {quarterId} · {qRuntime.year}</div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.blue }} />
+                <span>
+                  Atualizado em {formatAtualizadoEm(atualizadoEm)} · {
+                    qRuntime.phase === 'current' ? `${qRuntime.daysRemaining} dias para fechar o trimestre`
+                    : qRuntime.phase === 'past' ? 'trimestre encerrado'
+                    : 'trimestre ainda não iniciado'
+                  }
+                </span>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    </OkrEditCtx.Provider>
+    </QuarterCtx.Provider>
+  );
+}
+
+/* ====== mount ====== */
+ReactDOM.createRoot(document.getElementById('root')).render(<Dashboard />);
+</script>
+</body>
+</html>
