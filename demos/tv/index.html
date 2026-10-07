@@ -1,0 +1,1950 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prisma · Dashboard TV (demo)</title>
+<meta name="description" content="Demo com dados fictícios do painel em loop exibido na TV do setor de Marketing da Prisma.">
+<link rel="icon" type="image/png" href="brand/favicon.png">
+<script src="mock-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+<script>window.react = window.React;</script>
+<script src="https://unpkg.com/lucide-react@0.453.0/dist/umd/lucide-react.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+<style>
+  html, body, #root { height: 100%; }
+  body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f4f7fb; }
+  /* ★★ SAFARI 14.1.3 (confirmado com o usuário): mesmo com `inset` trocado por
+     top/right/bottom/left e `aspect-ratio` trocado por padding-bottom (ver os
+     comentários em Exibicao/ThumbTopPost), o conteúdo continuava não preenchendo
+     nem centralizando verticalmente em tela cheia. Causa: no WebKit legado
+     (< 15.4), o elemento em `:-webkit-full-screen` NÃO herda `height:100%` da
+     cadeia html→body→#root automaticamente — a folha de estilo do próprio
+     Safari o trata como um elemento comum dentro do "palco" de tela cheia, que
+     é quem de fato ocupa a tela. Sem isso, `html` (é ele quem pede fullscreen,
+     em useFullscreen) encolhe para a altura do conteúdo e o WebKit centraliza
+     essa caixa menor no meio da tela — sobra igual em cima/embaixo é o próprio
+     sintoma relatado. Forçar 100%/100% direto no seletor de pseudo-classe (que
+     tem prioridade sobre o UA stylesheet) resolve nos dois motores. */
+  html:-webkit-full-screen, html:fullscreen,
+  body:-webkit-full-screen, body:fullscreen,
+  #root:-webkit-full-screen, #root:fullscreen {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+  /* Cursor escondido no modo exibição: numa TV o ponteiro parado no meio da
+     tela é sujeira permanente. Volta ao mover o mouse (classe removida). */
+  .tv-sem-cursor, .tv-sem-cursor * { cursor: none !important; }
+  @keyframes tvFade { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .tv-fade { animation: tvFade .5s cubic-bezier(.22,.61,.36,1) both; }
+  @keyframes tvGira { to { transform: rotate(360deg); } }
+  .tv-girando { animation: tvGira 1s linear infinite; }
+  /* Brilhos de marca ao fundo dos slides de gráfico (GlowMarca): vagam e
+     respiram devagar.
+     ★ SÓ `transform` anima. O `filter: blur(120px)` fica estático e o
+     `will-change` promove cada blob a uma camada própria, então o borrão é
+     rasterizado UMA vez e o compositor só move a camada. Animar o blur — ou
+     largura/altura, que forçariam recalcular o desfoque — custaria
+     re-rasterizar 120px de blur a cada quadro numa tela ligada 24/7.
+     ★ Ciclos longos, de durações ÍMPARES entre si, e com atraso NEGATIVO
+     (começam no meio do próprio ciclo): sem isso os três pulsam em uníssono
+     e o fundo vira batida de coração, que numa parede chama mais atenção que
+     o dado do slide. */
+  .tv-glow { will-change: transform; animation-timing-function: ease-in-out;
+             animation-iteration-count: infinite; animation-direction: alternate; }
+  .tv-glow-0 { animation-name: tvGlow0; animation-duration: 26s; }
+  .tv-glow-1 { animation-name: tvGlow1; animation-duration: 34s; animation-delay: -9s; }
+  .tv-glow-2 { animation-name: tvGlow2; animation-duration: 30s; animation-delay: -17s; }
+  @keyframes tvGlow0 { from { transform: translate(0,0) scale(1); }    to { transform: translate(16%,10%) scale(1.18); } }
+  @keyframes tvGlow1 { from { transform: translate(0,0) scale(1.12); } to { transform: translate(-14%,-8%) scale(.90); } }
+  @keyframes tvGlow2 { from { transform: translate(0,0) scale(.95); }  to { transform: translate(10%,-14%) scale(1.22); } }
+  .tv-btn { border: 0; background: rgba(255,255,255,.10); color: #fff; border-radius: 10px;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            cursor: pointer; font: inherit; transition: background .15s; }
+  .tv-btn:hover { background: rgba(255,255,255,.20); }
+  .tv-btn:disabled { opacity: .45; cursor: not-allowed; }
+  input, textarea, select { font: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+const { Tv, Play, Pause, ChevronLeft, ChevronRight, Maximize, Minimize, Pencil, Trash2,
+        ImagePlus, Type, Eye, EyeOff, Clock, AlertTriangle,
+        Loader2, Save, BarChart3, DollarSign, TrendingUp } = LucideReact;
+
+/* ============================================================
+   Identidade Prisma + fundo CLARO no modo exibição (2026-09-02,
+   pedido do usuário — antes era escuro; a paleta abaixo inverteu papéis
+   (`ink`/`inkSoft` eram o fundo escuro, viraram o fundo claro; `text`
+   era o texto claro, virou o texto escuro) para não precisar reescrever
+   cada componente, só a fonte da cor. O EDITOR (paleta `E`, mais abaixo)
+   já era claro e não muda.
+   ============================================================ */
+const C = {
+  blue: '#0072ce', blueLight: '#0072ce', amber: '#de8d13',
+  ink: '#f4f7fb', inkSoft: '#e6ecf5', line: 'rgba(11,18,32,.12)',
+  text: '#0b1220', dim: 'rgba(11,18,32,.72)', faint: 'rgba(11,18,32,.45)',
+};
+const HEADING = "'Bricolage Grotesque', system-ui, sans-serif";
+
+const API_DECK = '/api/tv/deck';
+const API_MEDIA = '/api/tv/media';
+const mediaUrl = (key) => `${API_MEDIA}/${encodeURIComponent(key)}`;
+const ehVideo = (s) => !!(s.mediaType && s.mediaType.startsWith('video/'));
+
+/* Recarrega o deck de tempo em tempo: a TV não é recarregada por ninguém, então
+   é assim que uma edição do gestor chega à parede. */
+const RECARGA_MS = 60000;
+
+const novoId = () => (crypto.randomUUID ? crypto.randomUUID() : 's' + Date.now() + Math.random().toString(36).slice(2, 7));
+const seg = (ms) => Math.round(ms / 1000);
+
+/* ============================================================
+   Tela cheia (mesma abordagem do Modo Apresentação do OKR).
+   ============================================================ */
+/* ★ SAFARI: a API sem prefixo só existe do Safari 16.4 em diante. Antes disso
+   há apenas a versão `webkit*`, e como o código checava `el.requestFullscreen`
+   antes de chamar, o botão de tela cheia simplesmente NÃO FAZIA NADA no Safari
+   — sem erro, sem log (relatado pelo usuário transmitindo de um Mac).
+   A TV do setor é o caso de uso principal, e quem transmite escolhe o
+   navegador, então as duas APIs precisam ser suportadas. */
+const fsElemento = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+
+function useFullscreen() {
+  const [isFs, setIsFs] = useState(() => !!fsElemento());
+  useEffect(() => {
+    const onFs = () => setIsFs(!!fsElemento());
+    // Os dois eventos: o webkit é `webkitfullscreenchange`, todo minúsculo.
+    document.addEventListener('fullscreenchange', onFs);
+    document.addEventListener('webkitfullscreenchange', onFs);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs);
+      document.removeEventListener('webkitfullscreenchange', onFs);
+    };
+  }, []);
+  const toggle = useCallback(() => {
+    if (!fsElemento()) {
+      const el = document.documentElement;
+      const pedir = el.requestFullscreen || el.webkitRequestFullscreen;
+      // ★ `.call(el)`: pegar o método solto perde o `this`. E o webkit devolve
+      // undefined em vez de Promise, daí o encadeamento opcional no catch.
+      if (pedir) { try { pedir.call(el)?.catch?.(() => {}); } catch { /* sem tela cheia */ } }
+    } else {
+      const sair = document.exitFullscreen || document.webkitExitFullscreen;
+      if (sair) { try { sair.call(document)?.catch?.(() => {}); } catch { /* segue */ } }
+    }
+  }, []);
+  return { isFs, toggle };
+}
+
+/* ★★ SAFARI 14.1.3 — 2ª tentativa (a 1ª, forçar `documentElement.style.height`
+   a partir de `window.innerHeight` no `fullscreenchange`, não resolveu:
+   usuário confirmou "continua a mesma coisa" mesmo após dar refresh de
+   verdade). Suspeita nova: `position:fixed; top/right/bottom/left:0` do painel
+   depende da BORDA da viewport (o "containing block inicial"), e é exatamente
+   essa noção de viewport que o WebKit legado não atualiza a tempo ao entrar
+   em tela cheia — então mesmo forçando a altura do `html`, o retângulo do
+   `position:fixed` calculado a partir de `right/bottom` ainda usa a borda
+   antiga. Este hook troca a fonte da medida: em vez de esperar o layout
+   recalcular sozinho, mede explicitamente e escuta `resize`/`fullscreenchange`
+   com reforço atrasado — a rede de segurança contra o atraso do WebKit
+   legado — e o painel passa a ter `width`/`height` em pixel explícito, nunca
+   `right`/`bottom`.
+   ★ NUNCA usar `screen.width/height` aqui (era a fonte antes desta correção):
+   embarcado dentro do lightbox do portfólio, a demo roda dentro de um
+   <iframe>, e ao entrar em tela cheia é o PRÓPRIO iframe que fica em tela
+   cheia (via `allowfullscreen`) — mas `screen.width/height` mede o monitor
+   físico do usuário, não a área de renderização real, que pode ser menor
+   (barra de endereço/DPI) ou simplesmente diferente dela. O resultado era o
+   painel sendo desenhado maior que a área visível e cortado nas bordas.
+   `window.innerWidth/innerHeight` sempre reflete a viewport real de quem
+   está rodando o script (a do iframe, quando é o caso), então é a única
+   fonte segura tanto embarcado quanto em tela cheia de verdade. */
+function useMedidaTela() {
+  const medirAgora = () => ({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  });
+  const [tela, setTela] = useState(medirAgora);
+  useEffect(() => {
+    const medir = () => setTela(medirAgora());
+    // Reforço com atraso: mesmo usando `screen.*` (que não devia sofrer o
+    // atraso do WebKit legado), medir de novo pouco depois da transição é
+    // uma rede de segurança barata contra qualquer variação de timing.
+    const medirComReforco = () => { medir(); requestAnimationFrame(medir); setTimeout(medir, 150); setTimeout(medir, 500); };
+    window.addEventListener('resize', medirComReforco);
+    document.addEventListener('fullscreenchange', medirComReforco);
+    document.addEventListener('webkitfullscreenchange', medirComReforco);
+    return () => {
+      window.removeEventListener('resize', medirComReforco);
+      document.removeEventListener('fullscreenchange', medirComReforco);
+      document.removeEventListener('webkitfullscreenchange', medirComReforco);
+    };
+  }, []);
+  return tela;
+}
+
+/* Impede a tela de dormir enquanto o painel exibe. Só existe em navegador
+   moderno sob HTTPS; falhar em silêncio é aceitável (a TV normalmente já está
+   configurada para não dormir). */
+function useWakeLock(ativo) {
+  useEffect(() => {
+    if (!ativo || !navigator.wakeLock) return;
+    let sentinel = null, vivo = true;
+    const pedir = async () => {
+      try {
+        sentinel = await navigator.wakeLock.request('screen');
+        // O sistema solta o lock quando a aba perde o foco; ao voltar, repede.
+        sentinel.addEventListener('release', () => { if (vivo) setTimeout(pedir, 1000); });
+      } catch { /* sem wake lock: depende da configuração da própria TV */ }
+    };
+    pedir();
+    const onVis = () => { if (document.visibilityState === 'visible') pedir(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      vivo = false;
+      document.removeEventListener('visibilitychange', onVis);
+      if (sentinel) sentinel.release().catch(() => {});
+    };
+  }, [ativo]);
+}
+
+/* ============================================================
+   SLIDES
+   ------------------------------------------------------------
+   Como no Modo Apresentação, o LAYOUT É DERIVADO DO CONTEÚDO —
+   o editor não escolhe. Mídia sozinha ocupa a tela inteira;
+   mídia com texto divide ao meio; texto sozinho fica centrado
+   e enorme.
+   ============================================================ */
+function layoutDoSlide(s) {
+  const temTexto = !!(s.title || s.body);
+  if ((s.kind === 'media' || s.kind === 'chart') && temTexto) return 'media-texto';
+  if (s.kind === 'media' || s.kind === 'chart') return 'media';
+  return 'texto';
+}
+
+/* Quanto tempo um vídeo pode ficar SEM ANDAR antes de o painel desistir dele.
+   Cobre autoplay barrado, rede caída no meio e codec que a TV não decodifica —
+   casos em que não há evento de erro nenhum, o vídeo só fica paralisado. */
+const TRAVA_MS = 8000;
+
+/* Teto absoluto de permanência num slide de vídeo. Último recurso, depois do
+   onEnded e do vigia de travamento: nenhum slide segura a TV além disto. */
+const MAX_SLIDE_MS = 3 * 60 * 1000;
+
+/* A mídia avisa quando terminou (vídeo), quando falhou e quando TRAVOU. Um
+   VÍDEO governa a própria duração: o timer configurado não se aplica a ele. */
+function Media({ slide, pausado, onFim, onErro, onTravou }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !ehVideo(slide)) return;
+    if (pausado) el.pause();
+    else el.play().catch(() => { /* autoplay barrado: o vigia abaixo assume */ });
+  }, [pausado, slide]);
+
+  /* Vigia de travamento. Um vídeo parado não emite 'error' nem 'ended' — sem
+     este relógio o slide seguraria a TV até a rede de segurança lá em cima
+     estourar. Só reclama se o tempo do vídeo NÃO ANDOU: vídeo tocando normal
+     nunca cai aqui, e pausa manual desliga o vigia. */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !ehVideo(slide) || pausado) return;
+    let ultimo = -1;
+    const iv = setInterval(() => {
+      const agora = el.currentTime;
+      if (agora > ultimo + 0.05) { ultimo = agora; return; } // andou: tudo bem
+      clearInterval(iv);
+      onTravou();
+    }, TRAVA_MS);
+    return () => clearInterval(iv);
+  }, [slide, pausado, onTravou]);
+
+  /* `contain`, nunca `cover`: o conteúdo do painel é quase sempre uma PEÇA
+     (cartaz, aviso, gráfico) com texto dentro. `cover` preencheria a tela toda
+     mas recortaria as bordas — e o recorte apaga informação sem avisar
+     ninguém. Sobra tarja escura em mídia de proporção diferente: é o preço
+     certo a pagar. Mesma escolha do AvisoSlide do Modo Apresentação. */
+  const estilo = { width: '100%', height: '100%', objectFit: 'contain', display: 'block', background: C.ink };
+
+  if (ehVideo(slide)) {
+    return (
+      <video
+        ref={ref} src={mediaUrl(slide.mediaKey)} style={estilo}
+        /* muted + playsInline são o que permite tocar SEM gesto do usuário —
+           sem isso a TV mostraria o primeiro quadro congelado para sempre. */
+        autoPlay muted playsInline
+        onEnded={onFim} onError={onErro}
+      />
+    );
+  }
+  return <img src={mediaUrl(slide.mediaKey)} alt={slide.title || 'Mídia do painel'} style={estilo} onError={onErro} />;
+}
+
+function Texto({ slide, compacto }) {
+  return (
+    <div className="tv-fade" style={{
+      display: 'flex', flexDirection: 'column', justifyContent: 'center',
+      height: '100%', padding: compacto ? '0 clamp(24px,3vw,64px)' : '0 clamp(32px,6vw,140px)',
+      textAlign: compacto ? 'left' : 'center',
+    }}>
+      {slide.title && (
+        <h1 style={{
+          fontFamily: HEADING, margin: 0, color: C.text, fontWeight: 800,
+          letterSpacing: '-0.035em', lineHeight: 1.02,
+          fontSize: compacto ? 'clamp(40px, 4.2vw, 92px)' : 'clamp(56px, 8.5vw, 192px)',
+        }}>{slide.title}</h1>
+      )}
+      {slide.body && (
+        <p style={{
+          color: C.dim, fontWeight: 500, lineHeight: 1.35,
+          margin: slide.title ? 'clamp(20px,2.4vw,48px) 0 0' : 0,
+          fontSize: compacto ? 'clamp(22px, 2.2vw, 40px)' : 'clamp(28px, 3.6vw, 72px)',
+          maxWidth: compacto ? 'none' : 1500,
+          marginLeft: compacto ? 0 : 'auto', marginRight: compacto ? 0 : 'auto',
+        }}>{slide.body}</p>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   GRÁFICOS
+   ------------------------------------------------------------
+   Um slide kind:'chart' guarda só QUAL gráfico (chartId) — o dado
+   é buscado ao vivo quando o slide entra na tela. Fica sempre em
+   dia sem precisar salvar o deck de novo, e o corpo do slide nunca
+   guarda um valor que possa envelhecer.
+   ============================================================ */
+const MARCA_ROTULOS = { prisma: 'Prisma', fluxora: 'Fluxora', lumina: 'Lumina', zenith: 'Zenith' };
+
+/* @ do perfil de cada marca no Instagram.
+   ★ A fonte da verdade é o campo `username` em `src/relatorios/revendas.js`
+   (servidor). Está repetido aqui porque esta página é estática e NENHUMA rota da
+   TV devolve o @ hoje — mesma escolha já feita para MARCA_ROTULOS e MARCA_GLOW.
+   Se um @ mudar, mude nos dois lugares. */
+const MARCA_IG = {
+  prisma: 'prisma',
+  fluxora: 'fluxoraoficial',
+  lumina: 'oficiallumina',
+  zenith: 'oficialzenith',
+};
+
+/* Glifo do Instagram com o degradê da marca, desenhado à mão em SVG: a TV não
+   busca imagem externa e o ícone precisa escalar sem perder nitidez na parede.
+   ★ Dimensionado em `em`, não em px — assim acompanha sozinho o `clamp()` de
+   fonte do texto ao lado, em qualquer largura de tela.
+   ★ O id do degradê é sufixado pela marca: dois ícones na mesma tela com o
+   MESMO id fariam o segundo herdar o degradê do primeiro. */
+function IconeInstagram({ marcaKey, tamanho = '1.05em' }) {
+  const gid = `igGrad-${marcaKey || 'x'}`;
+  return (
+    <svg width={tamanho} height={tamanho} viewBox="0 0 48 48" aria-hidden="true"
+         style={{ display: 'block', flexShrink: 0 }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stopColor="#FEDA75" />
+          <stop offset="25%" stopColor="#FA7E1E" />
+          <stop offset="55%" stopColor="#D62976" />
+          <stop offset="80%" stopColor="#962FBF" />
+          <stop offset="100%" stopColor="#4F5BD5" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="44" height="44" rx="13" fill={`url(#${gid})`} />
+      <rect x="11.5" y="11.5" width="25" height="25" rx="7.5" fill="none" stroke="#fff" strokeWidth="3" />
+      <circle cx="24" cy="24" r="6.2" fill="none" stroke="#fff" strokeWidth="3" />
+      <circle cx="32.4" cy="15.6" r="2" fill="#fff" />
+    </svg>
+  );
+}
+
+/* [ícone] @perfil — diz DE QUEM é o slide. Herda cor e tamanho de fonte de quem
+   o usa, então serve o rodapé pequeno dos slides do ano e o cabeçalho do de
+   seguidores sem variante nenhuma. */
+function PerfilInstagram({ marcaKey }) {
+  const arroba = MARCA_IG[marcaKey];
+  if (!arroba) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4em', minWidth: 0 }}>
+      <IconeInstagram marcaKey={marcaKey} />
+      <span>@{arroba}</span>
+    </span>
+  );
+}
+
+/* Cores de marca (2026-09-02) — pedido do usuário: identificar de qual rede é
+   o slide só pelo brilho de canto, sem ler título nem posts. 2-3 cores por
+   marca (primária + secundária), NUNCA a paleta inteira (neutros como
+   preto/branco/cinza ficam de fora — não ajudam a identificar nada).
+   Fontes: Prisma e Fluxora são o guia de marca do hub; Lumina veio de
+   paleta-cores-lumina.pdf (primária #6F57E6, secundária #FF7913); Zenith
+   não tem guia formal — 3 tons lidos do print do blob em degradê da marca
+   (verde/ciano/roxo), ajustar se formalizarem um guia próprio. */
+const MARCA_GLOW = {
+  prisma: ['#0072ce', '#de8d13'],
+  fluxora: ['#e23945', '#52caca'],
+  lumina: ['#6F57E6', '#FF7913'],
+  zenith: ['#00D97E', '#22D3EE', '#7C86F2'],
+};
+
+/* Brilhos desfocados nos cantos, atrás do conteúdo — a identidade visual da
+   marca sem precisar de logo nem texto. `position:absolute` no PAI precisa
+   ser garantido por quem usa (Slide já entrega isso pros charts). */
+function GlowMarca({ cores }) {
+  const cantos = [
+    { top: '-22%', left: '-16%' },
+    { bottom: '-24%', right: '-16%' },
+    { top: '-20%', right: '2%' },
+  ];
+  return (
+    <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      {cores.map((cor, i) => (
+        <div key={i} className={`tv-glow tv-glow-${i % 3}`} style={{
+          position: 'absolute', width: '38%', paddingBottom: '38%', borderRadius: '50%',
+          background: cor, filter: 'blur(120px)', opacity: 0.30, ...cantos[i % cantos.length],
+        }} />
+      ))}
+    </div>
+  );
+}
+
+const CHART_ROTULOS = {
+  'financeiro-ytd': 'Faturamento de Serviços de Marketing no Ano',
+  'visualizacoes-ano-prisma': 'Visualizações Totais do Perfil no Ano — Prisma',
+  'visualizacoes-ano-fluxora': 'Visualizações Totais do Perfil no Ano — Fluxora',
+  'visualizacoes-ano-lumina': 'Visualizações Totais do Perfil no Ano — Lumina',
+  'visualizacoes-ano-zenith': 'Visualizações Totais do Perfil no Ano — Zenith',
+  'seguidores-crescimento-prisma': 'Crescimento de Seguidores — Prisma',
+  'seguidores-crescimento-fluxora': 'Crescimento de Seguidores — Fluxora',
+  'seguidores-crescimento-lumina': 'Crescimento de Seguidores — Lumina',
+  'seguidores-crescimento-zenith': 'Crescimento de Seguidores — Zenith',
+  'engajamento-ano-prisma': 'Maior Engajamento do Ano — Prisma',
+  'engajamento-ano-fluxora': 'Maior Engajamento do Ano — Fluxora',
+  'engajamento-ano-lumina': 'Maior Engajamento do Ano — Lumina',
+  'engajamento-ano-zenith': 'Maior Engajamento do Ano — Zenith',
+};
+
+/* Gráficos são slides PERMANENTES: não se criam nem se excluem pelo editor,
+   só se ocultam. Esta função completa o deck com qualquer gráfico que ainda
+   não exista nele — roda tanto na exibição quanto no editor, então o painel
+   nunca fica sem um gráfico só porque ninguém o cadastrou. ★ O id é
+   DETERMINÍSTICO (por chartId, não aleatório): gerar um id novo a cada
+   carga faria a TV achar que o deck mudou a cada recarga de 60s (mesmo sem
+   edição nenhuma) e reiniciar o controle de slides quebrados à toa. */
+function garantirGraficosPermanentes(lista) {
+  /* ★ Primeiro DESCARTA gráfico aposentado: `getDeck` devolve o deck do KV como
+     está (só o PUT passa por `sanitizeDeck`), então um chartId removido do
+     código continua no roteiro gravado. Foi o que aconteceu com os 4 slides de
+     engajamento mensal em 2026-09-10: sumiram do código, mas seguiam no deck —
+     no editor viravam cartões "Gráfico" sem nome (posições 2-5 de 17) e na
+     exibição, tela vazia. Só o `kind:'chart'` é filtrado: mídia e texto não têm
+     chartId e não podem ser tocados aqui.
+     O deck no KV se limpa de vez na próxima gravação pelo editor. */
+  const base = (lista || []).filter(s => s.kind !== 'chart' || CHART_ROTULOS[s.chartId]);
+  const existentes = new Set(base.filter(s => s.kind === 'chart').map(s => s.chartId));
+  const faltando = Object.keys(CHART_ROTULOS).filter(id => !existentes.has(id));
+  if (!faltando.length) return base;
+  return [...base, ...faltando.map(chartId => ({
+    id: 'grafico-' + chartId, kind: 'chart', title: '', body: '',
+    mediaKey: null, mediaType: null, chartId, durationMs: 20000, enabled: true,
+  }))];
+}
+
+/* Erro de gráfico segue a mesma regra do erro de mídia: não se conserta
+   sozinho, então o slide sai do loop (onErro, igual a <Media>). */
+function GraficoFinanceiroYtd({ titulo, onErro }) {
+  const [d, setD] = useState(null);
+  const falhou = useRef(false);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch('/api/tv/financeiro-ytd', { headers: { Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(j => {
+        if (!vivo) return;
+        if (!j.ok) throw new Error(j.error || 'sem dado');
+        setD(j);
+      })
+      .catch(() => { if (vivo && !falhou.current) { falhou.current = true; onErro(); } });
+    return () => { vivo = false; };
+  }, [onErro]);
+
+  if (!d) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} className="tv-girando" style={{ color: C.blueLight }} />
+      </div>
+    );
+  }
+
+  const pct = d.previsto > 0 ? Math.min(1, d.adquirido / d.previsto) : 0;
+  const brl0 = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+
+  /* ANEL: r/stroke são unidades do viewBox 700×700, então escalam com o SVG. */
+  const R = 290, CIRC = 2 * Math.PI * R;
+
+  /* TRILHA acumulada — o "como chegamos aqui". Usa `acumulado`, que a API já
+     devolvia e este slide DESCARTAVA (só lia adquirido/previsto/restante).
+     ★ Divide em realizado (até refIdx) e já contratado (depois dele): os meses
+     futuros de `mensal` são contrato assinado, receita ainda não realizada —
+     por isso saem pontilhados em âmbar, não como linha cheia.
+     ★ `vector-effect: non-scaling-stroke` é obrigatório aqui: o viewBox é
+     esticado (preserveAspectRatio="none") para a trilha ocupar a largura
+     inteira, e sem isso a espessura do traço deforma junto (fina na vertical,
+     grossa na horizontal). */
+  const serie = Array.isArray(d.acumulado) ? d.acumulado : [];
+  const TW = 1696, TH = 150, TTOP = 14, TBASE = 132;
+  const maxAcc = Math.max(...serie, 1);
+  const tx = i => (serie.length > 1 ? (i * TW) / (serie.length - 1) : 0);
+  const ty = v => TBASE - (v / maxAcc) * (TBASE - TTOP);
+  const iHoje = Math.min(Math.max(d.refIdx || 0, 0), Math.max(serie.length - 1, 0));
+  const pontos = serie.map((v, i) => `${tx(i).toFixed(1)} ${ty(v).toFixed(1)}`);
+  const linhaFeita = pontos.slice(0, iHoje + 1);
+  const linhaFutura = pontos.slice(iHoje);
+
+  return (
+    <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, boxSizing: 'border-box', padding: 'clamp(20px,3vw,72px) clamp(24px,4vw,112px)' }}>
+      <div className="tv-fade" style={{
+        height: '100%', display: 'flex', flexDirection: 'column', gap: 'clamp(12px,1.6vw,24px)', minHeight: 0,
+      }}>
+        {/* Título maior, com o NOME DO SERVIÇO como protagonista (pedido do
+            usuário): "Faturamento de" e "no ano" são moldura, "Serviços de
+            Marketing" é o assunto. ★ Só compõe assim o rótulo padrão — um
+            título digitado no editor é respeitado como veio (só maior), porque
+            não há como saber qual parte dele merece destaque. */}
+        <div style={{ flexShrink: 0, lineHeight: 1.06 }}>
+          {titulo ? (
+            <span style={{ color: C.text, fontFamily: HEADING, fontWeight: 800, fontSize: 'clamp(22px,2.9vw,54px)', letterSpacing: '-0.02em' }}>
+              {titulo}
+            </span>
+          ) : (
+            /* Duas linhas: "Faturamento de" é só a preposição do assunto, então
+               vira sobrelinha pequena e o nome do serviço ganha a linha inteira.
+               "no ano" saiu — o slide já diz o ano em "adquirido até <mês> de
+               2026" e na trilha do rodapé. */
+            <div>
+              <div style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(15px,1.6vw,30px)', letterSpacing: '-0.01em' }}>
+                Faturamento de
+              </div>
+              <div style={{ color: C.text, fontFamily: HEADING, fontWeight: 800, fontSize: 'clamp(26px,3.4vw,64px)', letterSpacing: '-0.025em' }}>
+                Serviços de Marketing
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Anel + rail de números. O percentual é DESENHADO — o número dentro do
+            anel só confirma o que o olho já leu no arco. */}
+        <div style={{
+          flexGrow: 1, minHeight: 0, display: 'grid',
+          gridTemplateColumns: 'minmax(0,clamp(320px,34vw,700px)) minmax(0,1fr)',
+          alignItems: 'center', gap: 'clamp(32px,5vw,104px)',
+        }}>
+          <div style={{ display: 'grid', placeItems: 'center', height: '100%', minHeight: 0, minWidth: 0 }}>
+            <svg viewBox="0 0 700 700" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block' }}>
+              <defs>
+                <linearGradient id="arcoFin" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0%" stopColor={C.blue} />
+                  <stop offset="100%" stopColor={C.amber} />
+                </linearGradient>
+              </defs>
+              {/* ★ Trilho em cinza SÓLIDO (C.inkSoft). A barra antiga usava
+                  rgba(255,255,255,.10) — herança do tema escuro que, sobre o
+                  fundo claro, deixava o "quanto falta" invisível. */}
+              <circle cx="350" cy="350" r={R} fill="none" stroke={C.inkSoft} strokeWidth="72" />
+              {pct > 0 && (
+                <circle
+                  cx="350" cy="350" r={R} fill="none" stroke="url(#arcoFin)" strokeWidth="72"
+                  strokeLinecap="round" strokeDasharray={`${(CIRC * pct).toFixed(2)} ${CIRC.toFixed(2)}`}
+                  transform="rotate(-90 350 350)"
+                />
+              )}
+              {/* ★ `dominantBaseline="central"` em vez de baseline: com baseline
+                  comum o y é o pé dos dígitos, então o bloco número+legenda subia
+                  ~90 unidades acima do centro do anel (visível na parede). Aqui o
+                  y é o MEIO do texto, e os dois y abaixo põem o conjunto
+                  centrado em ~350 — o mesmo cy do anel.
+                  ★ O tracking era -0.04em: em 196px isso fecha ~8px por par e
+                  colava os dois 7 num glifo só. Um tracking levemente POSITIVO
+                  separa dígitos repetidos sem soltar o número. */}
+              <text x="350" y="326" textAnchor="middle" dominantBaseline="central"
+                    fontFamily={HEADING} fontSize="196" fontWeight="800" fill={C.text} letterSpacing="0.015em">
+                {Math.round(pct * 100)}%
+              </text>
+              <text x="350" y="440" textAnchor="middle" dominantBaseline="central"
+                    fontSize="32" fontWeight="700" fill={C.faint}>
+                do objetivo do ano
+              </text>
+            </svg>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(18px,2.6vw,44px)', minWidth: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ color: C.faint, fontWeight: 700, fontSize: 'clamp(14px,1.4vw,27px)', letterSpacing: '.02em', textTransform: 'uppercase' }}>
+                adquirido até {d.rotulos[d.refIdx]}
+              </span>
+              <span style={{ fontFamily: HEADING, fontWeight: 800, fontSize: 'clamp(44px,6.6vw,126px)', color: C.text, lineHeight: 0.95, letterSpacing: '-0.035em' }}>
+                {brl0(d.adquirido)}
+              </span>
+            </div>
+
+            <div style={{ height: 3, background: C.line, flexShrink: 0 }} />
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'clamp(24px,4.6vw,88px)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ color: C.faint, fontWeight: 700, fontSize: 'clamp(13px,1.3vw,25px)' }}>previsto no ano</span>
+                <span style={{ fontFamily: HEADING, fontWeight: 800, fontSize: 'clamp(26px,3.5vw,68px)', color: C.amber, lineHeight: 1, letterSpacing: '-0.03em' }}>
+                  {brl0(d.previsto)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ color: C.faint, fontWeight: 700, fontSize: 'clamp(13px,1.3vw,25px)' }}>falta adquirir</span>
+                <span style={{ fontFamily: HEADING, fontWeight: 800, fontSize: 'clamp(26px,3.5vw,68px)', color: C.dim, lineHeight: 1, letterSpacing: '-0.03em' }}>
+                  {brl0(Math.max(0, d.restante))}
+                </span>
+              </div>
+            </div>
+
+            {/* Quantos clientes sustentam o número.
+                ★ 2026-09-09: revenda × cliente externo (ex.: WJD Têxtil) separados
+                a pedido do usuário, pra não misturar os dois no mesmo total.
+                ★ 2026-09-10: subiu de escala (era pequeno demais para a parede).
+                Fica alguns px ABAIXO dos valores de previsto/falta (68px), então
+                a hierarquia se mantém — o dinheiro continua protagonista, mas
+                quantos clientes o sustentam agora se lê de longe. */}
+            {d.clientesAtivos != null && (
+              <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 'clamp(8px,1vw,16px)' }}>
+                <span style={{ fontFamily: HEADING, fontWeight: 800, fontSize: 'clamp(28px,3.1vw,60px)', color: C.blue, lineHeight: 1 }}>
+                  {d.clientesAtivos}
+                </span>
+                <span style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(19px,2vw,38px)' }}>
+                  {d.clientesAtivos === 1 ? 'cliente ativo' : 'clientes ativos'}
+                </span>
+                {(d.revendasAtivas != null && d.clientesExternosAtivos != null) && (
+                  <span style={{ color: C.faint, fontWeight: 650, fontSize: 'clamp(16px,1.7vw,32px)' }}>
+                    ({d.revendasAtivas} {d.revendasAtivas === 1 ? 'Revenda' : 'Revendas'} • {d.clientesExternosAtivos} {d.clientesExternosAtivos === 1 ? 'Cliente Externo' : 'Clientes Externos'})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Trilha acumulada: o caminho até o número, discreta de propósito. */}
+        {serie.length > 1 && (
+          <div style={{ flexShrink: 0 }}>
+            <div style={{ height: 'clamp(72px,10vw,150px)' }}>
+              <svg viewBox={`0 0 ${TW} ${TH}`} preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+                <defs>
+                  <linearGradient id="fillFin" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={C.blue} stopOpacity="0.26" />
+                    <stop offset="100%" stopColor={C.blue} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {linhaFeita.length > 1 && (
+                  <path
+                    d={`M 0 ${TBASE} L ${linhaFeita.join(' L ')} L ${tx(iHoje).toFixed(1)} ${TBASE} Z`}
+                    fill="url(#fillFin)"
+                  />
+                )}
+                {linhaFeita.length > 1 && (
+                  <path d={`M ${linhaFeita.join(' L ')}`} fill="none" stroke={C.blue} strokeWidth="5"
+                        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                )}
+                {linhaFutura.length > 1 && (
+                  <path d={`M ${linhaFutura.join(' L ')}`} fill="none" stroke={C.amber} strokeWidth="5"
+                        strokeDasharray="13 10" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                )}
+                <circle cx={tx(iHoje)} cy={ty(serie[iHoje])} r="9" fill={C.amber} />
+              </svg>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <span style={{ color: C.faint, fontWeight: 600, fontSize: 'clamp(12px,1.1vw,22px)' }}>{d.rotulos[0]}</span>
+              {iHoje < serie.length - 1 && (
+                <span style={{ color: C.faint, fontWeight: 600, fontSize: 'clamp(12px,1.1vw,22px)' }}>
+                  {d.rotulos[serie.length - 1]} (já contratado)
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const fmtNum = v => (v || 0).toLocaleString('pt-BR');
+
+/* Só para o slide de Visualizações Totais: número cru (ex. "1.490.178") lido
+   de longe vira fácil de confundir com milhar — pedido do usuário 2026-09-03
+   foi deixar a unidade explícita.
+   ★ 2026-09-08: era SEMPRE "X,XX milhões" (`fmtMilhoes`), o que deixava
+   marca com total abaixo de 1 milhão (ex. Zenith, ~749 mil) com "0,75
+   milhões" — estranho de ler. Virou `fmtEscala`: troca a unidade pela
+   grandeza real do número (cru / mil / milhões), pedido do usuário ao
+   revisar os layouts do slide. */
+const fmtEscala = v => {
+  if (v == null) return '—';
+  const abs = Math.abs(v);
+  if (abs >= 1e6) return (v / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' milhões';
+  if (abs >= 1e3) return (v / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' mil';
+  return v.toLocaleString('pt-BR');
+};
+
+const MES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const mesCurto = (m) => {
+  const [ano, mm] = m.split('-');
+  return `${MES_ABREV[parseInt(mm, 10) - 1]}/${ano.slice(2)}`;
+};
+
+/* Suaviza a linha com uma bezier cúbica por segmento (ponto de controle no
+   meio do X, na altura Y de cada extremidade) — dá a curva "S" arredondada
+   dos gráficos modernos sem para o trabalho de um Catmull-Rom completo. */
+function pathSuave(pontos) {
+  if (pontos.length < 2) return pontos.length ? `M ${pontos[0].x} ${pontos[0].y}` : '';
+  let dPath = `M ${pontos[0].x} ${pontos[0].y}`;
+  for (let i = 0; i < pontos.length - 1; i++) {
+    const p0 = pontos[i], p1 = pontos[i + 1];
+    const meioX = (p0.x + p1.x) / 2;
+    dPath += ` C ${meioX} ${p0.y}, ${meioX} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+  return dPath;
+}
+
+/**
+ * Gráfico de ÁREA de uma marca só — pedido do usuário 2026-09-02, no estilo
+ * de um dashboard de referência que ele anexou (pílula escura de valor sobre
+ * a linha, área preenchida em degradê, linha pontilhada de referência no
+ * topo).
+ */
+function GraficoSeguidorMarca({ marcaKey, titulo, onErro }) {
+  const [d, setD] = useState(null);
+  const falhou = useRef(false);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/tv/seguidores-${marcaKey}`, { headers: { Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(j => {
+        if (!vivo) return;
+        if (!j.ok) throw new Error(j.error || 'sem dado');
+        setD(j);
+      })
+      .catch(() => { if (vivo && !falhou.current) { falhou.current = true; onErro(); } });
+    return () => { vivo = false; };
+  }, [marcaKey, onErro]);
+
+  if (!d) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} className="tv-girando" style={{ color: C.blueLight }} />
+      </div>
+    );
+  }
+
+  const m = d.marca;
+  const serie = m.serie || [];
+  const cabecalho = (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>
+        <div style={{ color: C.text, fontFamily: HEADING, fontWeight: 800, letterSpacing: '-0.02em', fontSize: 'clamp(30px,3.2vw,58px)' }}>
+          {titulo || CHART_ROTULOS[`seguidores-crescimento-${marcaKey}`]}
+        </div>
+        {/* Este slide não tinha linha de perfil — o @ entra sob o título. */}
+        <div style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(18px,1.9vw,36px)', letterSpacing: '-0.01em' }}>
+          <PerfilInstagram marcaKey={marcaKey} />
+        </div>
+      </div>
+      <div style={{
+        fontFamily: HEADING, color: m.cor, fontWeight: 800, letterSpacing: '-0.02em',
+        fontSize: 'clamp(34px,4vw,72px)', lineHeight: 1,
+      }}>{m.atual != null ? fmtNum(m.atual) : '—'}</div>
+    </div>
+  );
+
+  const glow = MARCA_GLOW[marcaKey];
+
+  if (serie.length < 2) {
+    return (
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        {glow && <GlowMarca cores={glow} />}
+        <div style={{
+          position: 'relative', boxSizing: 'border-box', width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+          padding: 'clamp(24px,3vw,64px)', gap: 'clamp(16px,2vw,28px)',
+        }}>
+          {cabecalho}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <p style={{ color: C.faint, fontSize: 'clamp(20px,2vw,32px)' }}>Sem histórico suficiente ainda.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ★ PAD_L/PAD_R precisam caber a METADE da pílula do 1º/último ponto (o
+  // texto é centralizado em `p.x`, então em tela cheia — sem a sobra que
+  // sobrava no preview letterboxed do editor — a pílula/mês vazava pra fora
+  // da própria área do slide e o navegador cortava). 110 cobre até 4 dígitos.
+  const W = 1200, H = 460, PAD_L = 110, PAD_R = 110, PAD_B = 46;
+  // 90px de folga no topo pra pílula do ponto mais alto não colar no título.
+  const TOPO = 90, BASE = H - PAD_B;
+  const xDe = (i) => PAD_L + i * (W - PAD_L - PAD_R) / (serie.length - 1);
+  const valores = serie.map(p => p.v);
+  const minV = Math.min(...valores), maxV = Math.max(...valores);
+  const faixa = (maxV - minV) || 1;
+  const yDe = (v) => TOPO + (BASE - TOPO) * (1 - (v - minV) / faixa);
+
+  const pontos = serie.map((p, i) => ({ i, x: xDe(i), y: yDe(p.v), v: p.v, m: p.m }));
+  const linha = pathSuave(pontos);
+  const area = `${linha} L ${pontos[pontos.length - 1].x} ${BASE} L ${pontos[0].x} ${BASE} Z`;
+  const yTopo = yDe(maxV);
+  const gradId = `segArea-${marcaKey}`;
+
+  return (
+    <div className="tv-fade" style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {glow && <GlowMarca cores={glow} />}
+      <div style={{
+        position: 'relative', boxSizing: 'border-box', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
+        padding: 'clamp(24px,3vw,64px)', gap: 'clamp(12px,1.8vw,24px)',
+      }}>
+        {cabecalho}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}>
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={m.cor} stopOpacity="0.38" />
+                <stop offset="100%" stopColor={m.cor} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+
+            {/* Referência pontilhada no valor mais alto da janela — dá escala ao olho. */}
+            <line x1={PAD_L} y1={yTopo} x2={W - PAD_R} y2={yTopo} stroke={C.line} strokeWidth={2} strokeDasharray="6 8" />
+
+            <path d={area} fill={`url(#${gradId})`} stroke="none" />
+            <path d={linha} fill="none" stroke={m.cor} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+
+            {pontos.map(p => (
+              <g key={p.i}>
+                <circle cx={p.x} cy={p.y} r={8} fill={m.cor} stroke={C.ink} strokeWidth={3} />
+                {/* Pílula escura FIXA (não amarrada ao tema, como o selo de formato
+                    do post): precisa contrastar sobre a própria área colorida. */}
+                <g transform={`translate(${p.x}, ${p.y - 52})`}>
+                  <rect x={-(20 + String(p.v).length * 15)} y={-24} width={2 * (20 + String(p.v).length * 15)} height={48} rx={12} fill="rgba(11,18,32,.88)" />
+                  <text x={0} y={8} textAnchor="middle" fontFamily={HEADING} fontWeight={800} fontSize={30} fill="#fff">{fmtNum(p.v)}</text>
+                </g>
+              </g>
+            ))}
+
+            {pontos.map(p => (
+              <text key={'m' + p.i} x={p.x} y={H - 10} textAnchor="middle" fontSize={22} fontWeight={600} fill={C.faint}>
+                {mesCurto(p.m)}
+              </text>
+            ))}
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Thumbnail pequena de um dos 4 posts que mais contribuíram para o total do
+   ano (pedido do usuário 2026-09-03) — sem a
+   tag de formato: aqui o protagonista é a visualização, não o tipo de post. */
+/* `campo` escolhe QUAL número o selo mostra — 'visualizacoes' (slide de
+   Visualizações) ou 'engajamento' (slide de Engajamento do Ano). O mesmo
+   componente serve os dois rankings de "top 4 posts do ano" sem duplicar
+   markup. */
+function ThumbTopPost({ p, campo = 'visualizacoes' }) {
+  return (
+    <a href={p.permalink || undefined} target="_blank" rel="noopener" style={{
+      /* ★★ QUADRADO POR `padding-bottom`, NÃO por `aspect-ratio` (2026-09-10).
+         O `aspectRatio: '1/1'` funcionava no Chrome e era IGNORADO no Safari:
+         o card ficava com a altura da proporção natural da foto e o
+         `object-fit: cover` exibia a imagem inteira em vez do recorte
+         (relatado pelo usuário transmitindo de um Mac; `alignSelf:'start'`
+         sozinho não resolveu — a primeira tentativa culpou o stretch do grid,
+         mas o ratio não estava sendo aplicado de jeito nenhum).
+         `height:0` + `paddingBottom:'100%'` é a técnica antiga de proporção:
+         a porcentagem de padding resolve contra a LARGURA do bloco contêiner,
+         então a altura vira igual à largura em qualquer motor. É o mesmo
+         recurso que o GlowMarca já usa neste arquivo.
+         ⚠️ Com padding fazendo a altura, a imagem PRECISA ser posicionada
+         absolutamente — no fluxo normal ela cairia abaixo da área do padding.
+         ★ `alignSelf:'start'` continua necessário: como item de grid, o
+         stretch daria uma altura definida que somaria ao padding. */
+      display: 'block', position: 'relative', minWidth: 0,
+      height: 0, paddingBottom: '100%', alignSelf: 'start',
+      background: C.inkSoft, border: `1px solid ${C.line}`, borderRadius: 12,
+      overflow: 'hidden', textDecoration: 'none', pointerEvents: p.permalink ? 'auto' : 'none',
+    }}>
+      {p.thumb && (
+        <img src={p.thumb} alt="" referrerPolicy="no-referrer"
+             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+             onError={e => { e.currentTarget.style.display = 'none'; }} />
+      )}
+      <span style={{
+        position: 'absolute', bottom: 8, right: 8, background: 'rgba(11,18,32,.75)', color: '#fff',
+        fontWeight: 700, fontSize: 'clamp(11px,1vw,16px)', padding: '3px 9px', borderRadius: 999,
+      }}>{fmtNum(p[campo])}</span>
+    </a>
+  );
+}
+
+/**
+ * "Visualizações Totais do Perfil no Ano" — pedido do usuário 2026-09-02,
+ * virou 1 slide POR MARCA na 2ª rodada (mesmo dia). Fonte: `views` da Graph
+ * API (conta, já ORGÂNICO + PATROCINADO) — ver a nota grande em
+ * src/tv/visualizacoes.js sobre por que não soma post a post nem o intervalo
+ * inteiro numa chamada só. ★ 2026-09-03: ganhou os 4 posts que mais
+ * contribuíram para essa soma (`topPosts`) e o layout virou número grande à
+ * ESQUERDA + thumbnails desses posts à DIREITA, pedido do usuário.
+ *
+ * ★★ 2026-09-08: o ranking passou a ser por visualizações TOTAIS (orgânico +
+ * patrocinado), não só orgânicas — em conta que anuncia, o post realmente mais
+ * visto do ano nem aparecia no top 4 (Fluxora: o 1º saltou de 3.414 para
+ * 708.660). O campo `visualizacoes` de cada topPost já vem somado do backend,
+ * então este componente não muda; os componentes ficam em `visualizacoesOrg` /
+ * `visualizacoesPaid` se um dia quisermos exibir a quebra.
+ * ⚠️ NÃO reintroduzir o ícone de raio no thumbnail: o usuário pediu a remoção
+ * dele dos cards de post em 2026-09-03 (o dado `impulsionado` continua vindo).
+ *
+ * ★ 2026-09-08 — revisão de layout via `/design` (6 direções comparadas): o
+ * usuário escolheu manter ESTE formato (número + grade de 4 thumbnails), só
+ * pediu para não somar uma barra de composição orgânico×patrocinado — "é um
+ * Dashboard que estará em uma TV, não faz sentido mostrar números em
+ * minúcias". Por isso os thumbnails também NÃO ganharam selo de formato nem
+ * numeração de ranking (apareciam nos mockups comparados, mas são o mesmo
+ * tipo de minúcia que a barra) — mudou só o número: fonte maior
+ * (`clamp(50px,8vw,156px)`, era 140px) e a unidade agora troca sozinha entre
+ * cru/mil/milhões (`fmtEscala`, era sempre "X,XX milhões").
+ */
+function GraficoVisualizacoesMarca({ marcaKey, titulo, onErro }) {
+  const [d, setD] = useState(null);
+  const falhou = useRef(false);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/tv/visualizacoes-ano-${marcaKey}`, { headers: { Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(j => {
+        if (!vivo) return;
+        if (!j.ok) throw new Error(j.error || 'sem dado');
+        setD(j);
+      })
+      .catch(() => { if (vivo && !falhou.current) { falhou.current = true; onErro(); } });
+    return () => { vivo = false; };
+  }, [marcaKey, onErro]);
+
+  if (!d) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} className="tv-girando" style={{ color: C.blueLight }} />
+      </div>
+    );
+  }
+
+  const m = d.marca || {};
+  const glow = MARCA_GLOW[marcaKey];
+  const topPosts = m.topPosts || [];
+  // ★ Antes tinha uma div extra entre o wrapper posicionado e o grid que
+  // centraliza (pro glow), com `height:'100%'` — medido: em produção o grid
+  // saía mais alto que a tela (100% não resolvia contra o ancestral certo
+  // nesse aninhamento) e o conteúdo centralizava DENTRO dessa caixa inflada,
+  // não da tela real, empurrando tudo pra baixo. Um nível só resolve —
+  // mesmo formato do GraficoFinanceiroYtd (que nunca teve esse problema).
+  // ★★ 2026-09-11: mesmo com 1 nível só, sobrava espaço embaixo — mas SÓ
+  // nestes dois slides (Visualizações/Engajamento), os únicos com um irmão
+  // `position:absolute` (o `GlowMarca`) dentro de um `display:'grid'` cujo
+  // único outro filho é centralizado por `placeItems:'center'`. Confirmado
+  // com bordas de depuração (usuário mandou print): o container cobria a
+  // tela inteira, mas o bloco de conteúdo ficava desalinhado pra cima dentro
+  // dele — sinal de bug de Grid do WebKit ao posicionar item abspos como
+  // irmão de auto-placement. Trocado por `flex` (sempre exclui abspos do
+  // fluxo, sem as mesmas armadilhas de Grid); `GraficoFinanceiroYtd` nunca
+  // teve esse sintoma porque não tem glow de fundo.
+  return (
+    <div className="tv-fade" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(24px,4vw,80px)' }}>
+      {glow && <GlowMarca cores={glow} />}
+      <div style={{
+        display: topPosts.length ? 'grid' : 'flex',
+        gridTemplateColumns: topPosts.length ? '48.25fr 51.75fr' : undefined,
+        alignItems: topPosts.length ? 'stretch' : 'center', gap: 'clamp(28px,4vw,72px)',
+        maxWidth: 1700, width: '100%',
+      }}>
+        {/* Número grande à ESQUERDA, texto de contexto ABAIXO dele — pedido do
+            usuário via /design (2026-09-09): a leitura vira "X milhões" e só
+            depois "visualizações / perfil", em vez do título vir antes do
+            número (e sem o ano, que não acrescentava nada aqui).
+            ★ 2026-09-09 (mais tarde) — DUAS âncoras dentro da mesma coluna:
+            o RÓTULO ("Visualizações") fica preso ao TOPO, alinhado com o
+            topo dos cards (por isso `alignItems:'stretch'` no bloco de 2
+            colunas — sem isso a coluna esquerda não teria a MESMA altura dos
+            cards pra âncorar contra); número+legenda continuam CENTRALIZADOS
+            verticalmente, exatamente como antes de o rótulo existir — as
+            duas coisas são independentes: `gridTemplateRows:'auto 1fr'`
+            separa o rótulo (linha `auto`) do resto (linha `1fr`, com seu
+            próprio `alignContent:'center'`). */}
+        <div style={{
+          display: 'grid', gridTemplateRows: topPosts.length ? 'auto 1fr' : undefined,
+          gap: 'clamp(16px,2.4vw,24px)',
+          textAlign: topPosts.length ? 'left' : 'center', justifyItems: topPosts.length ? 'start' : 'center',
+        }}>
+          <div style={{ fontFamily: HEADING, color: C.text, fontWeight: 800, letterSpacing: '-0.02em', fontSize: 'clamp(32px,5.21vw,100px)' }}>
+            Visualizações
+          </div>
+          <div style={{
+            display: 'grid', alignContent: 'center', justifyItems: topPosts.length ? 'start' : 'center',
+            gap: 'clamp(16px,2.4vw,24px)',
+          }}>
+            <div style={{
+              fontFamily: HEADING, color: m.total != null ? m.cor : C.faint, fontWeight: 800,
+              letterSpacing: '-0.03em', lineHeight: 1.05, fontSize: 'clamp(50px,8vw,156px)',
+            }}>{fmtEscala(m.total)}</div>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(20px,2.3vw,40px)', letterSpacing: '-0.01em' }}>
+                {titulo || 'Visualizações totais no ano'}
+              </div>
+              {/* ★ O ícone do Instagram é dimensionado em `em`, então cresce
+                  junto com esta fonte — subir a escala aqui aumenta os dois de
+                  uma vez (pedido do usuário: estava pequeno para a parede). */}
+              <div style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(22px,2.5vw,44px)', letterSpacing: '-0.01em' }}>
+                <PerfilInstagram marcaKey={marcaKey} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Thumbnails à DIREITA: os 4 posts que mais contribuíram pro total.
+            ★ 2026-09-09: coluna 15% mais larga (45% -> 51,75%; a esquerda foi
+            de 55% para 48,25%) — virou grid com fr fixo em vez de flex-basis:
+            com flex-grow:1 dos dois lados, o espaço LIVRE se divide igual
+            entre eles e só mudar o flex-basis não garante a proporção real. */}
+        {topPosts.length > 0 && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(2,1fr)',
+            gap: 'clamp(12px,1.8vw,24px)', minWidth: 0,
+          }}>
+            {topPosts.map(p => <ThumbTopPost key={p.id} p={p} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Maior Engajamento do Ano" — pedido do usuário 2026-09-09: ao lado do slide
+ * de Engajamento MENSAL (removido em 2026-09-10), este soma
+ * o ANO INTEIRO — mesmo padrão de `GraficoVisualizacoesMarca` (número grande
+ * + os 4 posts que mais contribuíram, orgânico+pago). Os dois slides
+ * coexistem; nenhum substitui o outro.
+ */
+function GraficoEngajamentoAnoMarca({ marcaKey, titulo, onErro }) {
+  const [d, setD] = useState(null);
+  const falhou = useRef(false);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/tv/engajamento-ano-${marcaKey}`, { headers: { Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(j => {
+        if (!vivo) return;
+        if (!j.ok) throw new Error(j.error || 'sem dado');
+        setD(j);
+      })
+      .catch(() => { if (vivo && !falhou.current) { falhou.current = true; onErro(); } });
+    return () => { vivo = false; };
+  }, [marcaKey, onErro]);
+
+  if (!d) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} className="tv-girando" style={{ color: C.blueLight }} />
+      </div>
+    );
+  }
+
+  const m = d.marca || {};
+  const glow = MARCA_GLOW[marcaKey];
+  const topPosts = m.topPosts || [];
+  return (
+    <div className="tv-fade" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(24px,4vw,80px)' }}>
+      {glow && <GlowMarca cores={glow} />}
+      <div style={{
+        display: topPosts.length ? 'grid' : 'flex',
+        gridTemplateColumns: topPosts.length ? '48.25fr 51.75fr' : undefined,
+        alignItems: topPosts.length ? 'stretch' : 'center', gap: 'clamp(28px,4vw,72px)',
+        maxWidth: 1700, width: '100%',
+      }}>
+        {/* ★ 2026-09-09: DUAS âncoras na coluna esquerda — o rótulo preso ao
+            TOPO (mesma altura do topo dos cards, por isso `alignItems:
+            'stretch'` no bloco de 2 colunas) e número+legenda CENTRALIZADOS
+            verticalmente, como antes de o rótulo existir (`gridTemplateRows:
+            'auto 1fr'` separa as duas âncoras). Este slide e o de
+            Visualizações (mesmo layout) somam números parecidos — sem o
+            rótulo, quem olha rápido não sabe qual dos dois está vendo. */}
+        <div style={{
+          display: 'grid', gridTemplateRows: topPosts.length ? 'auto 1fr' : undefined,
+          gap: 'clamp(16px,2.4vw,24px)',
+          textAlign: topPosts.length ? 'left' : 'center', justifyItems: topPosts.length ? 'start' : 'center',
+        }}>
+          <div style={{ fontFamily: HEADING, color: C.text, fontWeight: 800, letterSpacing: '-0.02em', fontSize: 'clamp(32px,5.21vw,100px)' }}>
+            Interações
+          </div>
+          <div style={{
+            display: 'grid', alignContent: 'center', justifyItems: topPosts.length ? 'start' : 'center',
+            gap: 'clamp(16px,2.4vw,24px)',
+          }}>
+            <div style={{
+              fontFamily: HEADING, color: m.total != null ? m.cor : C.faint, fontWeight: 800,
+              letterSpacing: '-0.03em', lineHeight: 1.05, fontSize: 'clamp(50px,8vw,156px)',
+            }}>{fmtEscala(m.total)}</div>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(20px,2.3vw,40px)', letterSpacing: '-0.01em' }}>
+                {titulo || 'Interações totais no ano'}
+              </div>
+              {/* ★ O ícone do Instagram é dimensionado em `em`, então cresce
+                  junto com esta fonte — subir a escala aqui aumenta os dois de
+                  uma vez (pedido do usuário: estava pequeno para a parede). */}
+              <div style={{ color: C.dim, fontWeight: 700, fontSize: 'clamp(22px,2.5vw,44px)', letterSpacing: '-0.01em' }}>
+                <PerfilInstagram marcaKey={marcaKey} />
+              </div>
+            </div>
+          </div>
+        </div>
+        {topPosts.length > 0 && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(2,1fr)',
+            gap: 'clamp(12px,1.8vw,24px)', minWidth: 0,
+          }}>
+            {topPosts.map(p => <ThumbTopPost key={p.id} p={p} campo="engajamento" />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Slide de gráfico cujo chartId não existe mais no código — sai do loop pelo
+   MESMO caminho de uma mídia quebrada (onErro), em vez de virar tela vazia.
+   ★ Existe por causa de 2026-09-10: os 4 slides de engajamento MENSAL saíram do
+   código, mas `getDeck` NÃO sanitiza na leitura (só `sanitizeDeck`, na escrita),
+   então o deck já gravado no KV continua servindo esses chartIds até alguém
+   salvar o deck pelo editor. Sem isto eles cairiam no fallback do `Grafico` e a
+   parede exibiria QUATRO Faturamentos por volta do loop, sem erro nenhum. */
+function GraficoAposentado({ onErro }) {
+  // ★ Ref em vez de dependência: `onErro` é uma arrow inline no pai (identidade
+  // nova a cada render), e depender dela reagendaria o aviso sem parar.
+  const avisar = useRef(onErro);
+  avisar.current = onErro;
+  useEffect(() => {
+    /* ★★ ASSÍNCRONO DE PROPÓSITO (medido): efeito de filho roda ANTES do efeito
+       do pai, e o pai tem um `setQuebrados(new Set())` no mount ("deck novo,
+       chance nova"). Avisando de forma síncrona aqui, a marca de quebrado era
+       apagada no MESMO ciclo e o slide morto ficava eternamente na tela, em
+       branco — reproduzido na bancada: contador travado em "1 / 14" por 8s.
+       Os outros gráficos não tropeçam nisso porque só falham DEPOIS do fetch,
+       muito além do mount. Um tick basta para cair depois do reset. */
+    const t = setTimeout(() => avisar.current(), 0);
+    return () => clearTimeout(t);
+  }, []);
+  return null;
+}
+
+function Grafico({ slide, onErro }) {
+  const sm = /^seguidores-crescimento-(.+)$/.exec(slide.chartId || '');
+  if (sm) {
+    return <GraficoSeguidorMarca marcaKey={sm[1]} titulo={slide.title} onErro={onErro} />;
+  }
+  const vm = /^visualizacoes-ano-(.+)$/.exec(slide.chartId || '');
+  if (vm) {
+    return <GraficoVisualizacoesMarca marcaKey={vm[1]} titulo={slide.title} onErro={onErro} />;
+  }
+  const em = /^engajamento-ano-(.+)$/.exec(slide.chartId || '');
+  if (em) {
+    return <GraficoEngajamentoAnoMarca marcaKey={em[1]} titulo={slide.title} onErro={onErro} />;
+  }
+  /* ★ Faturamento só quando o chartId é O DELE. Era o fallback de qualquer
+     chartId desconhecido, o que transformava slide aposentado em Faturamento
+     repetido em silêncio. */
+  if (slide.chartId === 'financeiro-ytd') {
+    return <GraficoFinanceiroYtd titulo={slide.title} onErro={onErro} />;
+  }
+  return <GraficoAposentado onErro={onErro} />;
+}
+
+function Slide({ slide, pausado, onFim, onErro, onTravou }) {
+  const layout = layoutDoSlide(slide);
+  const conteudo = slide.kind === 'chart'
+    ? <Grafico slide={slide} onErro={onErro} />
+    : <Media slide={slide} pausado={pausado} onFim={onFim} onErro={onErro} onTravou={onTravou} />;
+
+  if (layout === 'media') {
+    return <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>{conteudo}</div>;
+  }
+
+  if (layout === 'media-texto') {
+    return (
+      <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'grid', gridTemplateColumns: '1.15fr 1fr' }}>
+        <div style={{ position: 'relative', overflow: 'hidden' }}>{conteudo}</div>
+        <div style={{ background: C.inkSoft, borderLeft: `1px solid ${C.line}` }}>
+          <Texto slide={slide} compacto />
+        </div>
+      </div>
+    );
+  }
+
+  return <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><Texto slide={slide} /></div>;
+}
+
+/* Barra de progresso do slide atual — dá à sala a noção de "já vai virar". */
+function Progresso({ chave, duracaoMs, pausado, indeterminado }) {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    setPct(0);
+    if (indeterminado || pausado) return;
+    const inicio = performance.now();
+    let raf;
+    const passo = (t) => {
+      const p = Math.min(1, (t - inicio) / duracaoMs);
+      setPct(p);
+      if (p < 1) raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, [chave, duracaoMs, pausado, indeterminado]);
+
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'rgba(11,18,32,.08)', zIndex: 5 }}>
+      <div style={{
+        height: '100%', width: indeterminado ? '100%' : `${pct * 100}%`,
+        background: indeterminado ? `linear-gradient(90deg,${C.blue},${C.amber})` : C.blueLight,
+        opacity: indeterminado ? .5 : 1,
+      }} />
+    </div>
+  );
+}
+
+/* ============================================================
+   MODO EXIBIÇÃO — o loop que a TV mostra.
+   ============================================================ */
+function Exibicao({ slides, podeEditar, onEditar, slideInicialId }) {
+  // Só usado na MONTAGEM: se veio de "Exibir" com um slide selecionado no
+  // editor, começa nele em vez do 1º da trilha (mesmo filtro de `deck`, que
+  // na montagem ainda não tem nada em `quebrados`).
+  const [i, setI] = useState(() => {
+    if (!slideInicialId) return 0;
+    const idx = slides.filter(s => s.enabled !== false).findIndex(s => s.id === slideInicialId);
+    return idx >= 0 ? idx : 0;
+  });
+  const [pausado, setPausado] = useState(false);
+  /* Slides cuja mídia falhou ao carregar. Saem do loop — sem isso a TV passaria
+     o dia num retângulo preto e ninguém estaria lá para perceber. */
+  const [quebrados, setQuebrados] = useState(() => new Set());
+  const { isFs, toggle } = useFullscreen();
+  useWakeLock(true);
+
+  const deck = useMemo(
+    () => slides.filter(s => s.enabled !== false && !quebrados.has(s.id)),
+    [slides, quebrados],
+  );
+  const total = deck.length;
+  const idx = total ? i % total : 0;
+  const slide = deck[idx];
+
+  // Mantém o índice na faixa quando o deck encolhe (edição ou slide quebrado).
+  useEffect(() => { if (total && i >= total) setI(0); }, [total, i]);
+
+  const vai = useCallback((d) => setI(v => (total ? (v + d + total) % total : 0)), [total]);
+  const avanca = useCallback(() => vai(1), [vai]);
+  const marcaQuebrado = useCallback((id) => {
+    setQuebrados(prev => { const n = new Set(prev); n.add(id); return n; });
+  }, []);
+
+  /* Deck novo, chance nova. Sem isto, um slide que falhou uma vez ficaria fora
+     do ar até alguém recarregar a página — e ninguém recarrega a TV. Quando o
+     gestor troca o arquivo, o slide precisa voltar a ser tentado. */
+  useEffect(() => { setQuebrados(new Set()); }, [slides]);
+
+  const video = slide ? ehVideo(slide) : false;
+
+  /* O timer. Duas regras:
+       - slide comum -> avança na duração configurada;
+       - VÍDEO       -> quem manda é o onEnded do <video>; o timer aqui é só
+                        uma REDE DE SEGURANÇA generosa, para o caso de o vídeo
+                        travar ou o autoplay ser barrado. Sem ela, um vídeo com
+                        problema congelaria o painel para sempre. */
+  useEffect(() => {
+    if (!slide || pausado || total <= 1) return;
+    // Vídeo: o onEnded manda, e o vigia de travamento (TRAVA_MS) cobre o vídeo
+    // paralisado. Esta rede aqui é o último recurso — teto absoluto de tempo em
+    // UM slide, para o caso de os dois falharem.
+    const ms = video ? MAX_SLIDE_MS : slide.durationMs;
+    const t = setTimeout(avanca, ms);
+    return () => clearTimeout(t);
+  }, [slide, idx, pausado, total, video, avanca]);
+
+  /* Controles: aparecem ao mover o mouse e somem sozinhos. A TV tem mouse
+     disponível, mas 99% do tempo ninguém toca nela — então o padrão é a tela
+     limpa, sem nem o cursor. */
+  const [mostraCtrl, setMostraCtrl] = useState(false);
+  const timerCtrl = useRef(null);
+  const acorda = useCallback(() => {
+    setMostraCtrl(true);
+    if (timerCtrl.current) clearTimeout(timerCtrl.current);
+    timerCtrl.current = setTimeout(() => setMostraCtrl(false), 3000);
+  }, []);
+  useEffect(() => () => { if (timerCtrl.current) clearTimeout(timerCtrl.current); }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const k = e.key.toLowerCase();
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); acorda(); vai(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); acorda(); vai(-1); }
+      else if (k === 'p') { acorda(); setPausado(p => !p); }
+      else if (k === 'f') toggle();
+      else if (k === 'e' && podeEditar) onEditar();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [vai, toggle, acorda, podeEditar, onEditar]);
+
+  /* ★★ SAFARI 14.1.3: duas tentativas anteriores (trocar `inset` por
+     top/right/bottom/left; depois forçar a altura do `html` via
+     `window.innerHeight` no fullscreenchange) não resolveram — usuário
+     confirmou "continua a mesma coisa" mesmo com refresh de verdade. Troca de
+     abordagem (ver `useMedidaTela`): `width`/`height` em PIXEL, vindos de
+     `screen.width/height` (medida física do monitor, imune ao atraso de
+     layout do WebKit legado), no lugar de `right`/`bottom`. */
+  const tela = useMedidaTela();
+  const base = { position: 'fixed', top: 0, left: 0, width: tela.w, height: tela.h, background: C.ink, overflow: 'hidden' };
+
+  if (!total) {
+    return (
+      <div style={{ ...base, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 40 }}>
+        <div>
+          <Tv size={64} style={{ color: C.blueLight, marginBottom: 28 }} strokeWidth={1.5} />
+          <h1 style={{ fontFamily: HEADING, color: C.text, fontSize: 'clamp(32px,4vw,64px)', margin: 0, fontWeight: 800, letterSpacing: '-0.03em' }}>
+            Painel sem conteúdo
+          </h1>
+          <p style={{ color: C.faint, fontSize: 'clamp(16px,1.6vw,24px)', marginTop: 18 }}>
+            {slides.length
+              ? 'Todos os slides estão ocultos ou com mídia indisponível.'
+              : 'Nenhum slide cadastrado ainda.'}
+          </p>
+          {podeEditar && (
+            <button className="tv-btn" onClick={onEditar} style={{ marginTop: 32, padding: '14px 22px', fontSize: 16, background: C.blue }}>
+              <Pencil size={18} /> Montar o painel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={mostraCtrl ? '' : 'tv-sem-cursor'} style={base} onMouseMove={acorda} onClick={acorda}>
+      <Progresso chave={slide.id + ':' + idx} duracaoMs={slide.durationMs} pausado={pausado} indeterminado={video} />
+
+      <Slide
+        key={slide.id + ':' + idx}
+        slide={slide} pausado={pausado}
+        onFim={avanca}
+        /* Erro de mídia = arquivo ruim ou ausente: não se conserta sozinho, o
+           slide sai do loop. TRAVOU = pode ser transitório (rede, autoplay):
+           só pula a vez e tenta de novo na próxima volta. */
+        onErro={() => marcaQuebrado(slide.id)}
+        onTravou={avanca}
+      />
+
+      {/* Controles flutuantes — fundo escuro translúcido FIXO, à parte da
+          paleta C: precisa contrastar sobre qualquer slide (imagem, vídeo,
+          claro ou escuro), não sobre o fundo do próprio slide. Por isso os
+          textos aqui usam branco/cinza-claro fixos, não os tokens do tema. */}
+      <div style={{
+        position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', alignItems: 'center', gap: 8, padding: 8,
+        background: 'rgba(11,18,32,.82)', backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255,255,255,.10)', borderRadius: 14, zIndex: 10,
+        opacity: mostraCtrl ? 1 : 0, pointerEvents: mostraCtrl ? 'auto' : 'none',
+        transition: 'opacity .3s',
+      }}>
+        <button className="tv-btn" onClick={() => vai(-1)} title="Anterior (←)" style={{ width: 42, height: 42 }}><ChevronLeft size={20} /></button>
+        <button className="tv-btn" onClick={() => setPausado(p => !p)} title={pausado ? 'Retomar (P)' : 'Pausar (P)'} style={{ width: 42, height: 42 }}>
+          {pausado ? <Play size={20} /> : <Pause size={20} />}
+        </button>
+        <button className="tv-btn" onClick={() => vai(1)} title="Próximo (→)" style={{ width: 42, height: 42 }}><ChevronRight size={20} /></button>
+        <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 13, padding: '0 10px', fontVariantNumeric: 'tabular-nums' }}>{idx + 1} / {total}</div>
+        <button className="tv-btn" onClick={toggle} title={isFs ? 'Sair da tela cheia (F)' : 'Tela cheia (F)'} style={{ width: 42, height: 42 }}>
+          {isFs ? <Minimize size={20} /> : <Maximize size={20} />}
+        </button>
+        {podeEditar && (
+          <button className="tv-btn" onClick={onEditar} title="Editar o painel (E)" style={{ width: 42, height: 42, background: C.blue }}>
+            <Pencil size={18} />
+          </button>
+        )}
+      </div>
+
+      {pausado && (
+        <div style={{
+          position: 'absolute', top: 24, right: 24, zIndex: 10, display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(222,141,19,.16)', border: `1px solid ${C.amber}`, color: C.amber,
+          borderRadius: 999, padding: '8px 16px', fontSize: 14, fontWeight: 700,
+        }}>
+          <Pause size={15} /> Pausado
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   EDITOR — só admin/gestor chega aqui (canEditTv no backend).
+   ============================================================ */
+const E = { bg: '#eef2f7', card: '#fff', line: '#e3e8ef', txt: '#1f2933', muted: '#6b7280' };
+
+const rotulo = { display: 'block', fontSize: 12, color: E.muted, fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' };
+const campo = { width: '100%', padding: '10px 12px', borderRadius: 9, border: `1px solid ${E.line}`, background: '#fff', color: E.txt, fontSize: 15 };
+const btnClaro = { background: '#fff', color: E.txt, border: `1px solid ${E.line}`, padding: '10px 16px', fontSize: 14, fontWeight: 600 };
+
+/* Imagem é reduzida no navegador antes de subir (mesma ideia do Modo
+   Apresentação), mas com destino diferente: vai ao R2, não a base64. Vídeo sobe
+   CRU — recodificar vídeo no navegador não é viável. */
+function reduzImagem(file, maxDim = 1920, quality = 0.86) {
+  return new Promise((resolve, reject) => {
+    // GIF animado perderia a animação no canvas; sobe como está.
+    if (file.type === 'image/gif') return resolve(file);
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo de imagem inválido.'));
+      img.onload = () => {
+        const escala = Math.min(1, maxDim / Math.max(img.width, img.height));
+        if (escala === 1) return resolve(file); // já cabe: não recomprime de graça
+        const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        cv.toBlob(
+          b => b ? resolve(new File([b], 'img.jpg', { type: 'image/jpeg' })) : reject(new Error('Falha ao converter a imagem.')),
+          'image/jpeg', quality,
+        );
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* Arquivo -> base64 puro (sem o prefixo `data:...;base64,`), que é o formato
+   que a API do GitHub espera no campo `content`. O FileReader faz isso em
+   código nativo, sem travar a interface como um laço em JS faria. */
+function paraBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+    reader.onload = () => {
+      const s = String(reader.result);
+      const virgula = s.indexOf(',');
+      if (virgula < 0) return reject(new Error('Falha ao codificar o arquivo.'));
+      resolve(s.slice(virgula + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* Todos os gráficos usavam o mesmo ícone genérico na trilha — impossível
+   diferenciar "Faturamento" de "Recentes — Fluxora" de "Engajamento —
+   Lumina" só de olhar. Um mini-rótulo (marca + tipo) resolve sem precisar
+   renderizar o gráfico de verdade (caro: seria uma chamada de API por
+   miniatura, na tela toda, toda vez que o editor abre). */
+function tituloCurtoChart(chartId) {
+  if (chartId === 'financeiro-ytd') return { linha1: 'Faturamento' };
+  const s = /^seguidores-crescimento-(.+)$/.exec(chartId || '');
+  if (s) return { linha1: MARCA_ROTULOS[s[1]] || s[1], linha2: 'seguidores' };
+  const v = /^visualizacoes-ano-(.+)$/.exec(chartId || '');
+  if (v) return { linha1: MARCA_ROTULOS[v[1]] || v[1], linha2: 'visualizações' };
+  const ea = /^engajamento-ano-(.+)$/.exec(chartId || '');
+  if (ea) return { linha1: MARCA_ROTULOS[ea[1]] || ea[1], linha2: 'engajamento anual' };
+  return { linha1: 'Gráfico' };
+}
+function iconeChart(chartId) {
+  if (chartId === 'financeiro-ytd') return DollarSign;
+  if (chartId && chartId.startsWith('visualizacoes-ano-')) return Eye;
+  if (chartId && chartId.startsWith('engajamento-ano-')) return BarChart3;
+  if (chartId && chartId.startsWith('seguidores-')) return TrendingUp;
+  return Clock;
+}
+
+/* Miniatura reaproveitada na trilha (e é o que a TV de fato mostraria). */
+function Miniatura({ slide }) {
+  const video = ehVideo(slide);
+  if (slide.kind === 'chart') {
+    const Icone = iconeChart(slide.chartId);
+    const { linha1, linha2 } = tituloCurtoChart(slide.chartId);
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, color: C.blueLight, padding: '0 4px', maxWidth: '100%' }}>
+        <Icone size={16} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.dim, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linha1}</span>
+        {linha2 && <span style={{ fontSize: 9, color: C.faint }}>{linha2}</span>}
+      </div>
+    );
+  }
+  if (slide.kind === 'media' && slide.mediaKey) {
+    return video ? (
+      <video src={mediaUrl(slide.mediaKey)} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+    ) : (
+      <img src={mediaUrl(slide.mediaKey)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+    );
+  }
+  return <Type size={20} style={{ color: C.blueLight }} />;
+}
+
+/* Um cartão da trilha geral — clicar joga o slide na prévia grande. A ordem
+   na trilha É a ordem do loop; mover a posição (na barra acima dela) altera
+   isto mesmo. */
+function ItemTrilha({ slide, n, ativo, onSelecionar }) {
+  const oculto = slide.enabled === false;
+  const dica = slide.title || (slide.kind === 'chart' ? CHART_ROTULOS[slide.chartId] : null) || `Slide ${n}`;
+  return (
+    <button onClick={onSelecionar} title={dica} style={{
+      flex: '0 0 auto', width: 128, padding: 0, border: 0, background: 'transparent',
+      cursor: 'pointer', display: 'grid', gap: 6,
+    }}>
+      <div style={{
+        /* 16/9 por padding (ver a prévia grande): no Safari 14 o `aspect-ratio`
+           não existe e a trilha inteira virava uma tira sem altura.
+           ★ A centralização saiu daqui para um wrapper absoluto — com a altura
+           vindo do padding, o content box tem 0 e o flex não teria o que
+           centralizar. */
+        position: 'relative', height: 0, paddingBottom: '56.25%',
+        borderRadius: 8, overflow: 'hidden', background: C.ink,
+        outline: ativo ? `3px solid ${C.blue}` : `1px solid ${E.line}`, outlineOffset: -1,
+        opacity: oculto ? .55 : 1,
+      }}>
+        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Miniatura slide={slide} />
+        </div>
+        {oculto && (
+          <div style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,.6)', borderRadius: 999, padding: 3, lineHeight: 0 }}>
+            <EyeOff size={11} color="#fff" />
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: ativo ? C.blue : E.muted, fontWeight: 700, textAlign: 'center' }}>{n}</div>
+    </button>
+  );
+}
+
+/* Painel de edição — abre por cima da prévia, com o que é específico DESTE
+   slide. Gráfico não tem "Excluir": é permanente, só "Oculto" o tira do ar. */
+function PainelEdicao({ slide, onMuda, onExclui, onFechar }) {
+  const video = ehVideo(slide);
+  const oculto = slide.enabled === false;
+  const tituloTipo = slide.kind === 'chart' ? 'gráfico' : slide.kind === 'media' ? (video ? 'vídeo' : 'imagem') : 'texto';
+
+  return (
+    <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 30, padding: 20 }}
+         onClick={onFechar}>
+      <div style={{ background: E.card, borderRadius: 14, padding: 24, width: 480, maxWidth: '100%', display: 'grid', gap: 16, boxShadow: '0 20px 60px rgba(15,23,42,.3)' }}
+           onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontFamily: HEADING, fontSize: 18, fontWeight: 700 }}>Editar {tituloTipo}</div>
+          <button className="tv-btn" onClick={onFechar} style={{ background: '#f1f5f9', color: E.txt, width: 32, height: 32, fontSize: 18 }}>×</button>
+        </div>
+
+        <div>
+          <label style={rotulo}>Título</label>
+          <input style={campo} value={slide.title || ''} maxLength={200}
+                 placeholder={slide.kind === 'chart' ? CHART_ROTULOS[slide.chartId] : slide.kind === 'media' ? 'Opcional — com texto, a mídia divide a tela' : 'Título grande na tela'}
+                 onChange={e => onMuda({ title: e.target.value })} />
+        </div>
+
+        {slide.kind === 'chart' ? (
+          <p style={{ fontSize: 13, color: E.muted, margin: 0 }}>
+            {CHART_ROTULOS[slide.chartId]} — gráfico permanente do painel, buscado ao vivo sempre que entra na tela.
+            Use "Oculto" abaixo para tirá-lo do ar sem excluir.
+          </p>
+        ) : (
+          <div>
+            <label style={rotulo}>Texto</label>
+            <textarea style={{ ...campo, minHeight: 90, resize: 'vertical' }} value={slide.body || ''} maxLength={2000}
+                      placeholder="Frase curta. A TV é lida de longe — quanto menos texto, maior ele fica."
+                      onChange={e => onMuda({ body: e.target.value })} />
+          </div>
+        )}
+
+        <div>
+          <label style={rotulo}><Clock size={11} style={{ verticalAlign: -1 }} /> Tempo na tela</label>
+          {video ? (
+            <div style={{ fontSize: 13, color: E.muted, padding: '9px 0' }}>a duração do vídeo</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="range" min={3} max={120} step={1} style={{ flex: 1, minWidth: 0 }}
+                     value={seg(slide.durationMs)}
+                     onChange={e => onMuda({ durationMs: Number(e.target.value) * 1000 })} />
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 14, minWidth: 36 }}>{seg(slide.durationMs)}s</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, borderTop: `1px solid ${E.line}` }}>
+          <button className="tv-btn" onClick={() => onMuda({ enabled: oculto })}
+                  style={{ background: oculto ? '#e2e8f0' : '#e8f5ee', color: oculto ? E.muted : '#1a8d5f', padding: '9px 14px', fontSize: 13, fontWeight: 700 }}>
+            {oculto ? <><EyeOff size={15} /> Oculto</> : <><Eye size={15} /> No ar</>}
+          </button>
+          {slide.kind !== 'chart' && (
+            <button className="tv-btn" onClick={onExclui}
+                    style={{ background: '#fdeceb', color: '#d92d20', padding: '9px 14px', fontSize: 13, fontWeight: 700 }}>
+              <Trash2 size={15} /> Excluir slide
+            </button>
+          )}
+        </div>
+        {slide.kind === 'media' && (
+          <p style={{ fontSize: 12, color: E.muted, margin: 0 }}>Excluir apaga o arquivo do armazenamento ao salvar — não tem como desfazer.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Editor({ slides, onSalvar, onSair, salvando, erro }) {
+  const [draft, setDraft] = useState(slides);
+  const [selecionado, setSelecionado] = useState(() => (slides[0] ? slides[0].id : null));
+  const [editandoSlide, setEditandoSlide] = useState(false);
+  const [subindo, setSubindo] = useState('');
+  const [erroLocal, setErroLocal] = useState('');
+  const inputArquivo = useRef(null);
+
+  const sujo = useMemo(() => JSON.stringify(draft) !== JSON.stringify(slides), [draft, slides]);
+
+  // Se o slide selecionado sumir do draft (excluído), cai no primeiro que sobrou.
+  useEffect(() => {
+    if (!draft.length) { setSelecionado(null); return; }
+    if (!draft.some(s => s.id === selecionado)) setSelecionado(draft[0].id);
+  }, [draft, selecionado]);
+
+  const idxAtual = draft.findIndex(s => s.id === selecionado);
+  const atual = idxAtual >= 0 ? draft[idxAtual] : null;
+
+  /* Autosave: some tempo depois da última mudança (debounce), sem botão. `slides`
+     (o que já está salvo) atualiza sozinho quando onSalvar termina — é o que faz
+     `sujo` voltar a false e a indicação virar "Salvo". */
+  const timerSalvar = useRef(null);
+  useEffect(() => {
+    if (!sujo) return;
+    if (timerSalvar.current) clearTimeout(timerSalvar.current);
+    timerSalvar.current = setTimeout(() => onSalvar(draft), 1200);
+    return () => clearTimeout(timerSalvar.current);
+  }, [draft, sujo, onSalvar]);
+
+  /* Sair não pode deixar as últimas teclas para trás: se o debounce ainda não
+     disparou, salva na hora antes de trocar de tela. */
+  const flush = useCallback(() => {
+    if (timerSalvar.current) { clearTimeout(timerSalvar.current); timerSalvar.current = null; }
+    if (sujo) onSalvar(draft);
+  }, [draft, sujo, onSalvar]);
+
+  // Avisa antes de fechar a aba com alteração ainda não salva (janela do debounce).
+  useEffect(() => {
+    if (!sujo) return;
+    const onSaida = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onSaida);
+    return () => window.removeEventListener('beforeunload', onSaida);
+  }, [sujo]);
+
+  const muda = (id, patch) => setDraft(d => d.map(s => s.id === id ? { ...s, ...patch } : s));
+  const move = (id, dir) => setDraft(d => {
+    const de = d.findIndex(s => s.id === id), para = de + dir;
+    if (de < 0 || para < 0 || para >= d.length) return d;
+    const n = d.slice(); [n[de], n[para]] = [n[para], n[de]]; return n;
+  });
+  // Gráfico é permanente: não sai pelo editor, só oculta (garantido também no PainelEdicao).
+  const exclui = (id) => setDraft(d => {
+    const alvo = d.find(s => s.id === id);
+    if (!alvo || alvo.kind === 'chart') return d;
+    return d.filter(s => s.id !== id);
+  });
+
+  const novoTexto = () => {
+    const s = { id: novoId(), kind: 'text', title: '', body: '', mediaKey: null, mediaType: null, chartId: null, durationMs: 15000, enabled: true };
+    setDraft(d => [...d, s]);
+    setSelecionado(s.id);
+  };
+
+  const subirArquivo = async (file) => {
+    if (!file) return;
+    setErroLocal('');
+    setSubindo(file.name);
+    try {
+      const pronto = file.type.startsWith('image/') ? await reduzImagem(file) : file;
+      /* ★ Quem codifica em base64 é AQUI, o navegador — não o Worker. No plano
+         gratuito o Worker tem 10 ms de CPU por requisição e codificar dezenas
+         de MB estouraria isso; o backend só repassa o fluxo adiante. O tipo e o
+         tamanho vão na query porque o corpo é o arquivo cru em base64, não um
+         multipart (o Worker não abre o corpo para não gastar CPU). */
+      const base64 = await paraBase64(pronto);
+      const r = await fetch(
+        `${API_MEDIA}?tipo=${encodeURIComponent(pronto.type)}&bytes=${pronto.size}`,
+        { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: base64 },
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Falha no upload.');
+      const s = { id: novoId(), kind: 'media', title: '', body: '', mediaKey: j.mediaKey, mediaType: j.mediaType, durationMs: 15000, enabled: true };
+      setDraft(d => [...d, s]);
+      setSelecionado(s.id);
+    } catch (e) {
+      setErroLocal(e.message || 'Falha no upload.');
+    } finally {
+      setSubindo('');
+      if (inputArquivo.current) inputArquivo.current.value = '';
+    }
+  };
+
+  const ocupado = !!subindo || salvando;
+  const noAr = draft.filter(s => s.enabled !== false).length;
+  const voltaMs = draft.filter(s => s.enabled !== false && !ehVideo(s)).reduce((a, s) => a + s.durationMs, 0);
+
+  return (
+    <div style={{ minHeight: '100vh', background: E.bg, color: E.txt }}>
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 20, background: 'rgba(238,242,247,.94)',
+        backdropFilter: 'blur(8px)', borderBottom: `1px solid ${E.line}`, padding: '16px 28px',
+        display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, height: 30,
+          fontFamily: HEADING, fontWeight: 800, fontSize: 20, letterSpacing: '-0.02em', color: '#0072ce',
+        }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 26, height: 26, borderRadius: '50%', background: '#0072ce',
+            color: '#fff', fontSize: 15, fontWeight: 800,
+          }}>N</span>
+          prisma
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontFamily: HEADING, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>Dashboard TV</div>
+          <div style={{ fontSize: 13, color: E.muted }}>
+            {draft.length} slide{draft.length === 1 ? '' : 's'} · {noAr} no ar
+            {voltaMs > 0 && ` · volta do loop em ~${Math.round(voltaMs / 1000)}s (~${Math.round(voltaMs / 60000)}min) (+ os vídeos)`}
+          </div>
+        </div>
+
+        <input ref={inputArquivo} type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+               style={{ display: 'none' }} onChange={e => subirArquivo(e.target.files && e.target.files[0])} />
+        <button className="tv-btn" disabled={ocupado} onClick={() => inputArquivo.current && inputArquivo.current.click()} style={btnClaro}>
+          {subindo ? <><Loader2 size={16} className="tv-girando" /> Subindo…</> : <><ImagePlus size={16} /> Imagem ou vídeo</>}
+        </button>
+        <button className="tv-btn" disabled={ocupado} onClick={novoTexto} style={btnClaro}>
+          <Type size={16} /> Slide de texto
+        </button>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600,
+          color: salvando ? C.blue : sujo ? E.muted : '#1a8d5f', padding: '0 4px',
+        }}>
+          {salvando ? <><Loader2 size={15} className="tv-girando" /> Salvando…</>
+            : sujo ? <><Save size={15} /> Alteração pendente…</>
+            : <><Save size={15} /> Salvo automaticamente</>}
+        </div>
+        <button className="tv-btn" onClick={() => { flush(); onSair(atual ? atual.id : null); }} style={btnClaro}>
+          <Play size={16} /> Exibir
+        </button>
+      </header>
+
+      {(erro || erroLocal) && (
+        <div style={{ margin: '18px 28px 0', background: '#fdeceb', border: '1px solid #f3b9b4', color: '#a4231b', borderRadius: 10, padding: '12px 16px', display: 'flex', gap: 10, fontSize: 14 }}>
+          <AlertTriangle size={18} /> {erro || erroLocal}
+        </div>
+      )}
+
+      <main style={{ padding: '22px 28px 60px', display: 'grid', gap: 18, maxWidth: 1400, margin: '0 auto' }}>
+        {!draft.length && (
+          <div style={{ background: E.card, border: `1px dashed ${E.line}`, borderRadius: 12, padding: '54px 24px', textAlign: 'center', color: E.muted }}>
+            <Tv size={40} style={{ color: C.blueLight, marginBottom: 16 }} strokeWidth={1.5} />
+            <div style={{ fontSize: 16, fontWeight: 600, color: E.txt }}>Painel vazio</div>
+            <div style={{ fontSize: 14, marginTop: 6 }}>Suba uma imagem ou vídeo, ou crie um slide de texto.</div>
+          </div>
+        )}
+
+        {!!atual && (
+          <>
+            {/* Prévia — o que a TV mostraria de fato, em 85% da largura. */}
+            {/* ★★ DUAS CAIXAS, e a razão é sutil: 16/9 vem de `padding-bottom`
+                (o `aspect-ratio` não existe no Safari 14, onde a prévia
+                colapsava sem altura), e padding em PORCENTAGEM resolve contra a
+                largura do BLOCO CONTÊINER, não a do próprio elemento. Com
+                `width:85%` e o padding no MESMO elemento, a altura saía de 85%
+                da largura do pai contra 56,25% dela — medido: 1190x788, ratio
+                1,51 em vez de 1,78. A caixa externa fixa a largura; a interna
+                só cria a proporção, e aí o padding resolve contra a largura
+                certa. O <Slide> filho já é `position:absolute; top:0,right:0,bottom:0,left:0`. */}
+            <div style={{ width: '85%', maxWidth: 1280, margin: '0 auto' }}>
+              <div style={{
+                height: 0, paddingBottom: '56.25%', position: 'relative', borderRadius: 16,
+                overflow: 'hidden', background: C.ink, boxShadow: '0 18px 44px rgba(15,23,42,.28)',
+              }}>
+                <Slide key={atual.id} slide={atual} pausado={false} onFim={() => {}} onErro={() => {}} onTravou={() => {}} />
+              </div>
+            </div>
+
+            {/* Mover a posição do slide atual na trilha geral + editar detalhes */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <button className="tv-btn" title="Mover para trás na trilha" disabled={ocupado || idxAtual <= 0}
+                      onClick={() => move(atual.id, -1)} style={{ ...btnClaro, width: 42, height: 42 }}>
+                <ChevronLeft size={18} />
+              </button>
+              <div style={{ fontSize: 13, color: E.muted, fontWeight: 600, minWidth: 110, textAlign: 'center' }}>
+                Posição {idxAtual + 1} de {draft.length}
+              </div>
+              <button className="tv-btn" title="Mover para frente na trilha" disabled={ocupado || idxAtual >= draft.length - 1}
+                      onClick={() => move(atual.id, 1)} style={{ ...btnClaro, width: 42, height: 42 }}>
+                <ChevronRight size={18} />
+              </button>
+              <button className="tv-btn" onClick={() => setEditandoSlide(true)}
+                      style={{ background: C.blue, color: '#fff', padding: '10px 20px', fontSize: 14, fontWeight: 700, marginLeft: 12 }}>
+                <Pencil size={16} /> Editar slide
+              </button>
+            </div>
+
+            {/* Trilha geral — a ordem aqui é a ordem do loop na TV. */}
+            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 10px' }}>
+              {draft.map((s, k) => (
+                <ItemTrilha key={s.id} slide={s} n={k + 1} ativo={s.id === atual.id} onSelecionar={() => setSelecionado(s.id)} />
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+
+      {editandoSlide && atual && (
+        <PainelEdicao
+          slide={atual}
+          onMuda={patch => muda(atual.id, patch)}
+          onExclui={() => { exclui(atual.id); setEditandoSlide(false); }}
+          onFechar={() => setEditandoSlide(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   APP
+   ============================================================ */
+function App() {
+  const [slides, setSlides] = useState(null);
+  const [podeEditar, setPodeEditar] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [erroCarga, setErroCarga] = useState('');
+  const [slideInicialId, setSlideInicialId] = useState(null);
+
+  const carrega = useCallback(async () => {
+    const r = await fetch(API_DECK, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!r.ok) throw new Error(r.status === 403 ? 'Sem acesso ao painel.' : 'Falha ao carregar o painel.');
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'Falha ao carregar o painel.');
+    return j;
+  }, []);
+
+  useEffect(() => {
+    let vivo = true;
+    carrega()
+      .then(j => { if (!vivo) return; setSlides(garantirGraficosPermanentes(j.slides)); setPodeEditar(!!j.canEdit); setErroCarga(''); })
+      .catch(e => { if (vivo) setErroCarga(e.message); });
+    return () => { vivo = false; };
+  }, [carrega]);
+
+  /* Recarga periódica: é assim que uma edição do gestor chega à TV, que ninguém
+     recarrega à mão. Fica parada enquanto o editor está aberto — senão o deck
+     remoto atropelaria o rascunho de quem está digitando. Falha de rede aqui é
+     ignorada de propósito: a TV segue exibindo o que já tem. */
+  useEffect(() => {
+    if (editando) return;
+    const t = setInterval(() => {
+      carrega()
+        .then(j => setSlides(prev => {
+          const novo = garantirGraficosPermanentes(j.slides);
+          return JSON.stringify(prev) === JSON.stringify(novo) ? prev : novo;
+        }))
+        .catch(() => {});
+    }, RECARGA_MS);
+    return () => clearInterval(t);
+  }, [editando, carrega]);
+
+  const salva = useCallback(async (draft) => {
+    setSalvando(true); setErro('');
+    try {
+      const r = await fetch(API_DECK, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slides: draft }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Não foi possível salvar.');
+      setSlides(garantirGraficosPermanentes(j.slides));
+    } catch (e) {
+      setErro(e.message || 'Não foi possível salvar.');
+    } finally {
+      setSalvando(false);
+    }
+  }, []);
+
+  // Autosave: ao sair, o Editor já garantiu (via flush) que não fica nada pendente.
+  // `slideId` (do botão "Exibir" com um slide selecionado no editor) pula a
+  // exibição direto pra ele — sem isso o caminho até revisar 1 slide era abrir
+  // Apresentação do zero e rolar a trilha inteira até achar o certo.
+  const sai = useCallback((slideId) => {
+    setErro('');
+    setEditando(false);
+    setSlideInicialId(slideId || null);
+  }, []);
+
+  if (erroCarga) {
+    return (
+      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: C.ink, color: C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 40 }}>
+        <div>
+          <AlertTriangle size={52} style={{ color: C.amber, marginBottom: 20 }} />
+          <div style={{ fontFamily: HEADING, fontSize: 28, fontWeight: 700 }}>{erroCarga}</div>
+          <button className="tv-btn" onClick={() => location.reload()} style={{ marginTop: 24, padding: '12px 20px', background: C.blue }}>
+            Tentar de novo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (slides === null) {
+    return (
+      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: C.ink, color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+        Carregando o painel…
+      </div>
+    );
+  }
+
+  if (editando) {
+    return <Editor slides={slides} onSalvar={salva} onSair={sai} salvando={salvando} erro={erro} />;
+  }
+  return (
+    <Exibicao
+      slides={slides} podeEditar={podeEditar} onEditar={() => setEditando(true)}
+      slideInicialId={slideInicialId}
+    />
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

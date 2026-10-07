@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Financeiro Revendas · Intelidata</title>
+<link rel="icon" href="favicon.png" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --azul:#0072ce; --azul-esc:#005ba6; --ambar:#de8d13; --cinza:#777777;
+    --bg:#f4f6f9; --card:#ffffff; --texto:#1f2733; --muted:#6b7683;
+    --borda:#e4e8ee; --verde:#1a9e5f; --vermelho:#d4433a;
+    --sombra:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --sombra-md:0 4px 16px rgba(16,24,40,.08);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--texto); line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--azul)}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 20px 64px}
+  /* ---- Header ---- */
+  header.top{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:16px 0 20px;border-bottom:1px solid var(--borda);margin-bottom:24px;
+  }
+  header.top img{height:34px;width:auto}
+  .title h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .title p{margin:2px 0 0;color:var(--muted);font-size:13px}
+  .spacer{flex:1}
+  .ctrls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  select,button,input,textarea{font-family:inherit;font-size:14px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600}
+  select.yr,input,textarea{
+    background:var(--card);color:var(--texto);border:1px solid var(--borda);
+    border-radius:9px;padding:8px 11px;outline:none;
+  }
+  select.yr:focus,input:focus,textarea:focus{border-color:var(--azul);box-shadow:0 0 0 3px rgba(0,114,206,.15)}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;
+    background:var(--azul);color:#fff;border-radius:9px;padding:9px 15px;
+    font-weight:600;cursor:pointer;transition:background .15s,transform .05s;
+  }
+  .btn:hover{background:var(--azul-esc)} .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:transparent;color:var(--texto);border-color:var(--borda)}
+  .btn.ghost:hover{background:rgba(0,114,206,.07)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .btn.danger{background:var(--vermelho)} .btn.danger:hover{filter:brightness(.92)}
+  /* ---- KPIs ---- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+  .kpi{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--sombra);position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--azul)}
+  .kpi.amber::before{background:var(--ambar)} .kpi.green::before{background:var(--verde)} .kpi.gray::before{background:var(--cinza)}
+  .kpi .lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .val{font-size:26px;font-weight:750;margin-top:6px;letter-spacing:-.5px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  /* ---- Cards ---- */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+  @media (max-width:880px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);padding:18px;box-shadow:var(--sombra);margin-bottom:18px}
+  .card h2{font-size:15px;margin:0 0 4px;font-weight:700}
+  .card .hint{font-size:12px;color:var(--muted);margin:0 0 14px}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .card-head h2{margin:0} .card-head .hint{margin:2px 0 0}
+  .chart-box{position:relative;height:300px}
+  .chart-box.tall{height:340px}
+  /* ---- Tabelas ---- */
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+  th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--borda)}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+  thead th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--borda)}
+  tbody tr:hover td{background:rgba(0,114,206,.05)}
+  tbody tr:hover td:first-child{background:rgba(0,114,206,.05)}
+  td.num{font-variant-numeric:tabular-nums}
+  tr.total-row td{font-weight:700;border-top:2px solid var(--borda);background:rgba(0,114,206,.04)}
+  tr.total-row td:first-child{background:rgba(0,114,206,.04)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.ativo{background:rgba(26,158,95,.15);color:var(--verde)}
+  .pill.inativo{background:rgba(119,119,119,.15);color:var(--cinza)}
+  .row-actions{display:flex;gap:6px;justify-content:flex-end}
+  .icon-btn{border:1px solid var(--borda);background:var(--card);color:var(--muted);border-radius:7px;padding:5px 8px;cursor:pointer;font-size:12px}
+  .icon-btn:hover{color:var(--azul);border-color:var(--azul)}
+  .icon-btn.del:hover{color:var(--vermelho);border-color:var(--vermelho)}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .filters input,.filters select{padding:7px 10px}
+  .muted{color:var(--muted)} .empty{padding:28px;text-align:center;color:var(--muted)}
+  /* ---- Modal ---- */
+  .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.55);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--card);border-radius:16px;box-shadow:var(--sombra-md);width:100%;max-width:520px;max-height:92vh;overflow:auto}
+  .modal-head{padding:18px 20px;border-bottom:1px solid var(--borda);display:flex;justify-content:space-between;align-items:center}
+  .modal-head h3{margin:0;font-size:16px}
+  .modal-body{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .modal-body .full{grid-column:1/-1}
+  .modal-body label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
+  .modal-body input,.modal-body textarea,.modal-body select{width:100%}
+  .modal-foot{padding:16px 20px;border-top:1px solid var(--borda);display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .err{color:var(--vermelho);font-size:13px;min-height:18px}
+  .close-x{border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1}
+  /* toast */
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--texto);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:60}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--vermelho);color:#fff}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <img src="intelidata.png" alt="Intelidata" onerror="this.style.display='none'"/>
+    <div class="title">
+      <h1>Financeiro Revendas</h1>
+      <p>Recorrência, previsão anual e contratos de Serviços de Marketing</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="ctrls">
+      <div class="field">
+        <label for="ano">Ano</label>
+        <select id="ano" class="yr"></select>
+      </div>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Recorrência mês a mês</h2><p class="hint" id="rec-hint">Receita mensal e acumulado do ano</p></div>
+      </div>
+      <div class="chart-box"><canvas id="chartRec"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Previsão anual por revenda</h2><p class="hint">Contribuição de cada cliente na receita prevista do ano</p></div>
+      </div>
+      <div class="chart-box tall"><canvas id="chartRev"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Recorrência por cliente</h2><p class="hint">Valor mensal de cada revenda, mês a mês (meses futuros = projeção dos contratos ativos)</p></div>
+    </div>
+    <div class="tbl-scroll"><table id="pivot"></table></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Por tipo de serviço</h2><p class="hint" id="plano-hint">Contratos ativos e receita mensal por plano no mês de referência</p></div>
+      </div>
+      <div class="tbl-scroll"><table id="planos"></table></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Mix de receita por serviço</h2><p class="hint">Participação de cada plano na recorrência do mês de referência</p></div>
+      </div>
+      <div class="chart-box"><canvas id="chartPlano"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Contratos</h2><p class="hint">Fonte da verdade. Adicione, edite ou encerre — os cálculos acima recalculam na hora.</p></div>
+      <button class="btn sm" id="novo2">+ Novo</button>
+    </div>
+    <div class="filters">
+      <input id="busca" placeholder="Buscar revenda ou plano…" style="min-width:220px"/>
+      <select id="fstatus" class="yr">
+        <option value="">Todos os status</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+      </select>
+      <select id="fano" class="yr"><option value="">Qualquer ano</option></select>
+      <select id="frevenda" class="yr"><option value="">Todas as revendas</option></select>
+      <span class="muted" id="cont-count" style="margin-left:auto;font-size:13px"></span>
+    </div>
+    <div class="tbl-scroll"><table id="contratos"></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Ordens de Serviço</h2><p class="hint">Registro operacional mês a mês (migrado da planilha): valor cobrado, verba de Ads, nº da OS, boleto, faturamento e observações. É um log à parte — não altera os gráficos acima.</p></div>
+      <button class="btn sm" id="os-novo">+ Nova OS</button>
+    </div>
+    <div class="filters">
+      <input id="os-busca" placeholder="Buscar revenda, plano ou nº da OS…" style="min-width:240px"/>
+      <select id="os-fstatus" class="yr">
+        <option value="">Todos os status</option>
+        <option value="ativa">Ativas</option>
+        <option value="inativa">Inativas</option>
+      </select>
+      <select id="os-ffat" class="yr">
+        <option value="">Faturamento (todos)</option>
+        <option value="fat">Faturadas</option>
+        <option value="nfat">Não faturadas</option>
+      </select>
+      <select id="os-fano" class="yr"><option value="">Qualquer ano</option></select>
+      <select id="os-frevenda" class="yr"><option value="">Todas as revendas</option></select>
+      <span class="muted" id="os-count" style="margin-left:auto;font-size:13px"></span>
+    </div>
+    <div class="tbl-scroll"><table id="ordens"></table></div>
+  </div>
+</div>
+
+<!-- Modal contrato -->
+<div class="modal-bg" id="modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3 id="modal-title">Novo contrato</h3>
+      <button class="close-x" id="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="full">
+        <label for="f-revenda">Revenda</label>
+        <input id="f-revenda" list="revendas-list" autocomplete="off" placeholder="Ex.: Vetta Sistemas"/>
+        <datalist id="revendas-list"></datalist>
+      </div>
+      <div class="full">
+        <label for="f-plano">Plano / serviço</label>
+        <input id="f-plano" list="planos-list" autocomplete="off" placeholder="Ex.: Pro"/>
+        <datalist id="planos-list">
+          <option value="Pro"></option><option value="Redes Sociais"></option>
+          <option value="Geração de Leads"></option><option value="E-mail Marketing"></option>
+          <option value="Geração de Leads + E-mail Marketing"></option>
+          <option value="Consultoria"></option><option value="Design"></option>
+        </datalist>
+      </div>
+      <div>
+        <label for="f-valor">Valor mensal (R$)</label>
+        <input id="f-valor" type="number" min="0" step="0.01" placeholder="1259,00"/>
+      </div>
+      <div>
+        <label for="f-status">Status</label>
+        <select id="f-status" class="yr"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
+      </div>
+      <div>
+        <label for="f-inicio">Início (mês)</label>
+        <input id="f-inicio" type="month"/>
+      </div>
+      <div>
+        <label for="f-fim">Fim (mês)</label>
+        <input id="f-fim" type="month"/>
+      </div>
+      <div class="full">
+        <label for="f-obs">Observação (opcional)</label>
+        <textarea id="f-obs" rows="2" placeholder="Ex.: renovação em negociação"></textarea>
+      </div>
+      <div class="full">
+        <label style="display:flex;align-items:center;gap:7px;font-weight:600;color:var(--texto);cursor:pointer;margin:0">
+          <input id="f-cliente-externo" type="checkbox" style="width:auto"/> Cliente Externo
+        </label>
+      </div>
+      <div class="full err" id="modal-err"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger sm" id="modal-del" style="visibility:hidden">Excluir</button>
+      <div style="display:flex;gap:10px;margin-left:auto">
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn" id="modal-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal ordem de serviço -->
+<div class="modal-bg" id="os-modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3 id="os-modal-title">Nova ordem de serviço</h3>
+      <button class="close-x" id="os-modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="full">
+        <label for="os-revenda">Revenda</label>
+        <input id="os-revenda" list="revendas-list" autocomplete="off" placeholder="Ex.: Vetta Sistemas"/>
+      </div>
+      <div class="full">
+        <label for="os-plano">Plano / serviço</label>
+        <input id="os-plano" list="planos-list" autocomplete="off" placeholder="Ex.: Pro"/>
+      </div>
+      <div>
+        <label for="os-valor">Valor cobrado (R$)</label>
+        <input id="os-valor" type="number" min="0" step="0.01" placeholder="1329,00"/>
+      </div>
+      <div>
+        <label for="os-mes">Referente ao mês</label>
+        <input id="os-mes" type="month"/>
+      </div>
+      <div>
+        <label for="os-vigencia">Vigência do contrato</label>
+        <input id="os-vigencia" list="vigencia-list" autocomplete="off" placeholder="Ex.: 06 meses"/>
+        <datalist id="vigencia-list">
+          <option value="03 meses"></option><option value="06 meses"></option><option value="12 meses"></option>
+        </datalist>
+      </div>
+      <div>
+        <label for="os-parcela">Parcela</label>
+        <input id="os-parcela" type="number" min="0" step="1" placeholder="Ex.: 3"/>
+      </div>
+      <div>
+        <label for="os-numserv">Nº de Serviço</label>
+        <input id="os-numserv" autocomplete="off" placeholder="Ex.: 35320"/>
+      </div>
+      <div>
+        <label for="os-ads">Verba de Ads (R$)</label>
+        <input id="os-ads" type="number" min="0" step="0.01" placeholder="1500,00"/>
+      </div>
+      <div>
+        <label for="os-venc">Vencimento do boleto</label>
+        <input id="os-venc" type="date"/>
+      </div>
+      <div>
+        <label for="os-feita">Feita a OS no dia</label>
+        <input id="os-feita" type="date"/>
+      </div>
+      <div>
+        <label for="os-status">Status atual</label>
+        <select id="os-status" class="yr"><option value="ativa">Ativa</option><option value="inativa">Inativa</option></select>
+      </div>
+      <div style="display:flex;gap:18px;align-items:flex-end;padding-bottom:6px">
+        <label style="display:flex;align-items:center;gap:7px;font-weight:600;color:var(--texto);cursor:pointer;margin:0">
+          <input id="os-finalizado" type="checkbox" style="width:auto"/> Finalizado
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-weight:600;color:var(--texto);cursor:pointer;margin:0">
+          <input id="os-faturado" type="checkbox" style="width:auto"/> Faturado
+        </label>
+      </div>
+      <div class="full">
+        <label for="os-obs">Observação (opcional)</label>
+        <textarea id="os-obs" rows="2" placeholder="Ex.: Usado R$1.531,97"></textarea>
+      </div>
+      <div class="full err" id="os-modal-err"></div>
+    </div>
+    <div class="modal-foot">
+      <div style="display:flex;gap:10px">
+        <button class="btn danger sm" id="os-modal-del" style="visibility:hidden">Excluir</button>
+        <button class="btn ghost sm" id="os-modal-dup" style="visibility:hidden">Duplicar</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-left:auto">
+        <button class="btn ghost" id="os-modal-cancel">Cancelar</button>
+        <button class="btn" id="os-modal-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="mock-api.js"></script>
+<script>
+(function(){
+  "use strict";
+  const API = "/api/financeiro/contratos";
+  const API_OS = "/api/financeiro/ordens";
+  const MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const brl = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});
+  const brl0 = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
+  const fmt = v => brl.format(v||0);
+  const now = new Date();
+  const anoAtual = now.getFullYear();
+  const mesAtualIdx = now.getMonth(); // 0-11
+
+  // paleta categórica (revendas) — azul Intelidata como base + tons harmônicos
+  const PALETA = ["#0072ce","#de8d13","#1a9e5f","#8e44c9","#e0567b","#12a5b5","#e0913a","#5b7cc9",
+                  "#c0562f","#5aa02c","#a34fb0","#d94f4f","#2d8fa8","#b8863a","#6d6df0","#3aa88f"];
+  const corDe = (i)=>PALETA[i % PALETA.length];
+
+  // ---------- helpers de mês 'YYYY-MM' ----------
+  const ym = (y,m)=>`${y}-${String(m).padStart(2,"0")}`; // m: 1-12
+  const rotulo = (mk)=>{const [y,m]=mk.split("-");return `${MESES[+m-1]}/${y.slice(2)}`;};
+  const parse = (mk)=>{const [y,m]=mk.split("-").map(Number);return y*12+(m-1);};
+  const diffMeses = (a,b)=>parse(b)-parse(a)+1; // inclusivo
+  const dentroDoAno = (c,y)=>{
+    const lo = c.inicio > ym(y,1) ? c.inicio : ym(y,1);
+    const hi = c.fim   < ym(y,12) ? c.fim   : ym(y,12);
+    return hi>=lo ? diffMeses(lo,hi) : 0;
+  };
+  const ativoEm = (c,mk)=>c.inicio<=mk && mk<=c.fim;
+
+  // ---------- estado ----------
+  let contratos = [];
+  let ordens = [];
+  let ano = anoAtual;
+  let charts = {};
+  let editId = null;
+  let osEditId = null;
+
+  if(window.Chart){ Chart.defaults.animation=false; Chart.defaults.font.family="'Segoe UI',system-ui,-apple-system,sans-serif"; }
+
+  const $ = s => document.querySelector(s);
+  const el = (t,cls,html)=>{const e=document.createElement(t);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;};
+
+  function toast(msg, isErr){
+    const t=$("#toast"); t.textContent=msg; t.className="show"+(isErr?" err":"");
+    setTimeout(()=>t.className=t.className.replace("show",""),2600);
+  }
+
+  // ---------- carregar ----------
+  async function carregar(){
+    try{
+      const r = await fetch(API,{headers:{Accept:"application/json"}});
+      const j = await r.json();
+      contratos = (j.contratos||[]).map(c=>({...c, valor_mensal:Number(c.valor_mensal)}));
+    }catch(e){ contratos=[]; toast("Falha ao carregar contratos",true); }
+    montarAnos();
+    render();
+  }
+  async function carregarOrdens(){
+    try{
+      const r = await fetch(API_OS,{headers:{Accept:"application/json"}});
+      const j = await r.json();
+      ordens = (j.ordens||[]).map(o=>({...o, valor:Number(o.valor), ads:o.ads==null?null:Number(o.ads)}));
+    }catch(e){ ordens=[]; toast("Falha ao carregar ordens de serviço",true); }
+    montarAnosOS();
+    renderOrdens();
+  }
+
+  function anosComDados(){
+    const s = new Set([anoAtual]);
+    contratos.forEach(c=>{
+      const yi=+c.inicio.slice(0,4), yf=+c.fim.slice(0,4);
+      for(let y=yi;y<=yf;y++) s.add(y);
+    });
+    return [...s].sort((a,b)=>a-b);
+  }
+  function montarAnos(){
+    const anos = anosComDados();
+    const sel=$("#ano"); sel.innerHTML="";
+    anos.forEach(y=>{const o=el("option");o.value=y;o.textContent=y;if(y===ano)o.selected=true;sel.appendChild(o);});
+    const fano=$("#fano");
+    fano.innerHTML='<option value="">Qualquer ano</option>'+anos.map(y=>`<option value="${y}">${y}</option>`).join("");
+    // datalist de revendas
+    const revs=[...new Set(contratos.map(c=>c.revenda))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+    $("#revendas-list").innerHTML=revs.map(r=>`<option value="${esc(r)}"></option>`).join("");
+    // filtro de revenda (preserva a seleção atual)
+    const frev=$("#frevenda"), curRev=frev.value;
+    frev.innerHTML='<option value="">Todas as revendas</option>'+revs.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("");
+    if(revs.includes(curRev)) frev.value=curRev;
+  }
+  const esc = s => String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+  // ---------- derivações ----------
+  function serieMensal(y){
+    const meses = Array.from({length:12},(_,i)=>ym(y,i+1));
+    const mensal = meses.map(mk=>contratos.reduce((s,c)=>s+(ativoEm(c,mk)?c.valor_mensal:0),0));
+    let acc=0; const acumulado = mensal.map(v=>acc+=v);
+    return {meses,mensal,acumulado};
+  }
+  function previsaoAno(y){ return contratos.reduce((s,c)=>s+dentroDoAno(c,y)*c.valor_mensal,0); }
+  // mês de referência: se ano corrente => mês atual; passado => dez; futuro => jan
+  function mesRefIdx(y){ return y===anoAtual ? mesAtualIdx : (y<anoAtual?11:0); }
+
+  function render(){
+    ano = +$("#ano").value || anoAtual;
+    const {meses,mensal,acumulado} = serieMensal(ano);
+    const prev = previsaoAno(ano);
+    const refIdx = mesRefIdx(ano);
+    const refMk = meses[refIdx];
+    const recorRef = mensal[refIdx];
+    const adquirido = acumulado[refIdx];        // acumulado até o mês de referência
+    const restante = prev - adquirido;
+    const ativosRef = contratos.filter(c=>ativoEm(c,refMk));
+    const nClientes = new Set(ativosRef.map(c=>c.revenda)).size;
+    const ticket = nClientes ? recorRef/nClientes : 0;
+
+    // KPIs
+    $("#kpis").innerHTML = "";
+    const kpi = (cls,lbl,val,sub)=>{const k=el("div","kpi "+cls);k.innerHTML=`<div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub||""}</div>`;$("#kpis").appendChild(k);};
+    kpi("", `Recorrência · ${rotulo(refMk)}`, fmt(recorRef), `${nClientes} cliente(s) ativo(s)`);
+    kpi("green","Adquirido no ano", fmt(adquirido), `acumulado até ${rotulo(refMk)}`);
+    kpi("amber","Receita prevista", fmt(prev), `projeção ${ano} (contratos)`);
+    kpi("gray","Restante do ano", fmt(restante), `${prev>0?Math.round(adquirido/prev*100):0}% já adquirido`);
+    kpi("","Ticket médio", fmt(ticket), `por cliente ativo`);
+
+    $("#rec-hint").textContent = `Receita mensal de ${ano} · adquirido ${brl0.format(adquirido)} de ${brl0.format(prev)} previstos`;
+    $("#plano-hint").textContent = `Contratos ativos e receita mensal por plano em ${rotulo(refMk)}`;
+
+    renderChartRec(meses,mensal);
+    renderChartRev(ano);
+    renderPivot(ano,meses,mensal);
+    renderPlanos(refMk);
+    renderChartPlano(refMk);
+    renderContratos();
+  }
+
+  // ---------- charts ----------
+  function gridColor(){return getComputedStyle(document.body).getPropertyValue("--borda").trim();}
+  function txtColor(){return getComputedStyle(document.body).getPropertyValue("--muted").trim();}
+  function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+  const kfmt=v=>v>=1000?"R$ "+(v/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+"k":brl0.format(v);
+
+  // Plugin: escreve o valor (compacto) acima de cada barra vertical.
+  const rotuloTopo={
+    id:"rotuloTopo",
+    afterDatasetsDraw(chart){
+      const {ctx}=chart, meta=chart.getDatasetMeta(0);
+      ctx.save();ctx.fillStyle=txtColor();ctx.font="600 10px 'Segoe UI',system-ui,sans-serif";ctx.textAlign="center";
+      meta.data.forEach((bar,i)=>{const v=chart.data.datasets[0].data[i];if(v>0)ctx.fillText(kfmt(v),bar.x,bar.y-5);});
+      ctx.restore();
+    }
+  };
+  // Plugin: escreve o valor no fim de cada barra horizontal.
+  const rotuloFim={
+    id:"rotuloFim",
+    afterDatasetsDraw(chart){
+      const {ctx}=chart, meta=chart.getDatasetMeta(0);
+      ctx.save();ctx.fillStyle=txtColor();ctx.font="600 10px 'Segoe UI',system-ui,sans-serif";ctx.textBaseline="middle";ctx.textAlign="left";
+      meta.data.forEach((bar,i)=>{const v=chart.data.datasets[0].data[i];if(v>0)ctx.fillText(brl0.format(v),bar.x+6,bar.y);});
+      ctx.restore();
+    }
+  };
+
+  function renderChartRec(meses,mensal){
+    const ctx=$("#chartRec"); if(charts.rec)charts.rec.destroy();
+    charts.rec=new Chart(ctx,{
+      type:"bar",
+      data:{labels:meses.map(rotulo),datasets:[{label:"Recorrência mensal",data:mensal,backgroundColor:css("--azul"),borderRadius:5,maxBarThickness:46}]},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+fmt(c.parsed.y)}}},
+        scales:{
+          x:{grid:{display:false},ticks:{color:txtColor(),font:{size:11}}},
+          y:{beginAtZero:true,grid:{color:gridColor()},ticks:{color:txtColor(),font:{size:11},callback:v=>brl0.format(v)}}
+        }},
+      plugins:[rotuloTopo]
+    });
+  }
+  function renderChartRev(y){
+    const map={};
+    contratos.forEach(c=>{const v=dentroDoAno(c,y)*c.valor_mensal; if(v>0) map[c.revenda]=(map[c.revenda]||0)+v;});
+    const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    const ctx=$("#chartRev"); if(charts.rev)charts.rev.destroy();
+    charts.rev=new Chart(ctx,{
+      type:"bar",
+      data:{labels:arr.map(a=>a[0]),datasets:[{label:"Previsão anual",data:arr.map(a=>a[1]),backgroundColor:arr.map((_,i)=>corDe(i)),borderRadius:5,maxBarThickness:28}]},
+      options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,layout:{padding:{right:64}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+fmt(c.parsed.x)}}},
+        scales:{
+          x:{beginAtZero:true,grid:{color:gridColor()},ticks:{color:txtColor(),font:{size:11},callback:v=>brl0.format(v)}},
+          y:{grid:{display:false},ticks:{color:txtColor(),font:{size:11,weight:"600"},autoSkip:false}}
+        }},
+      plugins:[rotuloFim]
+    });
+  }
+  function renderChartPlano(refMk){
+    const map={};
+    contratos.filter(c=>ativoEm(c,refMk)).forEach(c=>{map[c.plano]=(map[c.plano]||0)+c.valor_mensal;});
+    const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    const ctx=$("#chartPlano"); if(charts.plano)charts.plano.destroy();
+    if(!arr.length){ctx.getContext("2d").clearRect(0,0,ctx.width,ctx.height);return;}
+    charts.plano=new Chart(ctx,{
+      type:"doughnut",
+      data:{labels:arr.map(a=>a[0]),datasets:[{data:arr.map(a=>a[1]),backgroundColor:arr.map((_,i)=>corDe(i)),borderWidth:2,borderColor:css("--card")}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:"58%",
+        plugins:{legend:{position:"right",labels:{color:txtColor(),boxWidth:12,padding:10,font:{size:11}}},
+          tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.parsed)}`}}}}
+    });
+  }
+  // ---------- pivot ----------
+  function renderPivot(y,meses,totalMensal){
+    const revs=[...new Set(contratos.filter(c=>dentroDoAno(c,y)>0 || meses.some(mk=>ativoEm(c,mk))).map(c=>c.revenda))]
+      .sort((a,b)=>a.localeCompare(b,"pt-BR"));
+    const t=$("#pivot"); t.innerHTML="";
+    const thead=el("thead"); const hr=el("tr");
+    hr.appendChild(el("th",null,"Mês"));
+    revs.forEach(r=>hr.appendChild(el("th",null,esc(r))));
+    hr.appendChild(el("th",null,"Total"));
+    thead.appendChild(hr); t.appendChild(thead);
+    const tb=el("tbody");
+    meses.forEach((mk,i)=>{
+      const tr=el("tr");
+      tr.appendChild(el("td",null,rotulo(mk)));
+      revs.forEach(r=>{
+        const v=contratos.filter(c=>c.revenda===r&&ativoEm(c,mk)).reduce((s,c)=>s+c.valor_mensal,0);
+        tr.appendChild(el("td","num",v?brl0.format(v):'<span class="muted">—</span>'));
+      });
+      tr.appendChild(el("td","num","<b>"+brl0.format(totalMensal[i])+"</b>"));
+      tb.appendChild(tr);
+    });
+    // total previsto por revenda
+    const tr=el("tr","total-row");
+    tr.appendChild(el("td",null,"Previsto "+y));
+    let soma=0;
+    revs.forEach(r=>{const v=contratos.filter(c=>c.revenda===r).reduce((s,c)=>s+dentroDoAno(c,y)*c.valor_mensal,0);soma+=v;tr.appendChild(el("td","num",v?brl0.format(v):"—"));});
+    tr.appendChild(el("td","num",brl0.format(soma)));
+    tb.appendChild(tr);
+    t.appendChild(tb);
+  }
+
+  // ---------- planos ----------
+  function renderPlanos(refMk){
+    const map={};
+    contratos.filter(c=>ativoEm(c,refMk)).forEach(c=>{const k=c.plano;(map[k]=map[k]||{n:0,v:0}).n++;map[k].v+=c.valor_mensal;});
+    const arr=Object.entries(map).sort((a,b)=>b[1].v-a[1].v);
+    const t=$("#planos"); t.innerHTML="";
+    t.innerHTML='<thead><tr><th>Plano</th><th>Contratos</th><th>Receita mensal</th></tr></thead>';
+    const tb=el("tbody");
+    if(!arr.length){tb.innerHTML='<tr><td colspan="3" class="empty">Nenhum contrato ativo neste mês.</td></tr>';}
+    let tn=0,tv=0;
+    arr.forEach(([k,o])=>{tn+=o.n;tv+=o.v;const tr=el("tr");tr.innerHTML=`<td>${esc(k)}</td><td class="num">${o.n}</td><td class="num">${fmt(o.v)}</td>`;tb.appendChild(tr);});
+    if(arr.length){const tr=el("tr","total-row");tr.innerHTML=`<td>Total</td><td class="num">${tn}</td><td class="num">${fmt(tv)}</td>`;tb.appendChild(tr);}
+    t.appendChild(tb);
+  }
+
+  // ---------- tabela de contratos ----------
+  function renderContratos(){
+    const busca=($("#busca").value||"").toLowerCase().trim();
+    const fst=$("#fstatus").value; const fan=$("#fano").value; const frev=$("#frevenda").value;
+    let list=contratos.slice();
+    if(busca) list=list.filter(c=>(c.revenda+" "+c.plano).toLowerCase().includes(busca));
+    if(fst) list=list.filter(c=>c.status===fst);
+    if(frev) list=list.filter(c=>c.revenda===frev);
+    if(fan){const y=+fan;list=list.filter(c=>+c.inicio.slice(0,4)<=y && +c.fim.slice(0,4)>=y);}
+    list.sort((a,b)=>a.revenda.localeCompare(b.revenda,"pt-BR")||a.inicio.localeCompare(b.inicio));
+    const t=$("#contratos"); t.innerHTML="";
+    t.innerHTML='<thead><tr><th>Revenda</th><th>Plano</th><th>Valor mensal</th><th>Início</th><th>Fim</th><th>Meses</th><th>Status</th><th></th></tr></thead>';
+    const tb=el("tbody");
+    if(!list.length){tb.innerHTML='<tr><td colspan="8" class="empty">Nenhum contrato encontrado.</td></tr>';}
+    list.forEach(c=>{
+      const tr=el("tr");
+      const rotuloExterno=c.cliente_externo?' <span class="pill inativo" title="Cliente externo — não é revenda">Externo</span>':'';
+      tr.innerHTML=`<td>${esc(c.revenda)}${rotuloExterno}</td><td>${esc(c.plano)}</td>
+        <td class="num">${fmt(c.valor_mensal)}</td>
+        <td class="num">${rotulo(c.inicio)}</td><td class="num">${rotulo(c.fim)}</td>
+        <td class="num">${diffMeses(c.inicio,c.fim)}</td>
+        <td><span class="pill ${c.status}">${c.status}</span></td>
+        <td><div class="row-actions">
+          <button class="icon-btn" data-edit="${c.id}">Editar</button>
+          <button class="icon-btn del" data-del="${c.id}">Excluir</button>
+        </div></td>`;
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    $("#cont-count").textContent=`${list.length} de ${contratos.length} contrato(s)`;
+    tb.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>abrirModal(+b.dataset.edit));
+    tb.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>excluir(+b.dataset.del));
+  }
+
+  // ---------- modal / CRUD ----------
+  function abrirModal(id){
+    editId=id||null;
+    $("#modal-err").textContent="";
+    const c = id ? contratos.find(x=>x.id===id) : null;
+    $("#modal-title").textContent = c?"Editar contrato":"Novo contrato";
+    $("#f-revenda").value=c?c.revenda:"";
+    $("#f-plano").value=c?c.plano:"";
+    $("#f-valor").value=c?c.valor_mensal:"";
+    $("#f-status").value=c?c.status:"ativo";
+    $("#f-inicio").value=c?c.inicio:ym(ano,1);
+    $("#f-fim").value=c?c.fim:ym(ano,12);
+    $("#f-obs").value=c&&c.obs?c.obs:"";
+    $("#f-cliente-externo").checked=c?!!c.cliente_externo:false;
+    $("#modal-del").style.visibility=id?"visible":"hidden";
+    $("#modal").classList.add("open");
+    $("#f-revenda").focus();
+  }
+  function fecharModal(){$("#modal").classList.remove("open");editId=null;}
+
+  async function salvar(){
+    const body={
+      revenda:$("#f-revenda").value.trim(),
+      plano:$("#f-plano").value.trim(),
+      valor_mensal:$("#f-valor").value,
+      inicio:$("#f-inicio").value,
+      fim:$("#f-fim").value,
+      status:$("#f-status").value,
+      obs:$("#f-obs").value.trim(),
+      cliente_externo:$("#f-cliente-externo").checked,
+    };
+    // validação leve no cliente (o backend revalida)
+    if(!body.revenda||!body.plano){$("#modal-err").textContent="Preencha revenda e plano.";return;}
+    if(!body.inicio||!body.fim){$("#modal-err").textContent="Informe início e fim.";return;}
+    if(body.fim<body.inicio){$("#modal-err").textContent="O fim não pode ser anterior ao início.";return;}
+    if(!(Number(body.valor_mensal)>=0)){$("#modal-err").textContent="Valor mensal inválido.";return;}
+    $("#modal-save").disabled=true;
+    try{
+      const url = editId?`${API}/${editId}`:API;
+      const r = await fetch(url,{method:editId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j = await r.json();
+      if(!r.ok||!j.ok){throw new Error(j.error||("HTTP "+r.status));}
+      fecharModal();
+      await carregar();
+      toast(editId?"Contrato atualizado":"Contrato criado");
+    }catch(e){$("#modal-err").textContent=String(e.message||e);}
+    finally{$("#modal-save").disabled=false;}
+  }
+  async function excluir(id){
+    const c=contratos.find(x=>x.id===id);
+    if(!confirm(`Excluir o contrato de ${c?c.revenda:""} (${c?rotulo(c.inicio)+"→"+rotulo(c.fim):""})?`))return;
+    try{
+      const r=await fetch(`${API}/${id}`,{method:"DELETE",headers:{Accept:"application/json"}});
+      const j=await r.json();
+      if(!r.ok||!j.ok)throw new Error(j.error||("HTTP "+r.status));
+      await carregar(); toast("Contrato excluído");
+    }catch(e){toast(String(e.message||e),true);}
+  }
+
+  // ---------- ordens de serviço ----------
+  const fdata = s => { if(!s) return "—"; const [y,m,d]=String(s).split("-"); return `${d}/${m}/${y.slice(2)}`; };
+
+  function montarAnosOS(){
+    const s=new Set();
+    ordens.forEach(o=>{ if(o.referente_mes) s.add(+o.referente_mes.slice(0,4)); });
+    const anos=[...s].sort((a,b)=>b-a);
+    $("#os-fano").innerHTML='<option value="">Qualquer ano</option>'+anos.map(y=>`<option value="${y}">${y}</option>`).join("");
+    // completa o datalist de revendas com as que só existem em OS
+    const revs=[...new Set([...contratos.map(c=>c.revenda),...ordens.map(o=>o.revenda)])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+    $("#revendas-list").innerHTML=revs.map(r=>`<option value="${esc(r)}"></option>`).join("");
+    // filtro de revenda das OS (só as revendas presentes nas ordens; preserva a seleção)
+    const osRevs=[...new Set(ordens.map(o=>o.revenda))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+    const frev=$("#os-frevenda"), curRev=frev.value;
+    frev.innerHTML='<option value="">Todas as revendas</option>'+osRevs.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("");
+    if(osRevs.includes(curRev)) frev.value=curRev;
+  }
+
+  function renderOrdens(){
+    const busca=($("#os-busca").value||"").toLowerCase().trim();
+    const fst=$("#os-fstatus").value, ffat=$("#os-ffat").value, fan=$("#os-fano").value, frev=$("#os-frevenda").value;
+    let list=ordens.slice();
+    if(busca) list=list.filter(o=>(o.revenda+" "+o.plano+" "+(o.num_servico||"")).toLowerCase().includes(busca));
+    if(fst) list=list.filter(o=>o.status===fst);
+    if(frev) list=list.filter(o=>o.revenda===frev);
+    if(ffat==="fat") list=list.filter(o=>o.faturado); else if(ffat==="nfat") list=list.filter(o=>!o.faturado);
+    if(fan) list=list.filter(o=>o.referente_mes.slice(0,4)===fan);
+    list.sort((a,b)=>b.referente_mes.localeCompare(a.referente_mes)||a.revenda.localeCompare(b.revenda,"pt-BR"));
+    const t=$("#ordens"); t.innerHTML="";
+    t.innerHTML='<thead><tr><th>Mês</th><th>Revenda</th><th>Plano</th><th>Valor</th><th>Parc.</th><th>Nº OS</th><th>Ads</th><th>Vencimento</th><th>Feita em</th><th>Fat.</th><th>Final.</th><th>Status</th><th></th></tr></thead>';
+    const tb=el("tbody");
+    if(!list.length){tb.innerHTML='<tr><td colspan="13" class="empty">Nenhuma ordem de serviço encontrada.</td></tr>';}
+    const sim=v=>v?'<span class="pill ativo">Sim</span>':'<span class="muted">—</span>';
+    let totV=0, totA=0;
+    list.forEach(o=>{
+      totV+=o.valor||0; totA+=o.ads||0;
+      const tr=el("tr");
+      tr.innerHTML=`<td class="num">${rotulo(o.referente_mes)}</td>
+        <td>${esc(o.revenda)}</td><td>${esc(o.plano)}</td>
+        <td class="num">${fmt(o.valor)}</td>
+        <td class="num">${o.parcela!=null?o.parcela:'—'}</td>
+        <td class="num">${o.num_servico?esc(o.num_servico):'—'}</td>
+        <td class="num">${o.ads!=null?fmt(o.ads):'<span class="muted">—</span>'}</td>
+        <td class="num">${fdata(o.venc_boleto)}</td>
+        <td class="num">${fdata(o.feita_em)}</td>
+        <td>${sim(o.faturado)}</td><td>${sim(o.finalizado)}</td>
+        <td><span class="pill ${o.status==='ativa'?'ativo':'inativo'}">${o.status}</span></td>
+        <td><div class="row-actions">
+          <button class="icon-btn" data-osedit="${o.id}">Editar</button>
+          <button class="icon-btn del" data-osdel="${o.id}">Excluir</button>
+        </div></td>`;
+      tb.appendChild(tr);
+    });
+    if(list.length){
+      const tr=el("tr","total-row");
+      tr.innerHTML=`<td colspan="3">Total (${list.length} OS)</td><td class="num">${fmt(totV)}</td><td></td><td></td><td class="num">${fmt(totA)}</td><td></td><td></td><td></td><td></td><td></td><td></td>`;
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb);
+    $("#os-count").textContent=`${list.length} de ${ordens.length} OS`;
+    tb.querySelectorAll("[data-osedit]").forEach(b=>b.onclick=()=>abrirModalOS(+b.dataset.osedit));
+    tb.querySelectorAll("[data-osdel]").forEach(b=>b.onclick=()=>excluirOS(+b.dataset.osdel));
+  }
+
+  function abrirModalOS(id){
+    osEditId=id||null;
+    $("#os-modal-err").textContent="";
+    const o = id ? ordens.find(x=>x.id===id) : null;
+    $("#os-modal-title").textContent = o?"Editar ordem de serviço":"Nova ordem de serviço";
+    $("#os-revenda").value=o?o.revenda:"";
+    $("#os-plano").value=o?o.plano:"";
+    $("#os-valor").value=o?o.valor:"";
+    $("#os-mes").value=o?o.referente_mes:ym(ano,mesRefIdx(ano)+1);
+    $("#os-vigencia").value=o&&o.vigencia?o.vigencia:"";
+    $("#os-parcela").value=o&&o.parcela!=null?o.parcela:"";
+    $("#os-numserv").value=o&&o.num_servico?o.num_servico:"";
+    $("#os-ads").value=o&&o.ads!=null?o.ads:"";
+    $("#os-venc").value=o&&o.venc_boleto?o.venc_boleto:"";
+    $("#os-feita").value=o&&o.feita_em?o.feita_em:"";
+    $("#os-status").value=o?o.status:"ativa";
+    $("#os-finalizado").checked=o?!!o.finalizado:false;
+    $("#os-faturado").checked=o?!!o.faturado:false;
+    $("#os-obs").value=o&&o.obs?o.obs:"";
+    $("#os-modal-del").style.visibility=id?"visible":"hidden";
+    $("#os-modal-dup").style.visibility=id?"visible":"hidden";
+    $("#os-modal").classList.add("open");
+    $("#os-revenda").focus();
+  }
+  function fecharModalOS(){$("#os-modal").classList.remove("open");osEditId=null;}
+  function duplicarOS(){
+    if(!osEditId)return;
+    osEditId=null;
+    $("#os-modal-title").textContent="Nova ordem de serviço (duplicada)";
+    $("#os-modal-del").style.visibility="hidden";
+    $("#os-modal-dup").style.visibility="hidden";
+    $("#os-modal-err").textContent="";
+    $("#os-mes").focus();
+  }
+
+  async function salvarOS(){
+    const body={
+      revenda:$("#os-revenda").value.trim(),
+      plano:$("#os-plano").value.trim(),
+      valor:$("#os-valor").value,
+      referente_mes:$("#os-mes").value,
+      vigencia:$("#os-vigencia").value.trim(),
+      parcela:$("#os-parcela").value===""?"":$("#os-parcela").value,
+      num_servico:$("#os-numserv").value.trim(),
+      ads:$("#os-ads").value===""?"":$("#os-ads").value,
+      venc_boleto:$("#os-venc").value,
+      feita_em:$("#os-feita").value,
+      status:$("#os-status").value,
+      finalizado:$("#os-finalizado").checked,
+      faturado:$("#os-faturado").checked,
+      obs:$("#os-obs").value.trim(),
+    };
+    if(!body.revenda||!body.plano){$("#os-modal-err").textContent="Preencha revenda e plano.";return;}
+    if(!body.referente_mes){$("#os-modal-err").textContent="Informe o mês de referência.";return;}
+    if(!(Number(body.valor)>=0)){$("#os-modal-err").textContent="Valor cobrado inválido.";return;}
+    $("#os-modal-save").disabled=true;
+    try{
+      const url = osEditId?`${API_OS}/${osEditId}`:API_OS;
+      const r = await fetch(url,{method:osEditId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j = await r.json();
+      if(!r.ok||!j.ok){throw new Error(j.error||("HTTP "+r.status));}
+      fecharModalOS();
+      await carregarOrdens();
+      toast(osEditId?"OS atualizada":"OS criada");
+    }catch(e){$("#os-modal-err").textContent=String(e.message||e);}
+    finally{$("#os-modal-save").disabled=false;}
+  }
+  async function excluirOS(id){
+    const o=ordens.find(x=>x.id===id);
+    if(!confirm(`Excluir a OS de ${o?o.revenda:""} (${o?rotulo(o.referente_mes):""})?`))return;
+    try{
+      const r=await fetch(`${API_OS}/${id}`,{method:"DELETE",headers:{Accept:"application/json"}});
+      const j=await r.json();
+      if(!r.ok||!j.ok)throw new Error(j.error||("HTTP "+r.status));
+      await carregarOrdens(); toast("OS excluída");
+    }catch(e){toast(String(e.message||e),true);}
+  }
+
+  // ---------- eventos ----------
+  $("#ano").onchange=render;
+  $("#busca").oninput=renderContratos;
+  $("#fstatus").onchange=renderContratos;
+  $("#fano").onchange=renderContratos;
+  $("#frevenda").onchange=renderContratos;
+  $("#novo2").onclick=()=>abrirModal(null);
+  $("#modal-close").onclick=fecharModal;
+  $("#modal-cancel").onclick=fecharModal;
+  $("#modal-save").onclick=salvar;
+  $("#modal-del").onclick=()=>{if(editId){const id=editId;fecharModal();excluir(id);}};
+  $("#modal").onclick=e=>{if(e.target===$("#modal"))fecharModal();};
+  // ordens de serviço
+  $("#os-busca").oninput=renderOrdens;
+  $("#os-fstatus").onchange=renderOrdens;
+  $("#os-ffat").onchange=renderOrdens;
+  $("#os-fano").onchange=renderOrdens;
+  $("#os-frevenda").onchange=renderOrdens;
+  $("#os-novo").onclick=()=>abrirModalOS(null);
+  $("#os-modal-close").onclick=fecharModalOS;
+  $("#os-modal-cancel").onclick=fecharModalOS;
+  $("#os-modal-save").onclick=salvarOS;
+  $("#os-modal-del").onclick=()=>{if(osEditId){const id=osEditId;fecharModalOS();excluirOS(id);}};
+  $("#os-modal-dup").onclick=duplicarOS;
+  $("#os-modal").onclick=e=>{if(e.target===$("#os-modal"))fecharModalOS();};
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){fecharModal();fecharModalOS();}});
+  carregar();
+  carregarOrdens();
+})();
+</script>
+</body>
+</html>

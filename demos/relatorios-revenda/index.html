@@ -1,0 +1,2506 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Relatórios de Revenda | Vetor</title>
+<link rel="icon" href="favicon-vetor.png">
+<style>
+  :root{
+    --azul:#0072ce; --azul-d:#005299; --ambar:#de8d13; --cinza:#777;
+    --bg:#eef1f5; --card:#fff; --texto:#0a2540; --linha:#e3e8ee;
+    --verde:#1d9e75; --vermelho:#d64545;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--texto);line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--azul);padding-bottom:16px;margin-bottom:20px}
+  header.top img.logo{height:38px}
+  header.top .ttl{flex:1;min-width:220px}
+  header.top h1{font-size:1.45rem;color:var(--azul-d)}
+  header.top .sub{color:var(--cinza);font-size:.9rem}
+  header.top .badge{background:#eef4fb;color:var(--azul-d);font-size:.78rem;font-weight:700;padding:6px 12px;border-radius:20px;white-space:nowrap}
+  .filtros{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:16px 18px;margin-bottom:22px}
+  .filtros .grp{display:flex;flex-direction:column;gap:5px}
+  .filtros label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--cinza)}
+  .filtros select,.filtros input[type=date]{font:inherit;padding:8px 10px;border:1px solid #cfd6df;border-radius:8px;background:#fff;color:var(--texto);min-width:140px}
+  .filtros button{font:inherit;font-weight:600;padding:9px 16px;border:1px solid var(--azul);background:var(--azul);color:#fff;border-radius:8px;cursor:pointer}
+  .filtros button.ghost{background:#fff;color:var(--azul)}
+  .filtros .hint{font-size:.78rem;color:var(--cinza);max-width:280px}
+.daterange{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px;padding-bottom:12px;border-bottom:1px solid var(--linha)}
+.daterange .dr-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--cinza);margin-right:2px}
+.daterange .dr-sep{color:var(--cinza)}
+.daterange input[type=date]{font:inherit;padding:7px 9px;border:1px solid #cfd6df;border-radius:8px;background:#fff;color:var(--texto)}
+.daterange button{font:inherit;font-weight:600;padding:8px 14px;border:1px solid var(--azul);background:var(--azul);color:#fff;border-radius:8px;cursor:pointer}
+.daterange button.ghost{background:#fff;color:var(--azul)}
+.dr-hint{font-size:.78rem;color:var(--cinza);margin:0 0 10px}
+  /* Divisor de ÁREA (centralizado): separa os grandes blocos do relatório
+     — Visão Geral, Mídia Paga, Redes Sociais. Diferente das seções (título
+     à esquerda com barra âmbar), a área é centralizada e com filetes. */
+  .area{display:flex;align-items:center;gap:12px;margin:42px 0 4px}
+  .area:first-of-type{margin-top:26px}
+  .area::before,.area::after{content:"";flex:1;height:1px;background:var(--linha)}
+  .area .area-ic{display:inline-flex;align-items:center;gap:6px}
+  .area .area-ic svg{width:22px;height:22px}
+  .area h2{font-size:1.2rem;font-weight:800;color:var(--azul-d);white-space:nowrap;border:0;padding:0}
+  .area .mes-tag{margin-left:2px}
+  .area-desc{text-align:center;color:var(--cinza);font-size:.85rem;margin:2px 0 0}
+  .secao{margin:30px 0 10px}
+  .secao-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .secao h2{font-size:1.12rem;color:var(--azul-d);border-left:4px solid var(--ambar);padding-left:10px;border-radius:0}
+  .secao .desc{color:var(--cinza);font-size:.85rem;margin:4px 0 0 14px}
+  .mes-tag{display:inline-flex;align-items:center;gap:6px;background:#eef4fb;color:var(--azul-d);font-size:.8rem;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap;text-transform:capitalize}
+  .mes-tag svg{width:14px;height:14px;fill:currentColor}
+  /* Subgrupos da Visão geral: separam Anúncios (Meta) de Redes Sociais (IG). */
+  .kpi-grupo{margin-top:16px}
+  .kpi-grupo + .kpi-grupo{margin-top:22px}
+  .grupo-head{display:flex;align-items:center;gap:8px;font-size:.9rem;font-weight:700;color:var(--texto);margin-bottom:2px}
+  .grupo-head .ic{width:20px;height:20px;flex:none}
+  .grupo-head::after{content:"";flex:1;height:1px;background:var(--linha);margin-left:4px}
+  .grid-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-top:12px}
+  .kpi{position:relative;background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:14px 16px}
+  .kpi .kpi-ic{position:absolute;top:12px;right:12px;width:16px;height:16px;opacity:.85}
+  .kpi .lbl{font-size:.74rem;color:var(--cinza);text-transform:uppercase;letter-spacing:.03em;font-weight:700;padding-right:22px}
+  .kpi .val{font-size:1.7rem;font-weight:800;color:var(--texto);margin-top:4px;line-height:1.1}
+  .kpi .dlt{font-size:.8rem;margin-top:3px}
+  /* Quebra do KPI por origem (ex.: Cadastros = formulário + WhatsApp). Só aparece
+     quando há mais de uma origem no mês — ver kpiSubCadastros(). */
+  .kpi .sub{font-size:.72rem;color:var(--cinza);margin-top:4px;line-height:1.3}
+  .dlt{display:inline-flex;align-items:center;gap:4px;font-weight:600}
+  .dlt svg{width:14px;height:14px;fill:currentColor;flex:none}
+  .dlt.up{color:var(--verde)} .dlt.down{color:var(--vermelho)} .dlt.flat{color:var(--cinza)}
+  .card{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:18px;margin-top:14px}
+  .chart-box{position:relative;width:100%;height:320px}
+  .chart-box.sm{height:280px}
+  table.dados{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:6px}
+  table.dados th,table.dados td{padding:9px 10px;border-bottom:1px solid var(--linha);text-align:right}
+  table.dados th{color:var(--cinza);font-size:.72rem;text-transform:uppercase;letter-spacing:.03em}
+  table.dados td:first-child,table.dados th:first-child{text-align:left}
+  table.dados tr:hover td{background:#f7fafd}
+  .destaque{color:var(--ambar);font-weight:800}
+  .ad-name{cursor:help;border-bottom:1px dotted var(--cinza)}
+  .ad-name .pv{display:inline-flex;vertical-align:-2px;margin-left:5px;color:var(--azul)}
+  .ad-name .pv svg{width:14px;height:14px;fill:currentColor}
+  #adPrev{position:fixed;z-index:60;display:none;background:#fff;border:1px solid var(--linha);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(10,37,64,.18);pointer-events:none}
+  #adPrev img{display:block;width:190px;height:190px;object-fit:cover;border-radius:6px;background:#0a2540}
+  #adPrev .cap{font-size:.72rem;color:var(--cinza);margin-top:5px;max-width:190px;line-height:1.35}
+  .creatives{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:14px}
+  .crv{background:var(--card);border:1px solid var(--linha);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  .crv .thumb{aspect-ratio:1/1;background:#0a2540;overflow:hidden}
+  .crv .thumb img{width:100%;height:100%;object-fit:cover}
+  .crv .info{padding:12px 14px}
+  .crv .tipo{font-size:.68rem;font-weight:700;color:var(--azul);text-transform:uppercase}
+  .crv h3{font-size:1rem;color:var(--texto);margin:3px 0}
+  .crv .d{font-size:.8rem;color:var(--cinza)}
+  .crv .leads{margin-top:8px;font-size:.9rem}
+  .crv .leads b{font-size:1.3rem;color:var(--ambar)}
+  /* Métricas do criativo: Cadastros (âmbar) + Cliques (azul), lado a lado. */
+  .crv .metricas{margin-top:10px;display:flex;gap:18px}
+  .crv .metricas .mt{display:flex;flex-direction:column;line-height:1.15}
+  .crv .metricas .mt b{font-size:1.3rem}
+  .crv .metricas .mt .k{font-size:.72rem;color:var(--cinza);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+  .crv .metricas .cad b{color:var(--ambar)}
+  .crv .metricas .clk b{color:var(--azul)}
+  /* Publicações do mês (Instagram) — filtros + carrossel horizontal */
+  .post-filtros{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .seg-controls{display:flex;flex-direction:column;gap:9px;margin-bottom:14px}
+  .seg-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .seg-row .post-filtros{margin-bottom:0}
+  .seg-lab{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--cinza);min-width:84px}
+  .pc-chip{border:1px solid var(--linha);background:#fff;color:var(--cinza);border-radius:999px;padding:6px 13px;font-size:.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s,border-color .15s}
+  .pc-chip:hover{border-color:var(--azul);color:var(--azul)}
+  .pc-chip.on{background:var(--azul);border-color:var(--azul);color:#fff}
+  .pc-chip .cnt{font-weight:800;font-variant-numeric:tabular-nums;opacity:.85}
+  .pc-chip.vazio{opacity:.5}
+  .pc-chip:disabled{cursor:not-allowed}
+  .pc-chip:disabled:hover{border-color:var(--linha);color:var(--cinza)}
+  .post-carousel{position:relative}
+  .post-track{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(208px,1fr);gap:16px;overflow-x:auto;scroll-behavior:smooth;scroll-snap-type:x proximity;padding:2px 2px 12px}
+  .post-track::-webkit-scrollbar{height:8px}
+  .post-track::-webkit-scrollbar-thumb{background:#cfd8e3;border-radius:8px}
+  .post-track::-webkit-scrollbar-track{background:transparent}
+  .post-card{scroll-snap-align:start;background:var(--card);border:1px solid var(--linha);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;text-decoration:none;color:inherit;transition:box-shadow .15s,transform .15s}
+  .post-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.10);transform:translateY(-2px)}
+  .post-card .pc-thumb{position:relative;aspect-ratio:4/5;background:#0a2540;overflow:hidden}
+  .post-card .pc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .pc-tag{position:absolute;top:8px;left:8px;font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#fff;padding:3px 9px;border-radius:999px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+  .tag-unico{background:#0072ce}
+  .tag-carrossel{background:#de8d13}
+  .tag-reels{background:#d6297a}
+  .tag-stories{background:linear-gradient(90deg,#f09433,#dc2743 55%,#8c3aaa)}
+  .tag-outros{background:#777}
+  .pc-info{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px}
+  .pc-date{font-size:.72rem;color:var(--cinza);font-weight:700}
+  .pc-assunto{font-size:.82rem;color:var(--texto);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.1em}
+  .pc-metrics{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:2px}
+  .pc-metrics span{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;color:var(--texto)}
+  .pc-metrics svg{width:14px;height:14px;fill:currentColor;color:var(--cinza);flex:none}
+  .pc-metrics b{font-weight:700;font-variant-numeric:tabular-nums}
+  .pc-nav{position:absolute;top:calc(50% - 20px);transform:translateY(-50%);z-index:2;width:34px;height:34px;border-radius:50%;border:1px solid var(--linha);background:#fff;color:var(--azul);font-size:1.35rem;line-height:1;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.14);display:flex;align-items:center;justify-content:center;padding:0}
+  .pc-nav.prev{left:-8px}
+  .pc-nav.next{right:-8px}
+  .pc-nav:disabled{opacity:0;pointer-events:none}
+  .post-vazio{color:var(--cinza);font-size:.86rem;padding:10px 2px}
+  .cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:14px}
+  .cmp .row{background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:14px}
+  .cmp .row .lbl{font-size:.74rem;color:var(--cinza);text-transform:uppercase;font-weight:700}
+  .cmp .row .vals{font-size:1rem;margin-top:4px}
+  .cmp .row .vals b{font-size:1.4rem;color:var(--texto)}
+  .nota{background:#fff7ec;border:1px solid #f3dcb3;border-radius:10px;padding:11px 14px;font-size:.84rem;color:#7a5a12;margin-top:12px}
+  .vazio{color:var(--cinza);font-size:.88rem;font-style:italic;padding:10px 2px}
+  footer{margin-top:40px;border-top:1px solid var(--linha);padding-top:16px;font-size:.78rem;color:var(--cinza)}
+  footer code{background:#eef1f5;padding:1px 5px;border-radius:4px}
+  .leg{display:flex;flex-wrap:wrap;gap:14px;font-size:.78rem;color:var(--cinza);margin-bottom:8px}
+  .leg span{display:flex;align-items:center;gap:6px}
+  .leg i{width:14px;height:3px;border-radius:2px;display:inline-block}
+  @media(max-width:600px){header.top h1{font-size:1.2rem}.kpi .val{font-size:1.4rem}}
+
+  /* ===================== MODO APRESENTAÇÃO ===================== */
+  #btnApres{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:700;font-size:.88rem;
+    padding:10px 18px;border:1px solid var(--azul);background:var(--azul);color:#fff;border-radius:10px;cursor:pointer;
+    transition:background .15s,box-shadow .15s}
+  #btnApres:hover{background:var(--azul-d);box-shadow:0 4px 14px rgba(0,114,206,.28)}
+  #btnApres svg{width:14px;height:14px}
+  /* Botão de exportação (secundário, contorno) — ao lado de "Iniciar apresentação". */
+  #btnExport{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:700;font-size:.88rem;
+    padding:10px 18px;border:1px solid var(--azul);background:#fff;color:var(--azul-d);border-radius:10px;cursor:pointer;
+    transition:background .15s,box-shadow .15s,color .15s}
+  #btnExport:hover{background:#eef4fb;box-shadow:0 4px 14px rgba(0,114,206,.18)}
+  #btnExport:disabled{opacity:.6;cursor:progress}
+  #btnExport svg{width:15px;height:15px}
+  /* Overlay: leve gradiente com as cores da paleta (azul → branco → âmbar). */
+  #apres{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;
+    background:
+      radial-gradient(1100px 560px at 6% -8%, rgba(0,114,206,.10), transparent 62%),
+      radial-gradient(980px 540px at 102% 108%, rgba(222,141,19,.10), transparent 62%),
+      linear-gradient(160deg,#f5f9fd 0%,#f0f3f7 55%,#faf3e8 100%)}
+  #apres[hidden]{display:none}
+  .ap-top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid rgba(10,37,64,.08);flex:none}
+  .ap-top .ap-logo{height:26px}
+  .ap-ttl{font-size:.95rem;color:var(--texto);display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow:hidden}
+  .ap-ttl b{color:var(--azul-d)}
+  .ap-ttl .ap-sep{color:var(--cinza)}
+  .ap-save{flex:1;text-align:right;font-size:.78rem;font-weight:600;color:var(--verde);padding-right:6px;white-space:nowrap}
+  .ap-save.erro{color:var(--vermelho)}
+  .ap-save.andamento{color:var(--cinza)}
+  .ap-actions{display:flex;align-items:center;gap:8px;flex:none}
+  .ap-actions button{font:inherit;font-size:.82rem;font-weight:600;padding:8px 13px;border:1px solid #cfd6df;background:#fff;
+    color:var(--texto);border-radius:9px;cursor:pointer;transition:border-color .15s,color .15s}
+  .ap-actions button:hover{border-color:var(--azul);color:var(--azul)}
+  .ap-actions button.on{background:var(--azul);border-color:var(--azul);color:#fff}
+  .ap-actions .ap-ic{width:36px;padding:8px 0;text-align:center}
+  .ap-count{font-size:.8rem;font-weight:700;color:var(--cinza);min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
+  .ap-stage{flex:1;display:flex;align-items:stretch;min-height:0;position:relative}
+  .ap-slide{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:18px 72px 26px}
+  .ap-holder{width:min(1220px,100%);margin:auto} /* margin:auto centraliza E permite rolar quando maior que a tela */
+  .ap-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:46px;height:46px;border-radius:50%;
+    border:1px solid #cfd6df;background:#fff;color:var(--azul-d);font-size:1.5rem;line-height:1;cursor:pointer;
+    box-shadow:0 4px 14px rgba(10,37,64,.10);transition:border-color .15s,color .15s,opacity .15s}
+  .ap-arrow:hover{border-color:var(--azul);color:var(--azul)}
+  .ap-arrow:disabled{opacity:.28;cursor:default}
+  .ap-arrow.prev{left:14px}
+  .ap-arrow.next{right:14px}
+  /* Bloco adotado dentro do slide: espaçamentos de "página" viram espaçamentos de slide */
+  .ap-holder .bloco .area{margin-top:0}
+  .ap-holder .bloco .secao{margin-top:0}
+  .ap-holder .bloco .secao h2{font-size:1.3rem}
+  .ap-holder .bloco .area h2{font-size:1.45rem}
+  #apres .ap-holder .chart-box{height:min(54vh,520px)}
+  #apres .ap-holder .chart-box.sm{height:min(50vh,470px)}
+  /* Notas de rodapé de cada elemento ficam fora da apresentação (visão do cliente). */
+  #apres .ap-holder .nota{display:none}
+  /* Anotações do analista (texto por slide de Elemento/Capa) + posição escolhida. */
+  .ap-holder.with-nota.pos-acima,.ap-holder.with-nota.pos-abaixo{display:flex;flex-direction:column;gap:18px}
+  .ap-holder.with-nota.pos-esquerda,.ap-holder.with-nota.pos-direita{display:flex;flex-direction:row;gap:26px;align-items:center}
+  .ap-holder.with-nota.pos-esquerda>:not(.ap-nota),.ap-holder.with-nota.pos-direita>:not(.ap-nota){flex:1;min-width:0}
+  .ap-holder.with-nota.pos-esquerda>.ap-nota,.ap-holder.with-nota.pos-direita>.ap-nota{flex:none;max-width:32%}
+  .ap-nota{font-size:clamp(1rem,1.5vw,1.35rem);line-height:1.5;color:#41546b;white-space:pre-wrap;
+    border-left:4px solid var(--ambar);padding:8px 0 8px 16px;text-align:left}
+  .ap-pos{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+  /* Ocultar/mostrar a barra superior (a barra tem controles que o cliente não vê). */
+  #apShowBar{position:absolute;top:8px;right:10px;z-index:15;display:none;align-items:center;justify-content:center;
+    width:36px;padding:8px 0;border:1px solid #cfd6df;border-radius:8px;
+    background:rgba(255,255,255,.78);color:var(--cinza);cursor:pointer;backdrop-filter:blur(3px);
+    opacity:0;pointer-events:none;transition:opacity .2s}
+  #apShowBar:hover{border-color:var(--azul);color:var(--azul);background:#fff}
+  #apres.bar-off .ap-top{display:none}
+  #apres.bar-off #apShowBar{display:inline-flex}
+  /* Só aparece com a proximidade do mouse no topo da tela (near-top via JS). */
+  #apres.bar-off.near-top #apShowBar{opacity:1;pointer-events:auto}
+  /* Capa */
+  .ap-capa{text-align:center;max-width:900px;padding:0 24px;margin:0 auto}
+  .ap-capa img{height:54px;margin-bottom:34px}
+  .ap-capa .k{font-size:.85rem;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--ambar);margin-bottom:18px}
+  .ap-capa h1{font-size:clamp(2.4rem,6vw,4.4rem);line-height:1.05;color:var(--azul-d);margin-bottom:18px}
+  .ap-capa .m{font-size:clamp(1.1rem,2.2vw,1.5rem);color:var(--cinza);text-transform:capitalize}
+  /* Slide personalizado (texto / imagem / imagem+texto) */
+  .ap-livre{max-width:1100px;width:100%;padding:0 24px;text-align:center}
+  .ap-livre .k{font-size:.8rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--azul);margin-bottom:20px}
+  .ap-livre h2{font-size:clamp(1.8rem,4.5vw,3.2rem);line-height:1.1;color:var(--texto);margin-bottom:22px}
+  .ap-livre p{font-size:clamp(1.05rem,2vw,1.5rem);line-height:1.5;color:#41546b;white-space:pre-wrap}
+  .ap-livre img{max-width:100%;max-height:60vh;object-fit:contain;border-radius:14px;border:1px solid var(--linha);background:#fff}
+  .ap-livre.duo{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;max-width:1240px;text-align:left}
+  .ap-livre.duo h2{font-size:clamp(1.5rem,3.4vw,2.5rem)}
+  .ap-livre.duo p{font-size:clamp(1rem,1.7vw,1.3rem)}
+  .ap-livre.soimg img{max-height:76vh}
+  @media(max-width:760px){.ap-livre.duo{grid-template-columns:1fr;text-align:center}}
+  /* Organizador (faixa inferior) */
+  .ap-strip{flex:none;display:flex;gap:8px;align-items:stretch;overflow-x:auto;padding:10px 16px;
+    background:rgba(255,255,255,.82);border-top:1px solid rgba(10,37,64,.10);backdrop-filter:blur(4px)}
+  .ap-strip[hidden]{display:none}
+  .ap-it{flex:none;display:flex;align-items:center;gap:8px;border:1px solid #cfd6df;background:#fff;border-radius:10px;
+    padding:8px 10px;font-size:.78rem;font-weight:600;color:var(--texto);cursor:grab;user-select:none;max-width:240px}
+  .ap-it:active{cursor:grabbing}
+  .ap-it .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ap-it.cur{border-color:var(--azul);box-shadow:0 0 0 2px rgba(0,114,206,.18)}
+  .ap-it.off{opacity:.45}
+  .ap-it.off .t{text-decoration:line-through}
+  .ap-it.arrastando{opacity:.35}
+  .ap-it .ap-ib{border:0;background:none;padding:2px;cursor:pointer;color:var(--cinza);line-height:1;flex:none;font-size:.85rem}
+  .ap-it .ap-ib:hover{color:var(--azul)}
+  .ap-it .ap-ib.del:hover{color:var(--vermelho)}
+  .ap-add{flex:none;border:1px dashed #b7c2cf;background:none;border-radius:10px;padding:8px 14px;font-size:1rem;
+    font-weight:700;color:var(--cinza);cursor:pointer}
+  .ap-add:hover{border-color:var(--azul);color:var(--azul)}
+  /* Drag-and-drop dos posts (só no modo apresentação) */
+  #apres .post-card{cursor:grab}
+  #apres .post-card.arrastando{opacity:.4}
+  /* Editor de slide (modal) */
+  .ap-modal{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(10,37,64,.35)}
+  .ap-modal[hidden]{display:none}
+  .ap-modal-box{width:min(640px,92vw);max-height:88vh;overflow:auto;background:#fff;border:1px solid var(--linha);
+    border-radius:16px;padding:24px 26px;box-shadow:0 18px 50px rgba(10,37,64,.25)}
+  .ap-modal-box h3{color:var(--azul-d);margin-bottom:16px}
+  .ap-modal-box label{display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--cinza);margin:14px 0 5px}
+  .ap-modal-box input,.ap-modal-box textarea{width:100%;font:inherit;padding:9px 11px;border:1px solid #cfd6df;border-radius:8px;color:var(--texto);resize:vertical}
+  .ap-ed-img{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .ap-ed-img img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--linha)}
+  .ap-modal-box button{font:inherit;font-weight:600;font-size:.85rem;padding:9px 16px;border:1px solid var(--azul);background:var(--azul);color:#fff;border-radius:8px;cursor:pointer}
+  .ap-modal-box button.ghost{background:#fff;color:var(--azul)}
+  .ap-ed-err{color:var(--vermelho);font-size:.82rem;font-weight:600;margin-top:12px;min-height:1em}
+  .ap-ed-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+  @media(max-width:760px){.ap-slide{padding:14px 16px 20px}.ap-arrow{display:none}.ap-top{flex-wrap:wrap}.ap-save{display:none}
+    .ap-holder.with-nota.pos-esquerda,.ap-holder.with-nota.pos-direita{flex-direction:column}
+    .ap-holder.with-nota.pos-esquerda>.ap-nota,.ap-holder.with-nota.pos-direita>.ap-nota{max-width:100%}}
+</style>
+</head>
+<body>
+<!-- Sprite de ícones (self-contained): logos oficiais Meta/Instagram + apoio.
+     Referenciados via <use href="#..."/>. O gradiente do IG mora aqui uma vez
+     só para não duplicar IDs por card. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="ic-meta" viewBox="0 0 24 24"><path d="M6.897 4h-.024l-.031 2.615h.022c1.715 0 3.046 1.357 5.94 6.246l.175.297.012.02 1.62-2.438-.012-.019a48.763 48.763 0 00-1.098-1.716 28.01 28.01 0 00-1.175-1.629C10.413 4.932 8.812 4 6.896 4z" fill="url(#lobe-icons-meta-0-_R_0_)"></path><path d="M6.873 4C4.95 4.01 3.247 5.258 2.02 7.17a4.352 4.352 0 00-.01.017l2.254 1.231.011-.017c.718-1.083 1.61-1.774 2.568-1.785h.021L6.896 4h-.023z" fill="url(#lobe-icons-meta-1-_R_0_)"></path><path d="M2.019 7.17l-.011.017C1.2 8.447.598 9.995.274 11.664l-.005.022 2.534.6.004-.022c.27-1.467.786-2.828 1.456-3.845l.011-.017L2.02 7.17z" fill="url(#lobe-icons-meta-2-_R_0_)"></path><path d="M2.807 12.264l-2.533-.6-.005.022c-.177.918-.267 1.851-.269 2.786v.023l2.598.233v-.023a12.591 12.591 0 01.21-2.44z" fill="url(#lobe-icons-meta-3-_R_0_)"></path><path d="M2.677 15.537a5.462 5.462 0 01-.079-.813v-.022L0 14.468v.024a8.89 8.89 0 00.146 1.652l2.535-.585a4.106 4.106 0 01-.004-.022z" fill="url(#lobe-icons-meta-4-_R_0_)"></path><path d="M3.27 16.89c-.284-.31-.484-.756-.589-1.328l-.004-.021-2.535.585.004.021c.192 1.01.568 1.85 1.106 2.487l.014.017 2.018-1.745a2.106 2.106 0 01-.015-.016z" fill="url(#lobe-icons-meta-5-_R_0_)"></path><path d="M10.78 9.654c-1.528 2.35-2.454 3.825-2.454 3.825-2.035 3.2-2.739 3.917-3.871 3.917a1.545 1.545 0 01-1.186-.508l-2.017 1.744.014.017C2.01 19.518 3.058 20 4.356 20c1.963 0 3.374-.928 5.884-5.33l1.766-3.13a41.283 41.283 0 00-1.227-1.886z" fill="#0082FB"></path><path d="M13.502 5.946l-.016.016c-.4.43-.786.908-1.16 1.416.378.483.768 1.024 1.175 1.63.48-.743.928-1.345 1.367-1.807l.016-.016-1.382-1.24z" fill="url(#lobe-icons-meta-6-_R_0_)"></path><path d="M20.918 5.713C19.853 4.633 18.583 4 17.225 4c-1.432 0-2.637.787-3.723 1.944l-.016.016 1.382 1.24.016-.017c.715-.747 1.408-1.12 2.176-1.12.826 0 1.6.39 2.27 1.075l.015.016 1.589-1.425-.016-.016z" fill="#0082FB"></path><path d="M23.998 14.125c-.06-3.467-1.27-6.566-3.064-8.396l-.016-.016-1.588 1.424.015.016c1.35 1.392 2.277 3.98 2.361 6.971v.023h2.292v-.022z" fill="url(#lobe-icons-meta-7-_R_0_)"></path><path d="M23.998 14.15v-.023h-2.292v.022c.004.14.006.282.006.424 0 .815-.121 1.474-.368 1.95l-.011.022 1.708 1.782.013-.02c.62-.96.946-2.293.946-3.91 0-.083 0-.165-.002-.247z" fill="url(#lobe-icons-meta-8-_R_0_)"></path><path d="M21.344 16.52l-.011.02c-.214.402-.519.67-.917.787l.778 2.462a3.493 3.493 0 00.438-.182 3.558 3.558 0 001.366-1.218l.044-.065.012-.02-1.71-1.784z" fill="url(#lobe-icons-meta-9-_R_0_)"></path><path d="M19.92 17.393c-.262 0-.492-.039-.718-.14l-.798 2.522c.449.153.927.222 1.46.222.492 0 .943-.073 1.352-.215l-.78-2.462c-.167.05-.341.075-.517.073z" fill="url(#lobe-icons-meta-10-_R_0_)"></path><path d="M18.323 16.534l-.014-.017-1.836 1.914.016.017c.637.682 1.246 1.105 1.937 1.337l.797-2.52c-.291-.125-.573-.353-.9-.731z" fill="url(#lobe-icons-meta-11-_R_0_)"></path><path d="M18.309 16.515c-.55-.642-1.232-1.712-2.303-3.44l-1.396-2.336-.011-.02-1.62 2.438.012.02.989 1.668c.959 1.61 1.74 2.774 2.493 3.585l.016.016 1.834-1.914a2.353 2.353 0 01-.014-.017z" fill="url(#lobe-icons-meta-12-_R_0_)"></path><defs><linearGradient id="lobe-icons-meta-0-_R_0_" x1="75.897%" x2="26.312%" y1="89.199%" y2="12.194%"><stop offset=".06%" stop-color="#0867DF"></stop><stop offset="45.39%" stop-color="#0668E1"></stop><stop offset="85.91%" stop-color="#0064E0"></stop></linearGradient><linearGradient id="lobe-icons-meta-1-_R_0_" x1="21.67%" x2="97.068%" y1="75.874%" y2="23.985%"><stop offset="13.23%" stop-color="#0064DF"></stop><stop offset="99.88%" stop-color="#0064E0"></stop></linearGradient><linearGradient id="lobe-icons-meta-2-_R_0_" x1="38.263%" x2="60.895%" y1="89.127%" y2="16.131%"><stop offset="1.47%" stop-color="#0072EC"></stop><stop offset="68.81%" stop-color="#0064DF"></stop></linearGradient><linearGradient id="lobe-icons-meta-3-_R_0_" x1="47.032%" x2="52.15%" y1="90.19%" y2="15.745%"><stop offset="7.31%" stop-color="#007CF6"></stop><stop offset="99.43%" stop-color="#0072EC"></stop></linearGradient><linearGradient id="lobe-icons-meta-4-_R_0_" x1="52.155%" x2="47.591%" y1="58.301%" y2="37.004%"><stop offset="7.31%" stop-color="#007FF9"></stop><stop offset="100%" stop-color="#007CF6"></stop></linearGradient><linearGradient id="lobe-icons-meta-5-_R_0_" x1="37.689%" x2="61.961%" y1="12.502%" y2="63.624%"><stop offset="7.31%" stop-color="#007FF9"></stop><stop offset="100%" stop-color="#0082FB"></stop></linearGradient><linearGradient id="lobe-icons-meta-6-_R_0_" x1="34.808%" x2="62.313%" y1="68.859%" y2="23.174%"><stop offset="27.99%" stop-color="#007FF8"></stop><stop offset="91.41%" stop-color="#0082FB"></stop></linearGradient><linearGradient id="lobe-icons-meta-7-_R_0_" x1="43.762%" x2="57.602%" y1="6.235%" y2="98.514%"><stop offset="0%" stop-color="#0082FB"></stop><stop offset="99.95%" stop-color="#0081FA"></stop></linearGradient><linearGradient id="lobe-icons-meta-8-_R_0_" x1="60.055%" x2="39.88%" y1="4.661%" y2="69.077%"><stop offset="6.19%" stop-color="#0081FA"></stop><stop offset="100%" stop-color="#0080F9"></stop></linearGradient><linearGradient id="lobe-icons-meta-9-_R_0_" x1="30.282%" x2="61.081%" y1="59.32%" y2="33.244%"><stop offset="0%" stop-color="#027AF3"></stop><stop offset="100%" stop-color="#0080F9"></stop></linearGradient><linearGradient id="lobe-icons-meta-10-_R_0_" x1="20.433%" x2="82.112%" y1="50.001%" y2="50.001%"><stop offset="0%" stop-color="#0377EF"></stop><stop offset="99.94%" stop-color="#0279F1"></stop></linearGradient><linearGradient id="lobe-icons-meta-11-_R_0_" x1="40.303%" x2="72.394%" y1="35.298%" y2="57.811%"><stop offset=".19%" stop-color="#0471E9"></stop><stop offset="100%" stop-color="#0377EF"></stop></linearGradient><linearGradient id="lobe-icons-meta-12-_R_0_" x1="32.254%" x2="68.003%" y1="19.719%" y2="84.908%"><stop offset="27.65%" stop-color="#0867DF"></stop><stop offset="100%" stop-color="#0471E9"></stop></linearGradient></defs></symbol>
+    <symbol id="ic-ig" viewBox="0 0 2500 2500"><defs><radialGradient id="igg0" cx="332.14" cy="2511.81" r="3263.54" gradientUnits="userSpaceOnUse"><stop offset=".09" stop-color="#fa8f21"/><stop offset=".78" stop-color="#d82d7e"/></radialGradient><radialGradient id="igg1" cx="1516.14" cy="2623.81" r="2572.12" gradientUnits="userSpaceOnUse"><stop offset=".64" stop-color="#8c3aaa" stop-opacity="0"/><stop offset="1" stop-color="#8c3aaa"/></radialGradient></defs><path d="M833.4,1250c0-230.11,186.49-416.7,416.6-416.7s416.7,186.59,416.7,416.7-186.59,416.7-416.7,416.7S833.4,1480.11,833.4,1250m-225.26,0c0,354.5,287.36,641.86,641.86,641.86S1891.86,1604.5,1891.86,1250,1604.5,608.14,1250,608.14,608.14,895.5,608.14,1250M1767.27,582.69a150,150,0,1,0,150.06-149.94h-0.06a150.07,150.07,0,0,0-150,149.94M745,2267.47c-121.87-5.55-188.11-25.85-232.13-43-58.36-22.72-100-49.78-143.78-93.5s-70.88-85.32-93.5-143.68c-17.16-44-37.46-110.26-43-232.13-6.06-131.76-7.27-171.34-7.27-505.15s1.31-373.28,7.27-505.15c5.55-121.87,26-188,43-232.13,22.72-58.36,49.78-100,93.5-143.78s85.32-70.88,143.78-93.5c44-17.16,110.26-37.46,232.13-43,131.76-6.06,171.34-7.27,505-7.27s373.28,1.31,505.15,7.27c121.87,5.55,188,26,232.13,43,58.36,22.62,100,49.78,143.78,93.5s70.78,85.42,93.5,143.78c17.16,44,37.46,110.26,43,232.13,6.06,131.87,7.27,171.34,7.27,505.15s-1.21,373.28-7.27,505.15c-5.55,121.87-25.95,188.11-43,232.13-22.72,58.36-49.78,100-93.5,143.68s-85.42,70.78-143.78,93.5c-44,17.16-110.26,37.46-232.13,43-131.76,6.06-171.34,7.27-505.15,7.27s-373.28-1.21-505-7.27M734.65,7.57c-133.07,6.06-224,27.16-303.41,58.06C349,97.54,279.38,140.35,209.81,209.81S97.54,349,65.63,431.24c-30.9,79.46-52,170.34-58.06,303.41C1.41,867.93,0,910.54,0,1250s1.41,382.07,7.57,515.35c6.06,133.08,27.16,223.95,58.06,303.41,31.91,82.19,74.62,152,144.18,221.43S349,2402.37,431.24,2434.37c79.56,30.9,170.34,52,303.41,58.06C868,2498.49,910.54,2500,1250,2500s382.07-1.41,515.35-7.57c133.08-6.06,223.95-27.16,303.41-58.06,82.19-32,151.86-74.72,221.43-144.18s112.18-139.24,144.18-221.43c30.9-79.46,52.1-170.34,58.06-303.41,6.06-133.38,7.47-175.89,7.47-515.35s-1.41-382.07-7.47-515.35c-6.06-133.08-27.16-224-58.06-303.41-32-82.19-74.72-151.86-144.18-221.43S2150.95,97.54,2068.86,65.63c-79.56-30.9-170.44-52.1-303.41-58.06C1632.17,1.51,1589.56,0,1250.1,0S868,1.41,734.65,7.57" fill="url(#igg0)"/><path d="M833.4,1250c0-230.11,186.49-416.7,416.6-416.7s416.7,186.59,416.7,416.7-186.59,416.7-416.7,416.7S833.4,1480.11,833.4,1250m-225.26,0c0,354.5,287.36,641.86,641.86,641.86S1891.86,1604.5,1891.86,1250,1604.5,608.14,1250,608.14,608.14,895.5,608.14,1250M1767.27,582.69a150,150,0,1,0,150.06-149.94h-0.06a150.07,150.07,0,0,0-150,149.94M745,2267.47c-121.87-5.55-188.11-25.85-232.13-43-58.36-22.72-100-49.78-143.78-93.5s-70.88-85.32-93.5-143.68c-17.16-44-37.46-110.26-43-232.13-6.06-131.76-7.27-171.34-7.27-505.15s1.31-373.28,7.27-505.15c5.55-121.87,26-188,43-232.13,22.72-58.36,49.78-100,93.5-143.78s85.32-70.88,143.78-93.5c44-17.16,110.26-37.46,232.13-43,131.76-6.06,171.34-7.27,505-7.27s373.28,1.31,505.15,7.27c121.87,5.55,188,26,232.13,43,58.36,22.62,100,49.78,143.78,93.5s70.78,85.42,93.5,143.78c17.16,44,37.46,110.26,43,232.13,6.06,131.87,7.27,171.34,7.27,505.15s-1.21,373.28-7.27,505.15c-5.55,121.87-25.95,188.11-43,232.13-22.72,58.36-49.78,100-93.5,143.68s-85.42,70.78-143.78,93.5c-44,17.16-110.26,37.46-232.13,43-131.76,6.06-171.34,7.27-505.15,7.27s-373.28-1.21-505-7.27M734.65,7.57c-133.07,6.06-224,27.16-303.41,58.06C349,97.54,279.38,140.35,209.81,209.81S97.54,349,65.63,431.24c-30.9,79.46-52,170.34-58.06,303.41C1.41,867.93,0,910.54,0,1250s1.41,382.07,7.57,515.35c6.06,133.08,27.16,223.95,58.06,303.41,31.91,82.19,74.62,152,144.18,221.43S349,2402.37,431.24,2434.37c79.56,30.9,170.34,52,303.41,58.06C868,2498.49,910.54,2500,1250,2500s382.07-1.41,515.35-7.57c133.08-6.06,223.95-27.16,303.41-58.06,82.19-32,151.86-74.72,221.43-144.18s112.18-139.24,144.18-221.43c30.9-79.46,52.1-170.34,58.06-303.41,6.06-133.38,7.47-175.89,7.47-515.35s-1.41-382.07-7.47-515.35c-6.06-133.08-27.16-224-58.06-303.41-32-82.19-74.72-151.86-144.18-221.43S2150.95,97.54,2068.86,65.63c-79.56-30.9-170.44-52.1-303.41-58.06C1632.17,1.51,1589.56,0,1250.1,0S868,1.41,734.65,7.57" fill="url(#igg1)"/></symbol>
+    <symbol id="ic-cal" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></symbol>
+    <symbol id="ic-overview" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></symbol>
+    <symbol id="ic-view" viewBox="0 0 24 24"><path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></symbol>
+    <symbol id="ic-eye" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 110-9 4.5 4.5 0 010 9zm0-7a2.5 2.5 0 100 5 2.5 2.5 0 000-5z"/></symbol>
+    <symbol id="ic-heart" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol>
+    <symbol id="ic-comment" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></symbol>
+    <symbol id="ic-bookmark" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z"/></symbol>
+    <symbol id="ic-share" viewBox="0 0 24 24"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></symbol>
+    <symbol id="ic-gads" viewBox="0 0 64 64"><defs><clipPath id="gadsA"><use xlink:href="#gadsB"/></clipPath><path id="gadsB" d="M0 0h250.9v312.8H0z"/></defs><g transform="matrix(.257748 0 0 .257745 -.361416 2.515516)" clip-path="url(#gadsA)"><path d="M85.9 28.6c2.4-6.3 5.7-12.1 10.6-16.8 19.6-19.1 52-14.3 65.3 9.7 10 18.2 20.6 36 30.9 54l51.6 89.8c14.3 25.1-1.2 56.8-29.6 61.1-17.4 2.6-33.7-5.4-42.7-21l-45.4-78.8c-.3-.6-.7-1.1-1.1-1.6-1.6-1.3-2.3-3.2-3.3-4.9L88.8 62.2c-3.9-6.8-5.7-14.2-5.5-22 .3-4 .8-8 2.6-11.6" fill="#3c8bd9"/><path d="M85.9 28.6c-.9 3.6-1.7 7.2-1.9 11-.3 8.4 1.8 16.2 6 23.5l32.9 56.9c1 1.7 1.8 3.4 2.8 5l-18.1 31.1-25.3 43.6c-.4 0-.5-.2-.6-.5-.1-.8.2-1.5.4-2.3 4.1-15 .7-28.3-9.6-39.7-6.3-6.9-14.3-10.8-23.5-12.1-12-1.7-22.6 1.4-32.1 8.9-1.7 1.3-2.8 3.2-4.8 4.2-.4 0-.6-.2-.7-.5l14.3-24.9L85.2 29.7c.2-.4.5-.7.7-1.1" fill="#fabc04"/><path d="M11.8 158l5.7-5.1c24.3-19.2 60.8-5.3 66.1 25.1 1.3 7.3.6 14.3-1.6 21.3-.1.6-.2 1.1-.4 1.7-.9 1.6-1.7 3.3-2.7 4.9-8.9 14.7-22 22-39.2 20.9C20 225.4 4.5 210.6 1.8 191c-1.3-9.5.6-18.4 5.5-26.6 1-1.8 2.2-3.4 3.3-5.2.5-.4.3-1.2 1.2-1.2" fill="#34a852"/><path d="M11.8 158c-.4.4-.4 1.1-1.1 1.2-.1-.7.3-1.1.7-1.6l.4.4" fill="#fabc04"/><path d="M81.6 201c-.4-.7 0-1.2.4-1.7l.4.4-.8 1.3" fill="#e1c025"/></g></symbol>
+  </defs>
+</svg>
+<style>
+  /* ===== Módulo de Edição — gaveta de clientes (esq.) + painel de exibição (dir.) ===== */
+  .nav-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;
+    border:1px solid var(--linha);background:var(--card);color:var(--azul-d);border-radius:11px;cursor:pointer;transition:background .12s,box-shadow .12s}
+  .nav-btn:hover{background:#f3f7fc;box-shadow:0 3px 12px rgba(0,114,206,.18)}
+  .nav-btn svg{width:22px;height:22px}
+  .nav-ov,.ed-ov{position:fixed;inset:0;z-index:80;background:rgba(10,37,64,.34)}
+  .nav-ov[hidden],.ed-ov[hidden]{display:none}
+  .nav-drawer{position:fixed;top:0;left:0;bottom:0;z-index:88;width:min(320px,86vw);background:var(--card);
+    border-right:1px solid var(--linha);box-shadow:6px 0 26px rgba(10,37,64,.16);display:flex;flex-direction:column}
+  .nav-drawer[hidden]{display:none}
+  .nav-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--linha)}
+  .nav-head span{font-weight:800;color:var(--azul-d);font-size:1.05rem}
+  .nav-x{border:0;background:transparent;color:var(--cinza);font-size:1.1rem;cursor:pointer;line-height:1;padding:6px}
+  .nav-x:hover{color:var(--texto)}
+  .nav-sub{padding:11px 18px;font-size:.78rem;color:var(--cinza);border-bottom:1px solid var(--linha);line-height:1.45}
+  .nav-list{overflow-y:auto;padding:8px;flex:1}
+  .nav-item{display:flex;align-items:center;gap:4px;border-radius:10px;transition:background .12s}
+  .nav-item:hover{background:#f3f7fc}
+  .nav-item.cur{background:#eaf3fc}
+  .nav-pick{flex:1;text-align:left;border:0;background:transparent;font:inherit;font-weight:600;color:var(--texto);
+    padding:11px 12px;cursor:pointer;border-radius:10px}
+  .nav-item.cur .nav-pick{color:var(--azul-d);font-weight:800}
+  .nav-edit{opacity:0;flex:none;border:0;background:transparent;color:var(--azul);cursor:pointer;padding:8px;border-radius:8px;transition:opacity .12s,background .12s}
+  .nav-item:hover .nav-edit,.nav-edit:focus-visible{opacity:1}
+  .nav-edit:hover{background:#dcebfb}
+  .nav-edit svg{width:17px;height:17px;display:block}
+  .ed-panel{position:fixed;top:0;right:0;bottom:0;z-index:89;width:min(400px,92vw);background:var(--card);
+    border-left:1px solid var(--linha);box-shadow:-6px 0 26px rgba(10,37,64,.16);display:flex;flex-direction:column}
+  .ed-panel[hidden]{display:none}
+  .ed-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--linha)}
+  .ed-h-ttl{flex:1;display:flex;flex-direction:column;line-height:1.2;min-width:0}
+  .ed-k{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--cinza)}
+  .ed-h-ttl b{color:var(--azul-d);font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ed-save{font-size:.74rem;color:var(--cinza);white-space:nowrap}
+  .ed-save.ok{color:var(--verde)} .ed-save.err{color:var(--vermelho)}
+  .ed-hint{padding:12px 18px;font-size:.78rem;color:var(--cinza);border-bottom:1px solid var(--linha);line-height:1.5}
+  .ed-tree{overflow-y:auto;padding:10px 14px 28px;flex:1}
+  .ed-area{margin-top:16px}
+  .ed-area:first-child{margin-top:4px}
+  .ed-row{display:flex;align-items:center;gap:10px;padding:8px;border-radius:9px}
+  .ed-row:hover{background:#f6f9fd}
+  .ed-row.lvl-area{font-weight:800;color:var(--azul-d);border-bottom:1px solid var(--linha);border-radius:0;padding-left:6px}
+  .ed-row.lvl-block{margin-left:12px;font-weight:600;color:var(--texto)}
+  .ed-row.lvl-part{margin-left:30px;font-size:.86rem;color:var(--cinza)}
+  .ed-row.off .ed-lbl{opacity:.5;text-decoration:line-through}
+  .ed-row.disabled{opacity:.45;pointer-events:none}
+  .ed-lbl{flex:1}
+  .ed-sw{position:relative;flex:none;width:38px;height:22px;cursor:pointer}
+  .ed-sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .ed-sw .tr{position:absolute;inset:0;background:#c9d3df;border-radius:999px;transition:background .15s}
+  .ed-sw .kn{position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .ed-sw input:checked ~ .tr{background:var(--azul)}
+  .ed-sw input:checked ~ .kn{transform:translateX(16px)}
+  /* Logo do cliente — header (analista) e palco da apresentação */
+  .client-logo{height:36px;max-width:150px;object-fit:contain;flex:none}
+  .ap-client-logo{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);height:40px;max-width:200px;object-fit:contain;z-index:6;pointer-events:none}
+  /* Sidebar: divisória Ativos/Inativos + toggle de status por cliente */
+  .nav-div{margin:12px 8px 2px;padding-top:12px;border-top:1px solid var(--linha);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--cinza)}
+  .nav-item.inativo .nav-pick{color:var(--cinza)}
+  .nav-sw{position:relative;flex:none;width:34px;height:20px;cursor:pointer;margin-right:4px}
+  .nav-sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .nav-sw .tr{position:absolute;inset:0;background:#c9d3df;border-radius:999px;transition:background .15s}
+  .nav-sw .kn{position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .nav-sw input:checked ~ .tr{background:var(--verde)}
+  .nav-sw input:checked ~ .kn{transform:translateX(14px)}
+
+  /* ===== Exportação da apresentação em PDF (layout de impressão) =========
+     #apPrint só existe para imprimir: fica oculto na tela e vira o único
+     conteúdo visível em @media print. Um slide por página, espelhando o deck. */
+  #apPrint{display:none}
+  @media print{
+    @page{size:338mm 190mm;margin:0}   /* 16:9, como os slides da apresentação */
+    html,body{background:#fff!important}
+    body.printing>*:not(#apPrint){display:none!important}
+    body.printing #apPrint{display:block!important}
+    /* Cada slide ocupa uma página inteira 16:9, COM o gradiente da apresentação
+       (o cliente recebe o mesmo visual que viu). print-color-adjust:exact pede ao
+       navegador para imprimir cores/fundos (o usuário ainda precisa manter
+       "Gráficos de segundo plano" ligado no diálogo). Sem cabeçalho próprio: cada
+       bloco já traz seu título, como na apresentação. */
+    #apPrint .print-slide{position:relative;break-after:page;break-inside:avoid;color:var(--texto);
+      min-height:100vh;box-sizing:border-box;padding:14mm 16mm 24mm;display:flex;flex-direction:column;
+      background:
+        radial-gradient(1100px 560px at 6% -8%, rgba(0,114,206,.10), transparent 62%),
+        radial-gradient(980px 540px at 102% 108%, rgba(222,141,19,.10), transparent 62%),
+        linear-gradient(160deg,#f5f9fd 0%,#f0f3f7 55%,#faf3e8 100%);
+      -webkit-print-color-adjust:exact;print-color-adjust:exact}
+    #apPrint .print-slide:last-child{break-after:auto}
+    /* grades de cards (posts/criativos): fluem por várias páginas, sem cortar
+       nenhum card ao meio (cada card inteiro numa página) — grade centralizada. */
+    #apPrint .print-slide.print-flow{break-inside:auto}
+    /* corpo centralizado VERTICALMENTE por margens auto (item flex): centraliza
+       quando cabe na página e flui a partir do topo quando excede (sem cortar). */
+    #apPrint .print-body{margin:auto 0;width:100%}
+    #apPrint .print-foot{position:absolute;left:0;right:0;bottom:10mm;text-align:center}
+    #apPrint .print-client-logo{height:34px;max-width:220px;object-fit:contain}
+    #apPrint .nota{display:none!important}   /* nota técnica: oculta (como na apresentação) */
+    #apPrint .bloco{margin:0!important;background:transparent!important}
+    #apPrint .card{background:rgba(255,255,255,.65)!important}
+    #apPrint .chart-box,#apPrint .chart-box.sm{height:auto!important}
+    #apPrint .print-chart{display:block;width:100%;height:auto;max-height:128mm;object-fit:contain}
+    /* controles interativos não fazem sentido no papel */
+    #apPrint .post-filtros,#apPrint .seg-controls,#apPrint .daterange,#apPrint .pc-nav,
+    #apPrint .dr-hint,#apPrint .ad-name .pv,#apPrint button,#apPrint input,#apPrint select{display:none!important}
+    /* achata o carrossel: TODOS os posts em grade centralizada */
+    #apPrint .post-carousel{overflow:visible!important}
+    #apPrint .post-track{display:flex!important;flex-wrap:wrap!important;justify-content:center!important;
+      overflow:visible!important;grid-auto-flow:unset!important;gap:12px!important;padding:0!important}
+    #apPrint .post-card{width:calc(25% - 9px);break-inside:avoid;box-shadow:none!important;transform:none!important}
+    /* thumb do post é retrato (4/5, ~95mm) e estoura a página com 4 cards + título;
+       altura fixa menor deixa a linha + título caberem folgados numa página. */
+    #apPrint .post-card .pc-thumb{aspect-ratio:auto!important;height:66mm}
+    #apPrint .post-card .pc-info{padding:8px 10px 10px;gap:4px}
+    /* criativos: grade centralizada, cada card inteiro numa página */
+    #apPrint .creatives{display:flex!important;flex-wrap:wrap!important;justify-content:center!important;gap:16px!important}
+    #apPrint .creatives .crv{width:calc(25% - 12px);break-inside:avoid}
+    /* capa e slides livres */
+    #apPrint .ap-capa{text-align:center;padding:18mm 0;margin:auto}
+    #apPrint .ap-capa img{height:44px;margin-bottom:22px}
+    #apPrint .ap-capa .k{color:var(--ambar);letter-spacing:.2em;text-transform:uppercase;font-weight:700;font-size:.8rem;margin-bottom:12px}
+    #apPrint .ap-capa h1{font-size:2.6rem;color:var(--azul-d);margin-bottom:10px}
+    #apPrint .ap-capa .m{color:var(--cinza);text-transform:capitalize}
+    #apPrint .ap-livre{max-width:100%;text-align:center}
+    #apPrint .ap-livre.duo{display:grid;grid-template-columns:1fr 1fr;gap:24px;text-align:left;align-items:center}
+    #apPrint .ap-livre img{max-width:100%;max-height:120mm;object-fit:contain;border:1px solid var(--linha);border-radius:12px}
+    #apPrint .ap-livre h2{color:var(--texto);font-size:1.6rem;margin-bottom:12px}
+    #apPrint .ap-livre p{font-size:1rem;line-height:1.5;color:#41546b;white-space:pre-wrap}
+    /* anotação do analista posicionada ao redor do bloco */
+    #apPrint .print-nota-wrap.pos-acima,#apPrint .print-nota-wrap.pos-abaixo{display:flex;flex-direction:column;gap:12px}
+    #apPrint .print-nota-wrap.pos-esquerda,#apPrint .print-nota-wrap.pos-direita{display:flex;gap:16px;align-items:flex-start}
+    #apPrint .print-nota-wrap.pos-esquerda>:not(.print-nota),#apPrint .print-nota-wrap.pos-direita>:not(.print-nota){flex:1;min-width:0}
+    #apPrint .print-nota{font-size:.95rem;line-height:1.5;color:#41546b;white-space:pre-wrap;
+      background:#f5f8fc;border-left:3px solid var(--ambar);padding:10px 14px;border-radius:8px}
+    #apPrint a{color:inherit;text-decoration:none}
+    #apPrint table.dados{width:100%;border-collapse:collapse}
+  }
+</style>
+
+<!-- Módulo de Edição: gaveta de clientes (esquerda) -->
+<div id="navOv" class="nav-ov" hidden></div>
+<aside id="navDrawer" class="nav-drawer" hidden aria-label="Clientes">
+  <div class="nav-head"><span>Clientes</span><button type="button" id="navClose" class="nav-x" aria-label="Fechar">✕</button></div>
+  <div class="nav-sub">Clique no nome para trocar de cliente. Passe o mouse e clique no lápis para editar a exibição do relatório.</div>
+  <div class="nav-list" id="navList"></div>
+</aside>
+
+<!-- Módulo de Edição: painel de exibir/ocultar (direita) -->
+<div id="edOv" class="ed-ov" hidden></div>
+<aside id="edPanel" class="ed-panel" hidden aria-label="Módulo de edição">
+  <div class="ed-head">
+    <div class="ed-h-ttl"><span class="ed-k">Módulo de edição</span><b id="edClient">—</b></div>
+    <span class="ed-save" id="edSave"></span>
+    <button type="button" id="edClose" class="nav-x" title="Fechar (Esc)" aria-label="Fechar">✕</button>
+  </div>
+  <div class="ed-hint">Desmarque o que <b>não</b> deve aparecer no relatório deste cliente. Salva automaticamente e vale para o dashboard e o Modo Apresentação.</div>
+  <div class="ed-tree" id="edTree"></div>
+</aside>
+
+<div class="wrap">
+  <header class="top">
+    <button type="button" id="navBtn" class="nav-btn" title="Clientes" aria-label="Abrir lista de clientes">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </button>
+    <img class="logo" src="logo-vetor.png" alt="Vetor" onerror="this.style.display='none'">
+    <div class="ttl">
+      <h1 id="hTitulo">Relatório do Cliente</h1>
+      <div class="sub" id="sub">Carregando…</div>
+    </div>
+    <img id="clientLogo" class="client-logo" src="" alt="" onerror="this.style.display='none'">
+    <div class="badge" id="updated">atualizado em —</div>
+    <button type="button" id="btnApres" title="Modo Apresentação — tela cheia para a reunião com o cliente">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      Iniciar apresentação
+    </button>
+  </header>
+
+  <div class="filtros">
+    <div class="grp">
+      <label for="mes">Mês</label>
+      <select id="mes"></select>
+    </div>
+    <button type="button" id="btnExport" style="margin-left:auto" title="Exportar os dados visíveis (mês, granularidade e recortes atuais) em um arquivo .md">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zM12 3v10.17l3.59-3.58L17 11l-6 6-6-6 1.41-1.41L11 13.17V3h1z"/></svg>
+      Exportar dados
+    </button>
+  </div>
+
+  <!-- ============ ÁREA: VISÃO GERAL ============ -->
+  <!-- section.bloco[data-el]: unidade "adotável" pelo Modo Apresentação (1 bloco = 1 slide) -->
+  <!-- .areawrap[data-area]: unidade "ocultável" pelo Módulo de Edição (área inteira) -->
+  <section class="areawrap" data-area="visao">
+  <section class="bloco" data-el="kpis">
+  <div class="area">
+    <span class="area-ic"><svg aria-hidden="true"><use href="#ic-overview"/></svg></span>
+    <h2>Visão geral</h2>
+    <span class="mes-tag" id="kpiMes"><svg aria-hidden="true"><use href="#ic-cal"/></svg><span id="kpiMesTxt">—</span></span>
+  </div>
+  <div class="area-desc" id="kpiDesc"></div>
+  <div id="kpis"></div>
+  </section>
+  </section><!-- /areawrap visao -->
+
+  <!-- ============ ÁREA: MÍDIA PAGA (Meta → Google) ============ -->
+  <section class="areawrap" data-area="midia">
+  <div class="area">
+    <span class="area-ic"><svg aria-hidden="true"><use href="#ic-meta"/></svg><svg aria-hidden="true"><use href="#ic-gads"/></svg></span>
+    <h2>Mídia Paga</h2>
+  </div>
+
+  <!-- Leads por mês (Meta + Google, visão combinada) -->
+  <section class="bloco" data-el="leads">
+  <div class="secao"><h2>Cadastros (leads) por mês</h2><div class="desc" id="leadsDesc">Meta Ads + Google Ads</div></div>
+  <div class="card">
+    <div class="leg">
+      <span data-legf="meta"><i style="background:#0072ce"></i>Meta Ads</span>
+      <span data-legf="google"><i style="background:#de8d13;border-top:0;height:0;border-bottom:2px dashed #de8d13"></i>Google Ads</span>
+    </div>
+    <div class="chart-box"><canvas id="cLeads"></canvas></div>
+  </div>
+  </section>
+
+  <!-- Meta: Principais anúncios (data-el="ads": ocultável, mas NÃO é slide do
+       Modo Apresentação — não está em AP_BASE) -->
+  <section data-el="ads">
+  <div class="secao"><h2>Meta Ads — Principais anúncios</h2><div class="desc" id="adsDesc"></div></div>
+  <div class="card" id="adsCard"></div>
+  </section>
+
+  <!-- Meta: Criativos -->
+  <section class="bloco" data-el="criativos">
+  <div class="secao">
+    <div class="secao-head"><h2>Meta Ads — Criativos utilizados</h2><span class="mes-tag"><svg aria-hidden="true"><use href="#ic-cal"/></svg><span id="crvMesTxt">—</span></span></div>
+    <div class="desc" id="crvDesc"></div>
+  </div>
+  <div id="crvWrap"></div>
+  </section>
+
+  <!-- Google Ads (depois de Meta, conforme ordem da área) -->
+  <section class="bloco" data-el="google">
+  <div class="secao"><h2>Google Ads</h2><div class="desc">Tráfego pago da revenda</div></div>
+  <div class="card">
+    <div class="chart-box sm"><canvas id="cGoogle"></canvas></div>
+    <div class="nota" id="googleNota"></div>
+  </div>
+  </section>
+
+  <!-- Google Ads — Palavras-chave (top por cliques no mês) -->
+  <section class="bloco" data-el="gkw">
+  <div class="secao">
+    <div class="secao-head"><h2>Google Ads — Palavras-chave</h2><span class="mes-tag"><svg aria-hidden="true"><use href="#ic-cal"/></svg><span id="gkwMesTxt">—</span></span></div>
+    <div class="desc" id="gkwDesc"></div>
+  </div>
+  <div class="card" id="gkwCard"></div>
+  </section>
+
+  <!-- Google Ads — Conjuntos / grupos de anúncios (principais, métricas do mês) -->
+  <section class="bloco" data-el="gcmp">
+  <div class="secao">
+    <div class="secao-head"><h2>Google Ads — Conjuntos</h2><span class="mes-tag"><svg aria-hidden="true"><use href="#ic-cal"/></svg><span id="gcmpMesTxt">—</span></span></div>
+    <div class="desc" id="gcmpDesc"></div>
+  </div>
+  <div class="card" id="gcmpCard"></div>
+  </section>
+  </section><!-- /areawrap midia -->
+
+  <!-- ============ ÁREA: REDES SOCIAIS ============ -->
+  <section class="areawrap" data-area="redes">
+  <div class="area">
+    <span class="area-ic"><svg aria-hidden="true"><use href="#ic-ig"/></svg></span>
+    <h2>Redes Sociais</h2>
+  </div>
+
+  <!-- Instagram comparativo -->
+  <section class="bloco" data-el="igcmp">
+  <div class="secao"><h2>Instagram — Comparativo com o mês anterior</h2><div class="desc" id="cmpDesc"></div></div>
+  <div id="cmpWrap"></div>
+  </section>
+
+  <!-- Instagram: Publicações do mês -->
+  <section class="bloco" data-el="igposts">
+  <div class="secao">
+    <div class="secao-head"><h2>Instagram — Publicações do mês</h2><span class="mes-tag"><svg aria-hidden="true"><use href="#ic-cal"/></svg><span id="postsMesTxt">—</span></span></div>
+    <div class="desc" id="postsDesc"></div>
+  </div>
+  <div class="card">
+    <div class="post-filtros" id="postFiltros"></div>
+    <div class="post-carousel">
+      <button class="pc-nav prev" id="postPrev" type="button" aria-label="Publicações anteriores">‹</button>
+      <div class="post-track" id="postTrack"></div>
+      <button class="pc-nav next" id="postNext" type="button" aria-label="Próximas publicações">›</button>
+    </div>
+    <div class="nota" id="postsNota"></div>
+  </div>
+  </section>
+
+  <!-- Seguidores -->
+  <section class="bloco" data-el="igseg">
+  <div class="secao"><h2>Instagram — Seguidores ao longo do tempo</h2><div class="desc" id="segDesc">Total de seguidores no fim de cada mês</div></div>
+  <div class="card">
+    <div class="seg-controls">
+      <div class="seg-row"><span class="seg-lab">Agrupar por</span><div class="post-filtros" id="segGran"></div></div>
+      <div class="seg-row"><span class="seg-lab">Janela</span><div class="post-filtros" id="segWin"></div></div>
+    </div>
+    <div class="chart-box sm"><canvas id="cFollowers"></canvas></div>
+    <div class="dr-hint" id="segHint"></div>
+  </div>
+  </section>
+
+  <!-- IG diário -->
+  <section class="bloco" data-el="igdiario">
+  <div class="secao"><h2>Instagram — Resultados diários</h2><div class="desc" id="diarioDesc"></div></div>
+  <div class="card">
+    <div class="daterange">
+      <span class="dr-label">Período personalizado</span>
+      <input type="date" id="dini"> <span class="dr-sep">até</span> <input type="date" id="dfim">
+      <button id="aplicar">Aplicar</button>
+      <button class="ghost" id="limpar">Limpar</button>
+    </div>
+    <div class="dr-hint" id="hintRange"></div>
+    <div class="leg"><span><i style="background:#0072ce"></i>Contas alcançadas</span><span><i style="background:#de8d13"></i>Visualizações</span></div>
+    <div class="chart-box" id="diarioBox"><canvas id="cDiario"></canvas></div>
+    <div class="vazio" id="diarioVazio" style="display:none">Dados diários disponíveis a partir de abril/2026.</div>
+  </div>
+  </section>
+  </section><!-- /areawrap redes -->
+
+  <div id="adPrev"><img alt=""><div class="cap"></div></div>
+</div>
+
+<!-- ============================================================
+     MODO APRESENTAÇÃO — tela cheia para a reunião com o cliente.
+     Os slides "adotam" os blocos reais do dashboard (section.bloco);
+     o analista reordena/oculta/cria slides pelo organizador (faixa
+     inferior). Tudo persiste por revenda no D1 (/api/relatorios/
+     apresentacao). Tudo fica DENTRO de #apres por causa do fullscreen.
+     ============================================================ -->
+<div id="apres" hidden>
+  <div class="ap-top">
+    <img class="ap-logo" src="logo-vetor.png" alt="Vetor" onerror="this.style.display='none'">
+    <div class="ap-ttl"><b id="apRevenda">—</b><span class="ap-sep">·</span><span id="apMesTxt">—</span></div>
+    <span class="ap-save" id="apSave"></span>
+    <div class="ap-actions">
+      <button type="button" id="apAnotar" title="Escrever um texto neste slide">✎ Texto</button>
+      <button type="button" id="apNovo" title="Criar um slide de texto/imagem">＋ Novo slide</button>
+      <button type="button" id="apOrg" title="Organizar slides (reordenar, ocultar, excluir)">☰ Organizar</button>
+      <button type="button" id="apPdf" title="Exportar a apresentação inteira em PDF (para enviar ao cliente)">⬇ PDF</button>
+      <span class="ap-count" id="apCount"></span>
+      <button type="button" class="ap-ic" id="apHideBar" title="Ocultar barra superior (T)">▴</button>
+      <button type="button" class="ap-ic" id="apFs" title="Tela cheia">⛶</button>
+      <button type="button" class="ap-ic" id="apSair" title="Encerrar apresentação (Esc)">✕</button>
+    </div>
+  </div>
+  <button type="button" id="apShowBar" class="ap-ic" title="Mostrar barra superior (T)">▾</button>
+  <div class="ap-stage">
+    <img id="apClientLogo" class="ap-client-logo" alt="" style="display:none" onerror="this.style.display='none'">
+    <button type="button" class="ap-arrow prev" id="apPrev" aria-label="Slide anterior">‹</button>
+    <div class="ap-slide" id="apSlide"></div>
+    <button type="button" class="ap-arrow next" id="apNext" aria-label="Próximo slide">›</button>
+  </div>
+  <div class="ap-strip" id="apStrip" hidden></div>
+
+  <!-- Editor de slide personalizado (título/texto/imagem) -->
+  <div class="ap-modal" id="apEditor" hidden>
+    <div class="ap-modal-box">
+      <h3 id="apEdHead">Novo slide</h3>
+      <label for="apEdTitulo">Título</label>
+      <input id="apEdTitulo" maxlength="200" placeholder="Título do slide (opcional)">
+      <label for="apEdTexto">Texto</label>
+      <textarea id="apEdTexto" rows="5" maxlength="4000" placeholder="Texto de apoio, análise, recado ao cliente… (opcional)"></textarea>
+      <label>Imagem</label>
+      <div class="ap-ed-img">
+        <img id="apEdPrev" alt="" hidden>
+        <button type="button" id="apEdImgAdd">Adicionar imagem</button>
+        <button type="button" id="apEdImgRm" class="ghost" hidden>Remover imagem</button>
+        <input type="file" id="apEdFile" accept="image/*" hidden>
+      </div>
+      <div class="ap-ed-err" id="apEdErr"></div>
+      <div class="ap-ed-foot">
+        <button type="button" id="apEdCancelar" class="ghost">Cancelar</button>
+        <button type="button" id="apEdSalvar">Salvar slide</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Texto/anotação de UM slide de Elemento (ou capa): texto + posição -->
+  <div class="ap-modal" id="apNota" hidden>
+    <div class="ap-modal-box">
+      <h3>Texto do slide</h3>
+      <label for="apNtTexto">Texto</label>
+      <textarea id="apNtTexto" rows="4" maxlength="2000" placeholder="Comentário, análise ou destaque para o cliente sobre este elemento…"></textarea>
+      <label>Onde colocar o texto</label>
+      <div class="ap-pos" id="apNtPos"></div>
+      <div class="ap-ed-err" id="apNtErr"></div>
+      <div class="ap-ed-foot">
+        <button type="button" id="apNtRemover" class="ghost">Remover</button>
+        <span style="flex:1"></span>
+        <button type="button" id="apNtCancelar" class="ghost">Cancelar</button>
+        <button type="button" id="apNtSalvar">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="data" type="application/json">{"metaMonthly":[],"ads":{},"igMonthly":{},"igDaily":{},"followers":[],"google":[],"googleKeywords":{},"googleCampaigns":{},"creatives":[],"meta":{"revenda":"","ig":"","updated":"","junePartial":null}}</script>
+<!-- Demo de portfólio: dados 100% fictícios, servidos por mock-api.js (sem backend real). -->
+<script src="mock-api.js"></script>
+<!-- Documento de impressão da apresentação (PDF). Vazio na tela; preenchido
+     sob demanda por apBuildPrint() e visível só em @media print. -->
+<div id="apPrint" aria-hidden="true"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// SNAP = esqueleto vazio + a identidade da revenda inicial (SM10), só para a
+// página ter o que renderizar antes do /data chegar. TODAS as revendas são
+// live-only: crescem com o mês corrente ao vivo (loadLive), os meses passados
+// consultados sob demanda (ensureMonth), a série mensal (loadSeries) e o
+// histórico de seguidores do D1 (loadFollowers).
+// Até 2026-08-11 a SM10 era exceção: carregava aqui um snapshot CONGELADO dos
+// meses fechados. Isso criou um buraco — julho/2026 fechou, saiu da faixa "ao
+// vivo" e nunca entrou no snapshot, então o mês aparecia vazio. Uniformizada
+// com as demais. O histórico de seguidores de 2025, que só existia no snapshot,
+// foi preservado no D1 pela migration 0021.
+const SNAP = JSON.parse(document.getElementById('data').textContent);
+const clone = o => JSON.parse(JSON.stringify(o));
+function emptyData(rev){return {metaMonthly:[],ads:{},igMonthly:{},igDaily:{},followers:[],google:[],googleKeywords:{},googleCampaigns:{},creatives:[],
+  meta:{revenda:(rev&&rev.nome)||'',ig:(rev&&rev.username)?('@'+rev.username):'',updated:'',junePartial:null}};}
+let currentRevenda='vetta';
+let REV_INDEX=[];            // índice das revendas (vem de /api/relatorios/data)
+let DATA = clone(SNAP);      // esqueleto da revenda inicial; preenchido ao vivo
+DATA.googleKeywords=DATA.googleKeywords||{};DATA.googleCampaigns=DATA.googleCampaigns||{};
+if(window.Chart){Chart.defaults.animation=false;Chart.defaults.font.family='-apple-system,Segoe UI,Roboto,Arial,sans-serif';}
+const AZUL='#0072ce', AMBAR='#de8d13', CINZA='#999';
+// Mês corrente do calendário (parcial). Substitui os antigos checks fixos a '2026-06'.
+const NOWM=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
+const isPartial=m=>m===NOWM;
+const partialTxt=()=>(DATA.meta&&DATA.meta.junePartial)?DATA.meta.junePartial:'mês em andamento';
+const MESES_PT={1:'Jan',2:'Fev',3:'Mar',4:'Abr',5:'Mai',6:'Jun',7:'Jul',8:'Ago',9:'Set',10:'Out',11:'Nov',12:'Dez'};
+const fmt=n=>n==null?'—':Number(n).toLocaleString('pt-BR');
+const fmtBRL=n=>n==null?'—':Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let AD_THUMBS={}; // adName -> {img,cap} do mês corrente (preview no hover)
+function mLabel(m){const[y,mm]=m.split('-');return MESES_PT[+mm]+'/'+y.slice(2);}
+function mLong(m){const[y,mm]=m.split('-');return MESES_PT[+mm]+'/'+y;}
+const order = DATA.followers.map(f=>f.m); // Ago/25..Jun/26
+const findM=(arr,m)=>arr.find(x=>x.m===m);
+const prevOf=m=>{const i=order.indexOf(m);return i>0?order[i-1]:null;};
+let charts={};
+let FOLLOWER_DAILY=[];  // série diária do D1 [{data:'YYYY-MM-DD', v}] (p/ Semana/Dia)
+let segGran='Mês';      // granularidade do gráfico de seguidores
+let segWin='tudo';      // janela de observação (recorte temporal) do gráfico de seguidores
+function mkChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg);}
+// Plugin: escreve o valor acima de cada barra do 1º dataset (barras). Deixa o
+// número do mês legível sem precisar de hover. Aplicado só onde é passado em
+// config.plugins (não é global).
+const barValueLabels={id:'barValueLabels',afterDatasetsDraw(chart){
+  const meta=chart.getDatasetMeta(0);
+  if(!meta||meta.type!=='bar'||meta.hidden)return;
+  const ds=chart.data.datasets[0], ctx=chart.ctx;
+  ctx.save();
+  ctx.font='700 11px -apple-system,Segoe UI,Roboto,Arial,sans-serif';
+  ctx.fillStyle='#0a2540';ctx.textAlign='center';ctx.textBaseline='bottom';
+  meta.data.forEach((el,i)=>{const v=ds.data[i];if(v==null||v===0)return;ctx.fillText(fmt(v),el.x,el.y-4);});
+  ctx.restore();
+}};
+// Plugin: valor acima de cada ponto do 1º dataset (linha). Para gráficos mensais
+// (Google Ads, seguidores), deixa o número visível sem depender do hover.
+const pointValueLabels={id:'pointValueLabels',afterDatasetsDraw(chart){
+  const m=chart.getDatasetMeta(0);
+  if(!m||m.hidden)return;
+  const ds=chart.data.datasets[0], ctx=chart.ctx;
+  ctx.save();
+  ctx.font='700 10px -apple-system,Segoe UI,Roboto,Arial,sans-serif';
+  ctx.fillStyle='#0a2540';ctx.textAlign='center';ctx.textBaseline='bottom';
+  m.data.forEach((pt,i)=>{const v=ds.data[i];if(v==null)return;ctx.fillText(fmt(v),pt.x,pt.y-7);});
+  ctx.restore();
+}};
+
+// ---- seletor de mês + chrome derivado de DATA (reexecutável por revenda) ----
+const selMes=document.getElementById('mes');
+let userPicked=false;
+let dailyMonths=[];  // meses com série diária de IG (recalculado por revenda)
+// O dropdown de mês é DESVINCULADO da série de seguidores: dá para consultar
+// posts/anúncios/insights de meses passados via API mesmo sem histórico de
+// seguidores. Faixa fixa a partir de MONTH_FLOOR, igual para todas as revendas.
+const MONTH_FLOOR='2024-01';
+function monthList(floor,cur){
+  const out=[]; let [y,m]=floor.split('-').map(Number); const [cy,cm]=cur.split('-').map(Number);
+  while(y<cy||(y===cy&&m<=cm)){ out.push(y+'-'+String(m).padStart(2,'0')); if(++m>12){m=1;y++;} }
+  return out;
+}
+// order = meses com QUALQUER dado (eixo dos gráficos de tendência + prevOf).
+// Cresce conforme o analista consulta meses passados (ensureMonth).
+function computeOrder(){
+  const s=new Set();
+  DATA.followers.forEach(f=>s.add(f.m));
+  DATA.metaMonthly.forEach(x=>x&&x.m&&s.add(x.m));
+  DATA.google.forEach(x=>x&&x.m&&s.add(x.m));
+  Object.keys(DATA.igMonthly).forEach(m=>s.add(m));
+  Object.keys(DATA.ads).forEach(m=>s.add(m));
+  order.length=0; [...s].sort().forEach(m=>order.push(m));
+}
+// (Re)inicializa o chrome derivado de DATA: order, opções de mês, limites do
+// gráfico diário e o rótulo "atualizado em". Roda no load e a cada troca de revenda.
+function initChrome(){
+  computeOrder();
+  const months=monthList(MONTH_FLOOR,NOWM);
+  selMes.innerHTML='';
+  months.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=mLong(m);selMes.appendChild(o);});
+  selMes.value=months.includes(NOWM)?NOWM:(months[months.length-1]||'');
+  dailyMonths=Object.keys(DATA.igDaily);
+  const allDates=dailyMonths.flatMap(m=>DATA.igDaily[m].dates).sort();
+  const minD=allDates[0], maxD=allDates[allDates.length-1];
+  ['dini','dfim'].forEach(id=>{const el=document.getElementById(id);el.value='';if(minD){el.min=minD;el.max=maxD;}});
+  document.getElementById('hintRange').textContent=minD
+    ?('Intervalo disponível: '+minD.split('-').reverse().join('/')+' a '+maxD.split('-').reverse().join('/')+'. Afeta apenas este gráfico; os demais blocos seguem o mês selecionado.')
+    :'Série diária ainda indisponível para esta revenda.';
+  const up=(DATA.meta&&DATA.meta.updated)||'';
+  document.getElementById('updated').textContent=up?('atualizado em '+up.split('-').reverse().join('/')+((DATA.meta&&DATA.meta.live)?' · ao vivo':'')):'sem dados ainda';
+}
+initChrome();
+
+// Ícones de tendência (Material). A DIREÇÃO segue o sinal da variação (subiu/
+// caiu); a COR segue o sentido (bom/ruim), então p/ investimento (invert) uma
+// alta aparece como seta pra cima em vermelho. flat = sem variação.
+const TREND={
+  up:'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z',
+  down:'M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6z',
+  flat:'M22 12l-4-4v3H3v2h15v3z',
+};
+function trendSvg(dir){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+TREND[dir]+'"/></svg>';}
+function deltaHTML(cur,prev,invert){
+  if(cur==null||prev==null||prev===0) return '<span class="dlt flat">—</span>';
+  const d=cur-prev, pct=Math.round(100*d/prev);
+  const cls = d===0?'flat':((d>0)!==!!invert?'up':'down');
+  const dir = d>0?'up':(d<0?'down':'flat');
+  return '<span class="dlt '+cls+'">'+trendSvg(dir)+'<span>'+(d>0?'+':'')+fmt(d)+' ('+(pct>0?'+':'')+pct+'%)</span></span>';
+}
+
+function renderKPIs(m){
+  const mm=findM(DATA.metaMonthly,m)||{}, g=findM(DATA.google,m)||{}, ig=DATA.igMonthly[m], f=findM(DATA.followers,m)||{};
+  const pm=prevOf(m), mmP=pm?findM(DATA.metaMonthly,pm)||{}:{}, igP=pm?DATA.igMonthly[pm]:null, fP=pm?findM(DATA.followers,pm)||{}:{};
+  const gP=pm?findM(DATA.google,pm)||{}:{};
+  const partial = isPartial(m);
+  document.getElementById('kpiMesTxt').textContent=mLong(m);
+  document.getElementById('kpiDesc').innerHTML = partial?mLong(m)+' é <b>parcial</b> ('+partialTxt()+'). Variações comparam com o mês anterior.':'Variações comparam com '+(pm?mLong(pm):'—')+'.';
+  const semIG='<span class="dlt flat">—</span>';
+  // Cadastros = leads de FORMULÁRIO + conversas iniciadas no WHATSAPP (campanha
+  // com objetivo de mensagem não gera `lead`). A quebra só aparece quando HÁ
+  // WhatsApp no mês: numa conta que só roda formulário ela seria ruído, mas onde
+  // o WhatsApp responde por tudo (ex.: Intelidata em Jul/26, 5 de 5) é o dado
+  // que explica o número.
+  function kpiSubCadastros(mm){
+    const f=mm.leadsForm, w=mm.leadsWa;
+    if(typeof w!=='number' || !w) return '';                  // sem WhatsApp (ou mês sem a quebra)
+    if(!f) return '<div class="sub">todos no WhatsApp</div>';
+    return '<div class="sub">'+fmt(f)+' por formulário · '+fmt(w)+' no WhatsApp</div>';
+  }
+  // Dois grupos: Anúncios (Meta Ads) e Redes Sociais (Instagram). O logo da
+  // plataforma no cabeçalho do grupo E em cada card deixa a origem do dado
+  // clara mesmo quando o card é visto isolado.
+  const grupos=[
+    {vis:'kpis:meta', icon:'ic-meta', titulo:'Anúncios · Meta Ads', cards:[
+      {lbl:'Cadastros',val:fmt(mm.leads),d:deltaHTML(mm.leads,mmP.leads),sub:kpiSubCadastros(mm)},
+      {lbl:'Alcance',val:fmt(mm.reach),d:deltaHTML(mm.reach,mmP.reach)},
+      {lbl:'Cliques',val:fmt(mm.clicks),d:deltaHTML(mm.clicks,mmP.clicks)},
+      {lbl:'Investimento',val:fmtBRL(mm.spend),d:deltaHTML(mm.spend,mmP.spend,true)},
+    ]},
+    {vis:'kpis:google', icon:'ic-gads', titulo:'Anúncios · Google Ads', cards:[
+      {lbl:'Cadastros',val:fmt(g.conv),d:deltaHTML(g.conv,gP.conv)},
+      {lbl:'Impressões',val:fmt(g.impr),d:deltaHTML(g.impr,gP.impr)},
+      {lbl:'Cliques',val:fmt(g.clicks),d:deltaHTML(g.clicks,gP.clicks)},
+      {lbl:'Investimento',val:fmtBRL(g.cost),d:deltaHTML(g.cost,gP.cost,true)},
+    ]},
+    {vis:'kpis:ig', icon:'ic-ig', titulo:'Redes Sociais · Instagram', cards:[
+      {lbl:'Seguidores',val:fmt(f.v),d:deltaHTML(f.v,fP.v)},
+      {lbl:'Contas alcançadas',val:ig?fmt(ig.reach):'—',d:ig&&igP?deltaHTML(ig.reach,igP.reach):semIG},
+      {lbl:'Visualizações',val:ig?fmt(ig.views):'—',d:ig&&igP?deltaHTML(ig.views,igP.views):semIG},
+      {lbl:'Visitas ao perfil',val:ig?fmt(ig.visits):'—',d:ig&&igP?deltaHTML(ig.visits,igP.visits):semIG},
+    ]},
+  ];
+  document.getElementById('kpis').innerHTML=grupos.filter(x=>!isHidden(x.vis)).map(g=>
+    '<div class="kpi-grupo"><div class="grupo-head"><svg class="ic" aria-hidden="true"><use href="#'+g.icon+'"/></svg>'+g.titulo+'</div>'+
+    '<div class="grid-kpi">'+g.cards.map(c=>
+      '<div class="kpi"><svg class="kpi-ic" aria-hidden="true"><use href="#'+g.icon+'"/></svg>'+
+      '<div class="lbl">'+c.lbl+'</div><div class="val">'+c.val+'</div>'+c.d+(c.sub||'')+'</div>'
+    ).join('')+'</div></div>'
+  ).join('');
+}
+
+function renderLeads(m){
+  // Módulo de Edição: cada mídia paga pode ser ocultada individualmente aqui.
+  const showMeta=!isHidden('leads:meta'), showGoog=!isHidden('leads:google');
+  const legM=document.querySelector('[data-legf="meta"]'); if(legM) legM.style.display=showMeta?'':'none';
+  const legG=document.querySelector('[data-legf="google"]'); if(legG) legG.style.display=showGoog?'':'none';
+  const fontes=[showMeta&&'Meta Ads',showGoog&&'Google Ads'].filter(Boolean).join(' + ')||'—';
+  const ld=document.getElementById('leadsDesc');
+  if(ld) ld.textContent=fontes+(order.length?(' · '+mLong(order[0])+' a '+mLong(order[order.length-1])):'');
+  const labels=order.map(mLabel);
+  const meta=order.map(x=>(findM(DATA.metaMonthly,x)||{}).leads||0);
+  const goog=order.map(x=>{const gg=findM(DATA.google,x);return gg?Math.round(gg.conv):0;});
+  const hl=order.map(x=>x===m?AMBAR:AZUL);
+  const dsets=[];
+  if(showMeta) dsets.push({type:'bar',label:'Meta Ads',data:meta,backgroundColor:hl,borderRadius:4,order:2});
+  if(showGoog) dsets.push({type:'line',label:'Google Ads',data:goog,borderColor:AMBAR,borderDash:[6,4],pointRadius:2,fill:false,order:1});
+  mkChart('cLeads',{type:'bar',plugins:[barValueLabels],data:{labels,datasets:dsets
+  },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)+' cadastros'}}},scales:{y:{beginAtZero:true,grace:'12%',ticks:{precision:0}}}}});
+}
+
+function renderGoogle(m){
+  const labels=order.map(mLabel);
+  const clk=order.map(x=>(findM(DATA.google,x)||{}).clicks||0);
+  mkChart('cGoogle',{type:'line',plugins:[pointValueLabels],data:{labels,datasets:[{label:'Cliques',data:clk,borderColor:AZUL,backgroundColor:'rgba(0,114,206,0.10)',fill:true,tension:0.3,pointRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true,text:'Cliques por mês (Google Ads)',color:'#777',font:{size:12}}},scales:{y:{beginAtZero:true,grace:'15%'}}}});
+  const nota=document.getElementById('googleNota');
+  if(!DATA.google.length){nota.textContent='Google Ads ainda não configurado para esta revenda — o bloco será preenchido quando a conta for integrada.';return;}
+  const totalConv=DATA.google.reduce((s,g)=>s+g.conv,0);
+  nota.innerHTML='<b>Atenção:</b> o Google Ads gerou tráfego (cliques/impressões) em todos os meses, mas registrou <b>'+fmt(totalConv)+' conversões/cadastros</b> no período. A ação de conversão "Enviar formulário de lead" está ativa porém zerada — provável rastreamento de conversão não configurado/disparando. Por isso o total de cadastros do mês vem do Meta.';
+}
+
+// Mensagem quando não há detalhamento de Google Ads (palavras-chave/campanhas).
+function gAdsVazioMsg(){
+  const rev=REV_INDEX.find(r=>r.key===currentRevenda);
+  if(rev&&rev.gads===false) return 'Google Ads não configurado para esta revenda.';
+  return 'Sem dados de Google Ads para este mês (conta ainda não integrada ou sem atividade).';
+}
+// Google Ads — top 10 palavras-chave por cliques no mês (tabela).
+function renderGkw(m){
+  const card=document.getElementById('gkwCard');const tag=document.getElementById('gkwMesTxt');const desc=document.getElementById('gkwDesc');
+  if(tag)tag.textContent=mLong(m);
+  if(desc)desc.textContent='Top 10 palavras-chave por cliques — '+mLong(m)+(isPartial(m)?' (parcial)':'');
+  const rows=(DATA.googleKeywords||{})[m];
+  if(!rows||!rows.length){card.innerHTML='<div class="vazio">'+gAdsVazioMsg()+'</div>';return;}
+  let html='<table class="dados"><thead><tr><th>Palavra-chave</th><th>Cliques</th><th>Impressões</th><th>Custo</th><th>Conv.</th></tr></thead><tbody>';
+  rows.slice(0,10).forEach(r=>{
+    html+='<tr><td>'+esc(r.kw)+'</td><td>'+fmt(r.clicks)+'</td><td>'+fmt(r.impr)+'</td><td>'+fmtBRL(r.cost)+'</td><td>'+(r.conv>0?'<span class="destaque">'+fmt(Math.round(r.conv))+'</span>':'0')+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  card.innerHTML=html;
+}
+// Google Ads — conjuntos (grupos de anúncios) com métricas do mês (tabela).
+function renderGcmp(m){
+  const card=document.getElementById('gcmpCard');const tag=document.getElementById('gcmpMesTxt');const desc=document.getElementById('gcmpDesc');
+  if(tag)tag.textContent=mLong(m);
+  if(desc)desc.textContent='Conjuntos por cliques — '+mLong(m)+(isPartial(m)?' (parcial)':'');
+  const rows=(DATA.googleCampaigns||{})[m];
+  if(!rows||!rows.length){card.innerHTML='<div class="vazio">'+gAdsVazioMsg()+'</div>';return;}
+  let html='<table class="dados"><thead><tr><th>Conjunto</th><th>Cliques</th><th>Impressões</th><th>Custo</th><th>Conv.</th></tr></thead><tbody>';
+  rows.slice(0,10).forEach(r=>{
+    html+='<tr><td>'+esc(r.name)+'</td><td>'+fmt(r.clicks)+'</td><td>'+fmt(r.impr)+'</td><td>'+fmtBRL(r.cost)+'</td><td>'+(r.conv>0?'<span class="destaque">'+fmt(Math.round(r.conv))+'</span>':'0')+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  const tot=rows.reduce((a,r)=>({clicks:a.clicks+r.clicks,cost:a.cost+r.cost,conv:a.conv+r.conv}),{clicks:0,cost:0,conv:0});
+  html+='<div class="nota">Total do mês: <b>'+fmt(tot.clicks)+'</b> cliques · <b>'+fmtBRL(tot.cost)+'</b> investidos · <b>'+fmt(Math.round(tot.conv))+'</b> conversões em '+rows.length+' conjunto(s).</div>';
+  card.innerHTML=html;
+}
+
+// Resolve a imagem do criativo de um anúncio para o preview no hover.
+// Prioriza r.thumb (miniatura ao vivo da API — mês corrente via /data ou mês
+// fechado via ensureCreatives). Sem thumb, cai no catálogo curado (casado pelo
+// nome do anúncio).
+function adThumb(r){
+  if(r.thumb) return {img:r.thumb, cap:r.n};
+  const c=DATA.creatives.find(x=>x.adName===r.n);
+  return c?{img:c.img, cap:c.nome+' · '+c.tipo}:null;
+}
+function renderAds(m){
+  const desc=document.getElementById('adsDesc'), card=document.getElementById('adsCard');
+  const rows=DATA.ads[m];
+  desc.textContent='Top anúncios por cadastros — '+mLong(m)+(isPartial(m)?' (parcial)':'');
+  if(!rows){card.innerHTML='<div class="vazio">Sem detalhamento por anúncio para este mês (buscando ao vivo — se persistir, não houve veiculação no período).</div>';return;}
+  const top=rows.slice(0,10);
+  AD_THUMBS={};
+  // "Cadastros" (era "Cadastros (Form.)"): desde 2026-08-11 o número soma os leads
+  // de formulário e as conversas iniciadas no WhatsApp — o rótulo antigo passaria
+  // a mentir. A origem de cada linha vai no title da célula.
+  let html='<table class="dados"><thead><tr><th>Anúncio</th><th>Alcance</th><th>Cliques (todos)</th><th>Cadastros</th></tr></thead><tbody>';
+  top.forEach(r=>{
+    const th=adThumb(r);
+    let nome;
+    if(th){AD_THUMBS[r.n]=th;nome='<span class="ad-name" data-ad="'+esc(r.n)+'">'+esc(r.n)+'<span class="pv"><svg viewBox="0 0 24 24"><use href="#ic-view"/></svg></span></span>';}
+    else nome=esc(r.n);
+    // Origem do cadastro no title (só quando há WhatsApp na linha) — o analista
+    // consegue explicar de onde veio o resultado sem sair da tabela.
+    const org=(r.cadWa>0)?(r.cadForm>0?' title="'+r.cadForm+' por formulário · '+r.cadWa+' no WhatsApp"':' title="'+r.cadWa+' no WhatsApp"'):'';
+    html+='<tr><td>'+nome+'</td><td>'+fmt(r.reach)+'</td><td>'+fmt(r.clicks)+'</td><td'+org+'>'+(r.cad>0?'<span class="destaque">'+r.cad+'</span>':'0')+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  const tot=rows.reduce((a,r)=>({reach:a.reach+r.reach,clicks:a.clicks+r.clicks,cad:a.cad+r.cad}),{reach:0,clicks:0,cad:0});
+  const igm=DATA.igMonthly[m];
+  html+='<div class="nota">Total do mês: <b>'+fmt(tot.clicks)+'</b> cliques e <b>'+fmt(tot.cad)+'</b> cadastros em '+rows.length+' anúncios ativos. Alcance único da conta no mês: <b>'+fmt((findM(DATA.metaMonthly,m)||{}).reach)+'</b> contas (a soma por anúncio conta a mesma pessoa mais de uma vez).</div>';
+  card.innerHTML=html;
+}
+
+function renderCreatives(m){
+  document.getElementById('crvMesTxt').textContent=mLong(m);
+  const wrap=document.getElementById('crvWrap'), desc=document.getElementById('crvDesc');
+  const rows=DATA.ads[m];
+  if(!rows){wrap.innerHTML='<div class="vazio">Sem detalhamento de anúncios para '+mLong(m)+'.</div>';return;}
+  // Preferência: criativos AO VIVO — anúncios do mês que vieram com a miniatura
+  // da API (r.thumb). Sem thumbs (meses do snapshot congelado), cai no catálogo
+  // curado, casado pelo nome do anúncio. Em ambos, ordena por cadastros.
+  const aoVivo=rows.filter(r=>r.thumb);
+  let itens;
+  if(aoVivo.length){
+    desc.textContent='Criativos em destaque no mês (miniatura via API), ordenados por cadastros.';
+    itens=aoVivo.slice().sort((a,b)=>b.cad-a.cad).slice(0,8)
+      .map(r=>({img:r.thumb,nome:r.n,tipo:'Meta Ads',desc:'',cad:r.cad,clk:r.clicks}));
+  }else{
+    desc.textContent='Criativos que veicularam no mês, ordenados por cadastros.';
+    itens=DATA.creatives
+      .map(c=>{const ad=rows.find(r=>r.n===c.adName);return ad?{img:c.img,nome:c.nome,tipo:c.tipo,desc:c.desc,cad:ad.cad,clk:ad.clicks}:null;})
+      .filter(Boolean)
+      .sort((a,b)=>b.cad-a.cad);
+  }
+  if(!itens.length){wrap.innerHTML='<div class="vazio">Nenhum criativo veiculou em '+mLong(m)+'.</div>';return;}
+  const html=itens.map(c=>'<div class="crv"><div class="thumb"><img src="'+c.img+'" alt="'+esc(c.nome)+'" loading="lazy"></div><div class="info"><div class="tipo">'+esc(c.tipo)+'</div><h3>'+esc(c.nome)+'</h3>'+(c.desc?'<div class="d">'+esc(c.desc)+'</div>':'')+'<div class="metricas"><span class="mt cad"><b>'+fmt(c.cad)+'</b><span class="k">Cadastro'+(c.cad===1?'':'s')+'</span></span><span class="mt clk"><b>'+fmt(c.clk)+'</b><span class="k">Clique'+(c.clk===1?'':'s')+'</span></span></div></div></div>').join('');
+  wrap.innerHTML='<div class="creatives">'+html+'</div>';
+}
+
+function renderCompare(m){
+  const ig=DATA.igMonthly[m], pm=prevOf(m), igP=pm?DATA.igMonthly[pm]:null, f=findM(DATA.followers,m), fP=pm?findM(DATA.followers,pm):null;
+  document.getElementById('cmpDesc').textContent=ig&&igP?(mLong(pm)+' → '+mLong(m)):'Comparativo disponível quando houver dois meses de Instagram (via API).';
+  const wrap=document.getElementById('cmpWrap');
+  if(!ig||!igP){wrap.innerHTML='<div class="vazio">Métricas de Instagram (alcance/visualizações/visitas) via API — precisam de dois meses para comparar. Seguidores no gráfico abaixo.</div>';return;}
+  const rows=[
+    {lbl:'Seguidores',a:fP?fP.v:null,b:f?f.v:null},
+    {lbl:'Contas alcançadas',a:igP.reach,b:ig.reach},
+    {lbl:'Visualizações',a:igP.views,b:ig.views},
+    {lbl:'Visitas ao perfil',a:igP.visits,b:ig.visits},
+  ];
+  wrap.innerHTML='<div class="cmp">'+rows.map(r=>'<div class="row"><div class="lbl">'+r.lbl+'</div><div class="vals">'+fmt(r.a)+' → <b>'+fmt(r.b)+'</b></div>'+deltaHTML(r.b,r.a)+'</div>').join('')+'</div>'+(isPartial(m)?'<div class="nota">'+mLong(m)+' é parcial ('+partialTxt()+') — comparação parcial vs. mês anterior cheio.</div>':'');
+}
+
+// Camadas de granularidade do gráfico de seguidores. Seguidores é um ESTOQUE:
+// cada período mostra o valor no seu FIM (última observação), nunca soma.
+// Ano/Trimestre/Mês vêm da série mensal (histórico completo, inclui 2025 semeado);
+// Semana/Dia vêm da série diária do D1 (só a partir de Jan/2026).
+const SEG_GRANS=['Ano','Trimestre','Mês','Semana','Dia'];
+const SEG_SING={Ano:'ano',Trimestre:'trimestre','Mês':'mês',Semana:'semana',Dia:'dia'};
+// Janelas de observação (recorte temporal). m = nº de meses p/ trás a partir do
+// ponto mais recente; 'y' = ano corrente da série; null = série inteira ("Tudo").
+const SEG_WINS=[{k:'3m',label:'3 meses',m:3},{k:'6m',label:'6 meses',m:6},{k:'12m',label:'12 meses',m:12},{k:'ano',label:'No ano',m:'y'},{k:'tudo',label:'Tudo',m:null}];
+const monthEnd=m=>{const [y,mm]=m.split('-').map(Number);return new Date(Date.UTC(y,mm,0)).toISOString().slice(0,10);};
+// Chave do período de um mês YYYY-MM, conforme a granularidade.
+function segKeyMes(gran,m){
+  const [y,mm]=m.split('-'); const q=Math.floor((+mm-1)/3)+1;
+  if(gran==='Ano') return {k:y,label:y};
+  if(gran==='Trimestre') return {k:y+'Q'+q,label:'T'+q+'/'+y.slice(2)};
+  return {k:m,label:mLabel(m)}; // Mês
+}
+function segFromMonthly(gran,selM){
+  const src=DATA.followers.slice().sort((a,b)=>a.m<b.m?-1:1);
+  const g=new Map();                       // ASC -> último do período vence (fim do período)
+  for(const f of src){const {k,label}=segKeyMes(gran,f.m); g.set(k,{label,v:f.v,lm:f.m});}
+  const selKey=segKeyMes(gran,selM).k;
+  const labels=[],vals=[],hi=[],wdates=[];
+  for(const [k,o] of g){labels.push(o.label);vals.push(o.v);hi.push(k===selKey?6:3);wdates.push(monthEnd(o.lm));}
+  return {labels,vals,hi,valueLabels:true,dates:null,wdates};
+}
+function segFromDaily(gran,selM){
+  const src=FOLLOWER_DAILY;                 // [{data,v}] ASC
+  if(gran==='Dia'){
+    return {
+      labels:src.map(p=>p.data.slice(8,10)+'/'+p.data.slice(5,7)),
+      vals:src.map(p=>p.v),
+      hi:src.map(p=>p.data.slice(0,7)===selM?4.5:0),
+      valueLabels:false, dates:src.map(p=>p.data),
+    };
+  }
+  // Semana (segunda a domingo): valor = último dia da semana (fim do período).
+  const g=new Map();
+  for(const p of src){
+    const dt=new Date(p.data+'T00:00:00Z'); const day=dt.getUTCDay();
+    dt.setUTCDate(dt.getUTCDate()-(day===0?6:day-1));   // recua até a segunda
+    g.set(dt.toISOString().slice(0,10),{lastDate:p.data,v:p.v});
+  }
+  const labels=[],vals=[],hi=[],dates=[];
+  for(const [,o] of g){labels.push(o.lastDate.slice(8,10)+'/'+o.lastDate.slice(5,7));vals.push(o.v);hi.push(o.lastDate.slice(0,7)===selM?4.5:0);dates.push(o.lastDate);}
+  return {labels,vals,hi,valueLabels:false,dates};
+}
+// Recorta a série (labels/vals/hi/datas) à janela escolhida. Usa wdates (mensal) ou
+// dates (diário) só p/ o corte; o eixo/tooltip continuam com os campos originais.
+function applyWindow(S,winKey){
+  const win=SEG_WINS.find(w=>w.k===winKey);
+  const D=S.wdates||S.dates;
+  if(!win||win.m==null||!D||!D.length) return S;          // "Tudo" ou série sem datas
+  const anchor=D.reduce((a,b)=>a>b?a:b);                   // ponto mais recente (ISO → compara ok)
+  let cutoff;
+  if(win.m==='y'){ cutoff=anchor.slice(0,4)+'-01-01'; }    // ano corrente da série
+  else { const [ay,am]=anchor.slice(0,7).split('-').map(Number); const d=new Date(Date.UTC(ay,am-1,1)); d.setUTCMonth(d.getUTCMonth()-(win.m-1)); cutoff=d.toISOString().slice(0,10); }
+  const keep=[]; D.forEach((dt,i)=>{ if(dt>=cutoff) keep.push(i); });
+  const pick=a=>Array.isArray(a)?keep.map(i=>a[i]):a;
+  return {labels:pick(S.labels),vals:pick(S.vals),hi:pick(S.hi),dates:pick(S.dates),wdates:pick(S.wdates),valueLabels:S.valueLabels};
+}
+function renderFollowers(m){
+  const filtros=document.getElementById('segGran'), winBox=document.getElementById('segWin'), hint=document.getElementById('segHint'), desc=document.getElementById('segDesc');
+  const temDiario=FOLLOWER_DAILY.length>0;
+  // chips (as 5 camadas sempre visíveis; Semana/Dia desabilitadas sem base diária)
+  filtros.innerHTML=SEG_GRANS.map(g=>{
+    const dis=(g==='Dia'||g==='Semana')&&!temDiario;
+    return '<button type="button" class="pc-chip'+(segGran===g?' on':'')+(dis?' vazio':'')+'" data-gran="'+g+'"'+(dis?' disabled':'')+'>'+g+'</button>';
+  }).join('');
+  const useDaily=(segGran==='Dia'||segGran==='Semana');
+  let S, gran=segGran;
+  if(useDaily && !temDiario){ gran='Mês'; S=segFromMonthly('Mês',m); hint.textContent='Granularidade diária/semanal indisponível sem base diária — exibindo por mês.'; }
+  else if(useDaily){ S=segFromDaily(segGran,m); hint.textContent=FOLLOWER_DAILY.length?('Base diária desde '+FOLLOWER_DAILY[0].data.split('-').reverse().join('/')+' (via D1).'):''; }
+  else { S=segFromMonthly(segGran,m); hint.textContent=''; }
+  // Chips de janela: desabilita as que deixariam < 2 pontos nesta granularidade.
+  const wc={}; SEG_WINS.forEach(w=>{ wc[w.k]=applyWindow(S,w.k).labels.length; });
+  if(segWin!=='tudo' && wc[segWin]<2) segWin='tudo';       // combinação inviável → volta p/ Tudo
+  winBox.innerHTML=SEG_WINS.map(w=>{const dis=w.k!=='tudo'&&wc[w.k]<2;return '<button type="button" class="pc-chip'+(segWin===w.k?' on':'')+(dis?' vazio':'')+'" data-win="'+w.k+'"'+(dis?' disabled':'')+'>'+w.label+'</button>';}).join('');
+  S=applyWindow(S,segWin);
+  const winLab=SEG_WINS.find(w=>w.k===segWin).label;
+  desc.textContent='Total de seguidores no fim de cada '+SEG_SING[gran]+(segWin==='tudo'?'':' · janela: '+winLab);
+  const ptR=S.hi.map(h=> h>0 ? h : (useDaily?0:3));
+  mkChart('cFollowers',{type:'line',plugins:S.valueLabels?[pointValueLabels]:[],data:{labels:S.labels,datasets:[{label:'Seguidores',data:S.vals,borderColor:AZUL,backgroundColor:'rgba(0,114,206,0.10)',fill:true,tension:useDaily?0.2:0.3,pointRadius:ptR,pointBackgroundColor:AZUL}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>{if(!S.dates)return items[0].label;const d=S.dates[items[0].dataIndex];return d?d.split('-').reverse().join('/'):items[0].label;},label:c=>fmt(c.parsed.y)+' seguidores'}}},scales:{y:{beginAtZero:false,grace:'12%'},x:{ticks:{autoSkip:true,maxRotation:0,maxTicksLimit:useDaily?12:24,font:{size:10}}}}}});
+}
+
+function dailySlice(ini,fim){
+  // concatena dias de todos os meses entre ini..fim (YYYY-MM-DD)
+  const out={dates:[],reach:[],views:[]};
+  dailyMonths.forEach(mk=>{const d=DATA.igDaily[mk];d.dates.forEach((dt,i)=>{if(dt>=ini&&dt<=fim){out.dates.push(dt);out.reach.push(d.reach[i]);out.views.push(d.views[i]);}});});
+  return out;
+}
+function renderDaily(m,range){
+  const box=document.getElementById('diarioBox'), vazio=document.getElementById('diarioVazio');
+  let ds, titulo;
+  if(range){ds=dailySlice(range.ini,range.fim);titulo='Período '+range.ini.split('-').reverse().join('/')+' a '+range.fim.split('-').reverse().join('/');}
+  else if(DATA.igDaily[m]){const d=DATA.igDaily[m];ds={dates:d.dates,reach:d.reach,views:d.views};titulo=mLong(m)+(isPartial(m)?' (parcial)':'');}
+  else {box.style.display='none';vazio.style.display='block';document.getElementById('diarioDesc').textContent='Sem dados diários para '+mLong(m)+'.';if(charts.cDiario)charts.cDiario.destroy();return;}
+  box.style.display='block';vazio.style.display='none';
+  document.getElementById('diarioDesc').textContent='Alcance e visualizações por dia — '+titulo;
+  const labels=ds.dates.map(d=>d.slice(8,10)+'/'+d.slice(5,7));
+  mkChart('cDiario',{data:{labels,datasets:[
+    {type:'line',label:'Contas alcançadas',data:ds.reach,borderColor:AZUL,backgroundColor:'rgba(0,114,206,0.08)',fill:true,tension:0.3,pointRadius:1.5,yAxisID:'y'},
+    {type:'line',label:'Visualizações',data:ds.views,borderColor:AMBAR,borderDash:[5,3],fill:false,tension:0.3,pointRadius:1.5,yAxisID:'y'}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:t=>'Dia '+t[0].label}}},scales:{y:{beginAtZero:true},x:{ticks:{autoSkip:true,maxRotation:0,font:{size:10}}}}}});
+}
+
+// Criativos de MESES FECHADOS ao vivo: a imagem do criativo é estável (não "anda"
+// como as métricas), então buscamos só a miniatura em /api/relatorios/creatives e a
+// injetamos no snapshot (r.thumb) — cadastros/alcance seguem congelados. É best-effort
+// e por mês (guard): se falhar, o mês continua com o catálogo curado.
+const CRV_FETCHED=new Set();
+async function ensureCreatives(m){
+  if(CRV_FETCHED.has(m)) return;
+  const rows=DATA.ads[m];
+  if(!rows||!rows.length) return;      // sem detalhamento por anúncio nesse mês
+  if(rows.some(r=>r.thumb)) return;     // já tem miniatura (mês ao vivo via /data)
+  CRV_FETCHED.add(m);
+  try{
+    const r=await fetch('/api/relatorios/creatives?month='+encodeURIComponent(m)+'&revenda='+encodeURIComponent(currentRevenda),{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok) return;
+    const res=await r.json();
+    if(!res||!res.ok||!Array.isArray(res.creatives)||!res.creatives.length) return;
+    const byName=new Map(res.creatives.map(c=>[c.n,c]));
+    let hit=false;
+    rows.forEach(x=>{const c=byName.get(x.n); if(c&&c.thumb){x.thumb=c.thumb; if(c.creative)x.creative=c.creative; hit=true;}});
+    if(hit && selMes.value===m){renderAds(m);renderCreatives(m);}
+  }catch(e){/* mantém o catálogo curado */}
+}
+
+// ===== Publicações do mês (Instagram) =======================================
+// Carrossel de posts do mês (feed/reels + stories ativos), buscados sob demanda
+// em /api/relatorios/posts?month=. Cada card tem a tag do formato + métricas.
+const POSTS_BY_MONTH={};        // m -> {posts, notes, error?}
+const POSTS_FETCHED=new Set();  // meses já buscados (guard)
+let postFiltro='Todos';
+const POST_FMTS=[{k:'Post Único',cls:'tag-unico'},{k:'Carrossel',cls:'tag-carrossel'},{k:'Reels',cls:'tag-reels'},{k:'Stories',cls:'tag-stories'}];
+function fmtCls(f){const x=POST_FMTS.find(p=>p.k===f);return x?x.cls:'tag-outros';}
+function pcMetric(icon,val,titulo){return '<span title="'+titulo+'"><svg viewBox="0 0 24 24"><use href="#'+icon+'"/></svg><b>'+fmt(val||0)+'</b></span>';}
+function postCard(p){
+  const d=p.date?p.date.slice(8,10)+'/'+p.date.slice(5,7):'';
+  const thumb=p.thumb?'<img src="'+esc(p.thumb)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">':'';
+  const met=[];
+  if(p.formato!=='Stories'){
+    if(p.impulsionado){
+      met.push('<span class="pc-boost" title="Visualizações: '+fmt(p.visualizacoesOrg||0)+' orgânico + '+fmt(p.visualizacoesPaid||0)+' patrocinado (post impulsionado)"><svg viewBox="0 0 24 24"><use href="#ic-eye"/></svg><b>'+fmt(p.visualizacoes||0)+'</b>⚡</span>');
+    } else {
+      met.push(pcMetric('ic-eye',p.visualizacoes,'Visualizações'));
+    }
+    met.push(pcMetric('ic-heart',p.curtidas,'Curtidas'));
+    met.push(pcMetric('ic-comment',p.comentarios,'Comentários'));
+    met.push(pcMetric('ic-bookmark',p.salvos,'Salvos'));
+    met.push(pcMetric('ic-share',p.envios,'Compartilhamentos'));
+  }
+  const pid=esc(p.id||p.permalink||p.date||'');
+  const open=p.permalink?('<a class="post-card" data-pid="'+pid+'" href="'+esc(p.permalink)+'" target="_blank" rel="noopener">'):'<div class="post-card" data-pid="'+pid+'">';
+  const close=p.permalink?'</a>':'</div>';
+  return open+'<div class="pc-thumb">'+thumb+'<span class="pc-tag '+fmtCls(p.formato)+'">'+esc(p.formato)+'</span></div>'+
+    '<div class="pc-info"><div class="pc-date">'+d+'</div><div class="pc-assunto">'+esc(p.assunto||'')+'</div>'+
+    (met.length?'<div class="pc-metrics">'+met.join('')+'</div>':'')+'</div>'+close;
+}
+function setPcNav(){
+  const track=document.getElementById('postTrack'),prev=document.getElementById('postPrev'),next=document.getElementById('postNext');
+  if(!track||!prev||!next) return;
+  const upd=()=>{const max=track.scrollWidth-track.clientWidth-2;prev.disabled=track.scrollLeft<=2;next.disabled=track.scrollWidth<=track.clientWidth+2||track.scrollLeft>=max;};
+  track.onscroll=upd;
+  const step=()=>Math.max(200,Math.round(track.clientWidth*0.85));
+  prev.onclick=()=>track.scrollBy({left:-step(),behavior:'smooth'});
+  next.onclick=()=>track.scrollBy({left:step(),behavior:'smooth'});
+  upd();
+}
+function renderPosts(m){
+  const mesTxt=document.getElementById('postsMesTxt'),desc=document.getElementById('postsDesc'),
+        filtros=document.getElementById('postFiltros'),track=document.getElementById('postTrack'),nota=document.getElementById('postsNota');
+  mesTxt.textContent=mLong(m);
+  const st=POSTS_BY_MONTH[m];
+  if(!st){desc.textContent='Carregando publicações…';filtros.innerHTML='';track.innerHTML='<div class="post-vazio">Carregando publicações do mês…</div>';nota.textContent='';return;}
+  const posts=st.posts||[];
+  if(st.error && !posts.length){desc.textContent='Publicações via Instagram Graph API.';filtros.innerHTML='';track.innerHTML='<div class="post-vazio">Não foi possível carregar as publicações deste mês.</div>';nota.textContent='';return;}
+  // contagem por formato + chips (Todos + as 4 categorias, sempre visíveis)
+  const cont={Todos:posts.length};POST_FMTS.forEach(f=>cont[f.k]=posts.filter(p=>p.formato===f.k).length);
+  const chips=[{k:'Todos'}].concat(POST_FMTS);
+  filtros.innerHTML=chips.map(c=>{const n=cont[c.k]||0;return '<button type="button" class="pc-chip'+(postFiltro===c.k?' on':'')+(n===0&&c.k!=='Todos'?' vazio':'')+'" data-fmt="'+esc(c.k)+'">'+esc(c.k)+' <span class="cnt">'+n+'</span></button>';}).join('');
+  // filtra + ordena por data (mais recente primeiro)
+  const vis=(postFiltro==='Todos'?posts:posts.filter(p=>p.formato===postFiltro)).slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  // A ordem salva pelo analista (drag-and-drop) prevalece — no dashboard E na
+  // apresentação (sincronizadas, mesma chave por mês). Posts fora da lista
+  // (novos) mantêm a ordem por data, depois dos ordenados.
+  const po=(AP.cfg.postOrder||{})[m];
+  if(po&&po.length){const rank=new Map(po.map((id,i)=>[id,i]));vis.sort((a,b)=>(rank.has(a.id)?rank.get(a.id):1e9)-(rank.has(b.id)?rank.get(b.id):1e9));}
+  if(!vis.length){
+    track.innerHTML='<div class="post-vazio">'+(postFiltro==='Stories'
+      ?'O Instagram só disponibiliza métricas de stories enquanto estão ativos (24h) — não há histórico por mês via API.'
+      :'Nenhuma publicação do tipo “'+esc(postFiltro)+'” em '+mLong(m)+'.')+'</div>';
+  }else{
+    track.innerHTML=vis.map(postCard).join('');
+  }
+  desc.textContent=posts.length?(posts.length+' publicaç'+(posts.length===1?'ão':'ões')+' em '+mLong(m)+' — deslize para ver todas'):'Sem publicações no Instagram em '+mLong(m)+'.';
+  nota.textContent=(st.notes||[]).join(' ');
+  setPcNav();
+  apPostsDraggable(); // arrastável no dashboard E na apresentação
+}
+async function ensurePosts(m){
+  if(POSTS_FETCHED.has(m)) return;
+  POSTS_FETCHED.add(m);
+  try{
+    const r=await fetch('/api/relatorios/posts?month='+encodeURIComponent(m)+'&revenda='+encodeURIComponent(currentRevenda),{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok){POSTS_BY_MONTH[m]={posts:[],notes:[],error:'http '+r.status};POSTS_FETCHED.delete(m);}
+    else{const res=await r.json();POSTS_BY_MONTH[m]=(res&&res.ok)?{posts:res.posts||[],notes:res.notes||[]}:{posts:[],notes:(res&&res.notes)||[],error:(res&&res.error)||'erro'};}
+  }catch(e){POSTS_BY_MONTH[m]={posts:[],notes:[],error:String(e)};POSTS_FETCHED.delete(m);}
+  if(selMes.value===m) renderPosts(m);
+}
+document.getElementById('postFiltros').addEventListener('click',e=>{const b=e.target.closest('.pc-chip');if(!b)return;postFiltro=b.getAttribute('data-fmt');renderPosts(selMes.value);});
+document.getElementById('segGran').addEventListener('click',e=>{const b=e.target.closest('.pc-chip');if(!b||b.disabled)return;segGran=b.getAttribute('data-gran');renderFollowers(selMes.value);});
+document.getElementById('segWin').addEventListener('click',e=>{const b=e.target.closest('.pc-chip');if(!b||b.disabled)return;segWin=b.getAttribute('data-win');renderFollowers(selMes.value);});
+
+let customRange=null;
+// Destrói gráficos e limpa os contêineres dinâmicos (usado ao trocar de revenda,
+// para não deixar dado da revenda anterior "vazando" enquanto o live não chega).
+function clearBoard(){
+  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});charts={};
+  ['kpis','adsCard','crvWrap','gkwCard','gcmpCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='';});
+  const track=document.getElementById('postTrack');if(track)track.innerHTML='';
+}
+function renderAll(){
+  applyVisibility(); // Módulo de Edição: mostra/oculta áreas e blocos inteiros
+  const m=selMes.value;
+  if(!m){ // revenda sem mês ainda (live-only aguardando /data e /followers)
+    clearBoard();
+    document.getElementById('kpis').innerHTML='<div class="vazio">Carregando dados ao vivo desta revenda…</div>';
+    return;
+  }
+  renderKPIs(m);renderLeads(m);renderGoogle(m);renderGkw(m);renderGcmp(m);renderAds(m);renderCreatives(m);renderCompare(m);renderFollowers(m);
+  renderDaily(m,customRange);
+  ensureMonth(m);              // live-only: busca o mês exibido ao vivo (no-op no SM10 / mês corrente)
+  ensureMonth(prevOf(m));      // e o mês ANTERIOR, p/ o "Comparativo com o mês anterior" (IG via API)
+  ensureCreatives(m);
+  renderPosts(m);ensurePosts(m);
+}
+selMes.addEventListener('change',()=>{userPicked=true;postFiltro='Todos';customRange=null;document.getElementById('dini').value='';document.getElementById('dfim').value='';renderAll();});
+
+// ===== Troca de revenda =====================================================
+// O índice vem de /api/relatorios/data (live.revendas). Ao trocar, reinicializa
+// DATA com um esqueleto vazio (todas as revendas são live-only), zera o estado
+// por revenda e recarrega live + seguidores + série + config da apresentação.
+// O campo #revenda saiu do header; a troca é só pela sidebar. fillRevendas
+// (chamada quando o índice chega do /data) apenas reconstrói a lista e o header.
+function fillRevendas(list){
+  renderClientList();
+  updateHeaderClient();
+}
+function setRevenda(key){
+  if(!key||key===currentRevenda) return;
+  const rev=REV_INDEX.find(r=>r.key===key)||{key,nome:key,username:''};
+  if(AP.on)apClose(); // devolve os nós adotados ao dashboard antes de trocar os dados
+  currentRevenda=key; AP_REVENDA=key;
+  DATA=emptyData(rev);
+  DATA.googleKeywords=DATA.googleKeywords||{};DATA.googleCampaigns=DATA.googleCampaigns||{};
+  userPicked=false;customRange=null;postFiltro='Todos';segGran='Mês';segWin='tudo';
+  FOLLOWER_DAILY=[];AD_THUMBS={};
+  CRV_FETCHED.clear();POSTS_FETCHED.clear();MONTH_FETCHED.clear();Object.keys(POSTS_BY_MONTH).forEach(k=>delete POSTS_BY_MONTH[k]);
+  AP.cfg={v:1,order:null,hidden:[],custom:[],postOrder:{},notes:{},visibility:{}};
+  updateHeaderClient(); // título "Relatório <cliente>", subtítulo e logo do cliente
+  clearBoard();
+  initChrome();
+  renderAll();
+  loadLive();loadFollowers();loadSeries();apLoadCfg();
+  renderClientList();                         // atualiza o destaque na gaveta
+  if(EDIT.open) syncEditorClient();           // editor aberto acompanha a troca
+}
+// (a troca de cliente agora é só pela sidebar — ver renderClientList/navList)
+document.getElementById('aplicar').addEventListener('click',()=>{
+  const a=document.getElementById('dini').value, b=document.getElementById('dfim').value;
+  if(a&&b&&a<=b){customRange={ini:a,fim:b};renderDaily(selMes.value,customRange);}
+});
+document.getElementById('limpar').addEventListener('click',()=>{customRange=null;document.getElementById('dini').value='';document.getElementById('dfim').value='';renderDaily(selMes.value,null);});
+
+// ===== EXPORTAÇÃO EM MARKDOWN (Visão do Analista) ===========================
+// Gera um .md com TODOS os dados visíveis no momento, refletindo o estado atual:
+// mês selecionado, granularidade + janela do gráfico de seguidores, recorte de
+// datas dos resultados diários, filtro de formato das publicações e os blocos/
+// áreas que o Módulo de Edição não ocultou. Números no mesmo formato do painel.
+const mdCell=s=>String(s==null?'':s).replace(/\|/g,'\\|').replace(/\r?\n/g,' ').trim();
+function mdTable(headers,rows){
+  const line=cells=>'| '+cells.map(mdCell).join(' | ')+' |';
+  const sep='| '+headers.map(()=>'---').join(' | ')+' |';
+  return [line(headers),sep].concat(rows.map(r=>line(r))).join('\n');
+}
+// Variação em texto (equivalente ao deltaHTML: absoluto + %, com seta).
+function deltaTxt(cur,prev){
+  if(cur==null||prev==null||prev===0) return '—';
+  const d=cur-prev, pct=Math.round(100*d/prev);
+  const arrow=d>0?'▲':(d<0?'▼':'=');
+  return arrow+' '+(d>0?'+':'')+fmt(d)+' ('+(pct>0?'+':'')+pct+'%)';
+}
+function expVisible(area,block){return !isHidden('area:'+area)&&!isHidden('block:'+block);}
+function buildMarkdown(){
+  const m=selMes.value;
+  const rev=(REV_INDEX||[]).find(r=>r.key===currentRevenda)||{};
+  const nome=rev.nome||((DATA.meta&&DATA.meta.revenda)||revNome(currentRevenda));
+  const username=rev.username||((DATA.meta&&DATA.meta.ig)?String(DATA.meta.ig).replace(/^@/,''):'');
+  const pm=prevOf(m);
+  const parcial=isPartial(m);
+  const L=[];
+  L.push('# Relatório '+nome+' — Visão do Analista');
+  L.push('');
+  const meta=[];
+  meta.push('- **Cliente:** '+nome);
+  if(username) meta.push('- **Instagram:** @'+username);
+  meta.push('- **Mês selecionado:** '+mLong(m)+(parcial?' (parcial — '+partialTxt()+')':''));
+  if(pm) meta.push('- **Mês de comparação:** '+mLong(pm));
+  if(DATA.meta&&DATA.meta.updated) meta.push('- **Dados atualizados em:** '+DATA.meta.updated);
+  meta.push('- **Exportado do dashboard em:** '+new Date().toLocaleString('pt-BR'));
+  L.push(meta.join('\n'));
+  L.push('');
+
+  // ---- Visão Geral — KPIs -------------------------------------------------
+  if(expVisible('visao','kpis')){
+    const mm=findM(DATA.metaMonthly,m)||{}, g=findM(DATA.google,m)||{}, ig=DATA.igMonthly[m], f=findM(DATA.followers,m)||{};
+    const mmP=pm?findM(DATA.metaMonthly,pm)||{}:{}, gP=pm?findM(DATA.google,pm)||{}:{}, igP=pm?DATA.igMonthly[pm]:null, fP=pm?findM(DATA.followers,pm)||{}:{};
+    L.push('## Visão Geral — KPIs de '+mLong(m));
+    L.push('');
+    L.push('### Anúncios · Meta Ads');
+    L.push(mdTable(['Métrica','Valor','Variação vs '+(pm?mLong(pm):'—')],[
+      ['Cadastros'+(mm.leadsWa>0?' (form. + WhatsApp)':''),fmt(mm.leads),deltaTxt(mm.leads,mmP.leads)],
+      ...(mm.leadsWa>0?[['— por formulário',fmt(mm.leadsForm),''],['— no WhatsApp',fmt(mm.leadsWa),'']]:[]),
+      ['Alcance',fmt(mm.reach),deltaTxt(mm.reach,mmP.reach)],
+      ['Cliques',fmt(mm.clicks),deltaTxt(mm.clicks,mmP.clicks)],
+      ['Investimento',fmtBRL(mm.spend),deltaTxt(mm.spend,mmP.spend)],
+    ]));
+    L.push('');
+    L.push('### Anúncios · Google Ads');
+    L.push(mdTable(['Métrica','Valor','Variação vs '+(pm?mLong(pm):'—')],[
+      ['Cadastros',fmt(g.conv),deltaTxt(g.conv,gP.conv)],
+      ['Impressões',fmt(g.impr),deltaTxt(g.impr,gP.impr)],
+      ['Cliques',fmt(g.clicks),deltaTxt(g.clicks,gP.clicks)],
+      ['Investimento',fmtBRL(g.cost),deltaTxt(g.cost,gP.cost)],
+    ]));
+    L.push('');
+    L.push('### Redes Sociais · Instagram');
+    L.push(mdTable(['Métrica','Valor','Variação vs '+(pm?mLong(pm):'—')],[
+      ['Seguidores',fmt(f.v),deltaTxt(f.v,fP.v)],
+      ['Contas alcançadas',ig?fmt(ig.reach):'—',ig&&igP?deltaTxt(ig.reach,igP.reach):'—'],
+      ['Visualizações',ig?fmt(ig.views):'—',ig&&igP?deltaTxt(ig.views,igP.views):'—'],
+      ['Visitas ao perfil',ig?fmt(ig.visits):'—',ig&&igP?deltaTxt(ig.visits,igP.visits):'—'],
+    ]));
+    L.push('');
+  }
+
+  // ---- Mídia Paga ---------------------------------------------------------
+  if(expVisible('midia','leads')){
+    L.push('## Mídia Paga — Cadastros por mês');
+    L.push('');
+    const rows=order.map(x=>{
+      const mm=findM(DATA.metaMonthly,x)||{}, gg=findM(DATA.google,x);
+      return [mLong(x),fmt(mm.leads||0),gg?fmt(Math.round(gg.conv)):'—'];
+    });
+    L.push(mdTable(['Mês','Meta Ads (cadastros)','Google Ads (conversões)'],rows));
+    L.push('');
+  }
+  if(expVisible('midia','ads')){
+    L.push('## Meta Ads — Principais anúncios ('+mLong(m)+(parcial?' · parcial':'')+')');
+    L.push('');
+    const rows=DATA.ads[m];
+    if(rows&&rows.length){
+      L.push(mdTable(['Anúncio','Alcance','Cliques (todos)','Cadastros'],
+        rows.slice(0,10).map(r=>[r.n,fmt(r.reach),fmt(r.clicks),fmt(r.cad)+(r.cadWa>0?(r.cadForm>0?' ('+r.cadForm+' form. + '+r.cadWa+' WhatsApp)':' (WhatsApp)'):'')])));
+      const tot=rows.reduce((a,r)=>({clicks:a.clicks+r.clicks,cad:a.cad+r.cad}),{clicks:0,cad:0});
+      L.push('');
+      L.push('_Total do mês: '+fmt(tot.clicks)+' cliques e '+fmt(tot.cad)+' cadastros em '+rows.length+' anúncios ativos. Alcance único da conta: '+fmt((findM(DATA.metaMonthly,m)||{}).reach)+' contas._');
+    } else { L.push('_Sem detalhamento por anúncio para '+mLong(m)+'._'); }
+    L.push('');
+  }
+  if(expVisible('midia','criativos')){
+    L.push('## Meta Ads — Criativos utilizados ('+mLong(m)+')');
+    L.push('');
+    const rows=DATA.ads[m];
+    if(rows&&rows.length){
+      const aoVivo=rows.filter(r=>r.thumb);
+      let itens;
+      if(aoVivo.length){
+        itens=aoVivo.slice().sort((a,b)=>b.cad-a.cad).slice(0,8).map(r=>({nome:r.creative||r.n,tipo:'Meta Ads',cad:r.cad,clk:r.clicks}));
+      } else {
+        itens=DATA.creatives.map(c=>{const ad=rows.find(r=>r.n===c.adName);return ad?{nome:c.nome,tipo:c.tipo,cad:ad.cad,clk:ad.clicks}:null;}).filter(Boolean).sort((a,b)=>b.cad-a.cad);
+      }
+      if(itens.length) L.push(mdTable(['Criativo','Tipo','Cadastros','Cliques'],itens.map(c=>[c.nome,c.tipo,fmt(c.cad),fmt(c.clk)])));
+      else L.push('_Nenhum criativo veiculou em '+mLong(m)+'._');
+    } else { L.push('_Sem detalhamento de criativos para '+mLong(m)+'._'); }
+    L.push('');
+  }
+  if(expVisible('midia','google')){
+    L.push('## Google Ads — Cliques por mês');
+    L.push('');
+    if(DATA.google.length){
+      L.push(mdTable(['Mês','Cliques'],order.map(x=>{const gg=findM(DATA.google,x)||{};return [mLong(x),fmt(gg.clicks||0)];})));
+    } else { L.push('_Google Ads ainda não configurado para esta revenda._'); }
+    L.push('');
+  }
+  if(expVisible('midia','gkw')){
+    const rows=(DATA.googleKeywords||{})[m];
+    L.push('## Google Ads — Palavras-chave ('+mLong(m)+')');
+    L.push('');
+    if(rows&&rows.length){
+      L.push(mdTable(['Palavra-chave','Cliques','Impressões','Custo','Conv.'],
+        rows.slice(0,10).map(r=>[r.kw,fmt(r.clicks),fmt(r.impr),fmtBRL(r.cost),fmt(Math.round(r.conv||0))])));
+    } else { L.push('_'+gAdsVazioMsg()+'_'); }
+    L.push('');
+  }
+  if(expVisible('midia','gcmp')){
+    const rows=(DATA.googleCampaigns||{})[m];
+    L.push('## Google Ads — Conjuntos ('+mLong(m)+')');
+    L.push('');
+    if(rows&&rows.length){
+      L.push(mdTable(['Conjunto','Cliques','Impressões','Custo','Conv.'],
+        rows.slice(0,10).map(r=>[r.name,fmt(r.clicks),fmt(r.impr),fmtBRL(r.cost),fmt(Math.round(r.conv||0))])));
+    } else { L.push('_'+gAdsVazioMsg()+'_'); }
+    L.push('');
+  }
+
+  // ---- Redes Sociais ------------------------------------------------------
+  if(expVisible('redes','igcmp')){
+    const ig=DATA.igMonthly[m], igP=pm?DATA.igMonthly[pm]:null, f=findM(DATA.followers,m), fP=pm?findM(DATA.followers,pm):null;
+    L.push('## Instagram — Comparativo com o mês anterior');
+    L.push('');
+    if(ig&&igP){
+      L.push('_'+mLong(pm)+' → '+mLong(m)+'_');
+      L.push('');
+      L.push(mdTable(['Métrica',mLong(pm),mLong(m),'Variação'],[
+        ['Seguidores',fmt(fP?fP.v:null),fmt(f?f.v:null),deltaTxt(f?f.v:null,fP?fP.v:null)],
+        ['Contas alcançadas',fmt(igP.reach),fmt(ig.reach),deltaTxt(ig.reach,igP.reach)],
+        ['Visualizações',fmt(igP.views),fmt(ig.views),deltaTxt(ig.views,igP.views)],
+        ['Visitas ao perfil',fmt(igP.visits),fmt(ig.visits),deltaTxt(ig.visits,igP.visits)],
+      ]));
+    } else { L.push('_Comparativo disponível quando houver dois meses de Instagram._'); }
+    L.push('');
+  }
+  if(expVisible('redes','igposts')){
+    L.push('## Instagram — Publicações de '+mLong(m));
+    L.push('');
+    const st=POSTS_BY_MONTH[m];
+    if(!st){ L.push('_Publicações ainda não carregadas._'); }
+    else {
+      const posts=st.posts||[];
+      const cont=POST_FMTS.map(fmt2=>fmt2.k+': '+posts.filter(p=>p.formato===fmt2.k).length).join(' · ');
+      L.push('_Filtro ativo: **'+postFiltro+'** · '+posts.length+' publicaç'+(posts.length===1?'ão':'ões')+' no mês ('+cont+')._');
+      L.push('');
+      let vis=(postFiltro==='Todos'?posts:posts.filter(p=>p.formato===postFiltro)).slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+      const po=(AP.cfg.postOrder||{})[m];
+      if(po&&po.length){const rank=new Map(po.map((id,i)=>[id,i]));vis.sort((a,b)=>(rank.has(a.id)?rank.get(a.id):1e9)-(rank.has(b.id)?rank.get(b.id):1e9));}
+      if(vis.length){
+        L.push(mdTable(['Data','Formato','Assunto/Legenda','Visualizações','Curtidas','Comentários','Salvos','Compart.','Link'],
+          vis.map(p=>{
+            const d=p.date?p.date.split('-').reverse().join('/'):'—';
+            const isStory=p.formato==='Stories';
+            const link=p.permalink?('['+'abrir'+']('+p.permalink+')'):'—';
+            return [d,p.formato,p.assunto||'',isStory?'—':fmt(p.visualizacoes),isStory?'—':fmt(p.curtidas),isStory?'—':fmt(p.comentarios),isStory?'—':fmt(p.salvos),isStory?'—':fmt(p.envios),link];
+          })));
+      } else { L.push('_Nenhuma publicação do tipo "'+postFiltro+'" em '+mLong(m)+'._'); }
+      if((st.notes||[]).length){ L.push(''); L.push('> '+st.notes.join(' ')); }
+    }
+    L.push('');
+  }
+  if(expVisible('redes','igseg')){
+    // Reproduz o gráfico de seguidores respeitando granularidade (segGran) + janela (segWin).
+    const temDiario=FOLLOWER_DAILY.length>0;
+    const useDaily=(segGran==='Dia'||segGran==='Semana');
+    let S, gran=segGran;
+    if(useDaily&&!temDiario){ gran='Mês'; S=segFromMonthly('Mês',m); }
+    else if(useDaily){ S=segFromDaily(segGran,m); }
+    else { S=segFromMonthly(segGran,m); }
+    const wc={}; SEG_WINS.forEach(w=>{ wc[w.k]=applyWindow(S,w.k).labels.length; });
+    let win=segWin; if(win!=='tudo'&&wc[win]<2) win='tudo';
+    S=applyWindow(S,win);
+    const winLab=SEG_WINS.find(w=>w.k===win).label;
+    L.push('## Instagram — Seguidores ao longo do tempo');
+    L.push('');
+    L.push('_Agrupado por: **'+gran+'** · Janela: **'+winLab+'** — total de seguidores no fim de cada '+SEG_SING[gran]+'._');
+    L.push('');
+    const perLabel=(gran==='Semana'||gran==='Dia')?'Data':'Período';
+    const rows=S.labels.map((lab,i)=>{
+      const per=(S.dates&&S.dates[i])?S.dates[i].split('-').reverse().join('/'):lab;
+      return [per,fmt(S.vals[i])];
+    });
+    L.push(mdTable([perLabel,'Seguidores'],rows));
+    L.push('');
+  }
+  if(expVisible('redes','igdiario')){
+    L.push('## Instagram — Resultados diários');
+    L.push('');
+    let ds,titulo;
+    if(customRange){ ds=dailySlice(customRange.ini,customRange.fim); titulo='Período '+customRange.ini.split('-').reverse().join('/')+' a '+customRange.fim.split('-').reverse().join('/'); }
+    else if(DATA.igDaily[m]){ const d=DATA.igDaily[m]; ds={dates:d.dates,reach:d.reach,views:d.views}; titulo=mLong(m)+(parcial?' (parcial)':''); }
+    else { ds=null; }
+    if(ds&&ds.dates.length){
+      L.push('_Alcance e visualizações por dia — '+titulo+'._');
+      L.push('');
+      L.push(mdTable(['Dia','Contas alcançadas','Visualizações'],
+        ds.dates.map((dt,i)=>[dt.split('-').reverse().join('/'),fmt(ds.reach[i]),fmt(ds.views[i])])));
+    } else { L.push('_Sem dados diários para '+mLong(m)+'._'); }
+    L.push('');
+  }
+
+  L.push('---');
+  L.push('');
+  L.push('_Fontes: Meta Marketing API + Instagram Graph API + Google Ads API (somente leitura). '+
+    'Cadastros = leads de formulário Meta. Instagram (Contas alcançadas / Visualizações) = orgânico + patrocinado somados; Visitas ao perfil = só orgânico. '+
+    'Métricas estimadas (visualizações/alcance) são fixadas no fechamento do mês. '+
+    'Exportação da Visão do Analista — dashboard Relatórios de Revenda / Vetor._');
+  return L.join('\n');
+}
+async function exportarMarkdown(){
+  const btn=document.getElementById('btnExport');
+  const m=selMes.value;
+  if(!m){ alert('Selecione um mês antes de exportar.'); return; }
+  if(btn){ btn.disabled=true; }
+  try{
+    // Garante que publicações e criativos do mês exibido estejam carregados
+    // (best-effort — se falhar, exporta o que estiver disponível).
+    try{ await ensurePosts(m); }catch(e){}
+    try{ await ensureCreatives(m); }catch(e){}
+    const md=buildMarkdown();
+    const nome=revNome(currentRevenda).replace(/[^\w\-]+/g,'-').replace(/^-+|-+$/g,'');
+    const fname='relatorio-'+(nome||currentRevenda).toLowerCase()+'-'+m+'.md';
+    const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=fname; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(e){ alert('Não foi possível gerar a exportação: '+e); }
+  finally{ if(btn){ btn.disabled=false; } }
+}
+document.getElementById('btnExport').addEventListener('click',exportarMarkdown);
+
+// ===== CONSULTA AO VIVO =====================================================
+// O snapshot acima é o HISTÓRICO CONGELADO (meses fechados + série de
+// seguidores semeada). Aqui buscamos o MÊS CORRENTE ao vivo em
+// /api/relatorios/data e o sobrepomos. Se a chamada falhar (sem sessão, fonte
+// fora do ar), a página continua mostrando o snapshot — degradação suave.
+function upsertM(arr,row){ if(!row||!row.m) return; const i=arr.findIndex(x=>x.m===row.m); if(i>=0)arr[i]=row; else arr.push(row); }
+function mergeLive(live){
+  const cur=live.month||live.current, D=live.data||{}; // month = mês que a resposta representa
+  if(D.metaMonthly) upsertM(DATA.metaMonthly,D.metaMonthly);
+  if(D.google) upsertM(DATA.google,D.google);
+  if(D.igMonthly) DATA.igMonthly[cur]=D.igMonthly;
+  if(D.igDaily&&D.igDaily.dates&&D.igDaily.dates.length) DATA.igDaily[cur]=D.igDaily;
+  if(D.ads&&Array.isArray(D.ads)&&D.ads.length) DATA.ads[cur]=D.ads;
+  if(Array.isArray(D.googleKeywords)) (DATA.googleKeywords||(DATA.googleKeywords={}))[cur]=D.googleKeywords;
+  if(Array.isArray(D.googleCampaigns)) (DATA.googleCampaigns||(DATA.googleCampaigns={}))[cur]=D.googleCampaigns;
+  if(D.followers&&typeof D.followers.v==='number') upsertM(DATA.followers,{m:cur,v:D.followers.v});
+  if(live.updated) DATA.meta.updated=String(live.updated).slice(0,10);
+  DATA.meta.live=true;
+  return cur;
+}
+function refreshChrome(){
+  computeOrder();
+  // Acrescenta ao dropdown meses com dado que ainda não estejam nele (ex.: o mês
+  // corrente do SM10, ausente do snapshot). Na live-only a faixa já cobre tudo.
+  const have=new Set([...selMes.options].map(o=>o.value));
+  order.forEach(m=>{ if(!have.has(m)){const o=document.createElement('option');o.value=m;o.textContent=mLong(m);selMes.appendChild(o);} });
+  // Estende os limites do período diário se o mês corrente trouxe dias novos.
+  dailyMonths=Object.keys(DATA.igDaily);
+  const ad=dailyMonths.flatMap(m=>DATA.igDaily[m].dates).sort();
+  if(ad.length){
+    const lo=ad[0],hi=ad[ad.length-1];
+    ['dini','dfim'].forEach(id=>{const el=document.getElementById(id);el.min=lo;el.max=hi;});
+    document.getElementById('hintRange').textContent='Intervalo disponível: '+lo.split('-').reverse().join('/')+' a '+hi.split('-').reverse().join('/')+'. Afeta apenas este gráfico; os demais blocos seguem o mês selecionado.';
+  }
+  const up=(DATA.meta.updated||'');
+  document.getElementById('updated').textContent='atualizado em '+up.split('-').reverse().join('/')+(DATA.meta.live?' · ao vivo':'');
+}
+async function loadLive(){
+  try{
+    const r=await fetch('/api/relatorios/data?revenda='+encodeURIComponent(currentRevenda),{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok) return;
+    const live=await r.json();
+    if(!live||!live.ok) return;
+    if(Array.isArray(live.revendas)&&live.revendas.length){REV_INDEX=live.revendas;fillRevendas(live.revendas);}
+    if(live.revenda&&live.revenda!==currentRevenda) return; // resposta de outra revenda (troca rápida)
+    const cur=mergeLive(live);
+    MONTH_FETCHED.add(cur); // mês corrente já carregado pelo loadLive
+    refreshChrome();
+    // Abre no mês corrente ao vivo (salvo se o usuário já escolheu outro mês ou
+    // se uma apresentação está em andamento — o mês fica congelado nela).
+    if(!userPicked && !AP.on && cur && [...selMes.options].some(o=>o.value===cur)) selMes.value=cur;
+    renderAll();
+  }catch(e){/* mantém o snapshot embutido */}
+}
+// Série histórica de seguidores do D1 (backfill planilha + cron). Mescla o total
+// de FIM DE MÊS sobre o snapshot: corrige os meses semeados de 2026 e cresce
+// sozinho conforme o cron acumula dias. O mês corrente fica com o overlay ao vivo
+// (mais fresco que o último ponto do cron). Degrada suave: sem D1, mantém o snapshot.
+async function loadFollowers(){
+  try{
+    const reqRev=currentRevenda;
+    const r=await fetch('/api/relatorios/followers?revenda='+encodeURIComponent(reqRev),{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok) return;
+    const res=await r.json();
+    if(reqRev!==currentRevenda) return; // troca de revenda durante o fetch
+    if(!res||!res.ok||!Array.isArray(res.monthly)||!res.monthly.length) return;
+    if(Array.isArray(res.daily)) FOLLOWER_DAILY=res.daily.map(x=>({data:x.data,v:x.v})).sort((a,b)=>a.data<b.data?-1:1);
+    const d=new Date(), curM=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    res.monthly.forEach(pt=>{
+      if(pt.m===curM && DATA.meta.live) return; // mês corrente: prioriza o overlay ao vivo
+      upsertM(DATA.followers,{m:pt.m,v:pt.v});
+    });
+    DATA.followers.sort((a,b)=>a.m<b.m?-1:a.m>b.m?1:0);
+    DATA.meta.d1=true;
+    refreshChrome();
+    renderAll();
+  }catch(e){/* mantém a série do snapshot */}
+}
+
+// Consulta AO VIVO de um mês PASSADO. Vale para TODAS as revendas. Busca
+// /api/relatorios/data?month= e mescla (metaMonthly/ads/igMonthly/igDaily/google
+// do mês). Seguidores não vêm por mês (limite da API) — a série é do D1. Guard por
+// mês evita refetch; o mês corrente é carregado pelo loadLive.
+const MONTH_FETCHED=new Set();
+async function ensureMonth(m){
+  if(!m || m===NOWM || MONTH_FETCHED.has(m)) return; // corrente é do loadLive
+  MONTH_FETCHED.add(m);
+  const reqRev=currentRevenda;
+  try{
+    const r=await fetch('/api/relatorios/data?revenda='+encodeURIComponent(reqRev)+'&month='+encodeURIComponent(m),{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok){MONTH_FETCHED.delete(m);return;}
+    const live=await r.json();
+    if(reqRev!==currentRevenda) return;    // trocou de revenda durante o fetch
+    if(!live||!live.ok){MONTH_FETCHED.delete(m);return;}
+    mergeLive(live);
+    refreshChrome();
+    // Re-renderiza se o mês que chegou é o EXIBIDO ou o ANTERIOR a ele (este
+    // último alimenta o "Comparativo com o mês anterior").
+    if(selMes.value===m || prevOf(selMes.value)===m) renderAll();
+  }catch(e){MONTH_FETCHED.delete(m);}
+}
+
+// Pré-carrega a SÉRIE MENSAL (últimos ~12 meses) da revenda, para o gráfico
+// "Cadastros por mês" já vir preenchido no load, sem o analista abrir mês a mês.
+// Uma chamada por fonte (metaMonthly + google) em /api/relatorios/series.
+function seriesRange(){
+  const [y,m]=NOWM.split('-').map(Number);
+  const d=new Date(Date.UTC(y,m-1,1)); d.setUTCMonth(d.getUTCMonth()-11); // 12 meses (incl. o corrente)
+  const since=d.toISOString().slice(0,10);
+  const n=new Date(); const until=n.getUTCFullYear()+'-'+String(n.getUTCMonth()+1).padStart(2,'0')+'-'+String(n.getUTCDate()).padStart(2,'0');
+  return {since,until};
+}
+async function loadSeries(){
+  const reqRev=currentRevenda, {since,until}=seriesRange();
+  try{
+    const r=await fetch('/api/relatorios/series?revenda='+encodeURIComponent(reqRev)+'&since='+since+'&until='+until,{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok) return;
+    const res=await r.json();
+    if(reqRev!==currentRevenda||!res||!res.ok) return;
+    (res.metaMonthly||[]).forEach(row=>upsertM(DATA.metaMonthly,row));
+    (res.google||[]).forEach(row=>upsertM(DATA.google,row));
+    refreshChrome(); renderAll();
+  }catch(e){/* mantém o que já houver */}
+}
+
+// Renderiza após o layout estar pronto (a página é pesada: ~286KB de dados +
+// imagens base64). Criar os gráficos antes do layout deixa os canvas com 0px.
+// O 2º render (setTimeout) é garantia caso o 1º pegue o layout ainda assentando.
+// loadLive() roda em seguida e sobrepõe o mês corrente quando os dados chegam.
+// Preview do criativo ao passar o mouse no nome do anúncio (Principais anúncios).
+// Delegação de evento: funciona para as linhas re-renderizadas a cada mês.
+(function(){
+  const pv=document.getElementById('adPrev'); if(!pv) return;
+  const img=pv.querySelector('img'), cap=pv.querySelector('.cap');
+  function pos(e){
+    const pad=14, w=pv.offsetWidth||208, h=pv.offsetHeight||236;
+    let x=e.clientX+pad, y=e.clientY+pad;
+    if(x+w>innerWidth) x=e.clientX-w-pad;
+    if(y+h>innerHeight) y=innerHeight-h-8;
+    if(y<8) y=8;
+    pv.style.left=x+'px'; pv.style.top=y+'px';
+  }
+  document.addEventListener('mouseover',e=>{
+    const t=e.target.closest && e.target.closest('.ad-name[data-ad]'); if(!t) return;
+    const info=AD_THUMBS[t.getAttribute('data-ad')]; if(!info) return;
+    img.src=info.img; cap.textContent=info.cap; pv.style.display='block'; pos(e);
+  });
+  document.addEventListener('mousemove',e=>{ if(pv.style.display==='block' && e.target.closest && e.target.closest('.ad-name[data-ad]')) pos(e); });
+  document.addEventListener('mouseout',e=>{
+    const t=e.target.closest && e.target.closest('.ad-name[data-ad]');
+    if(t && !t.contains(e.relatedTarget)){ pv.style.display='none'; img.removeAttribute('src'); }
+  });
+})();
+// ============================================================================
+//  MODO APRESENTAÇÃO — a visão que o Analista mostra ao cliente (revenda)
+// ============================================================================
+// Cada bloco do dashboard (section.bloco[data-el]) vira UM slide: o nó real é
+// "adotado" pelo palco e devolvido ao lugar ao trocar de slide/encerrar — zero
+// duplicação de render (os gráficos continuam vivos; só chamamos resize()).
+// O analista controla tudo pelo organizador (faixa inferior): reordena slides
+// por drag-and-drop, oculta/exibe qualquer slide, cria slides próprios (título/
+// texto/imagem) e exclui os que ele mesmo criou. Os posts de "Publicações do
+// mês" também podem ser reordenados por drag-and-drop — só neste modo.
+// Persistência: 1 JSON por revenda no D1 (GET/PUT /api/relatorios/apresentacao)
+// — a apresentação da revenda X nunca interfere na da revenda Y. Sem rede, as
+// mudanças valem só na sessão (badge avisa). O mês fica CONGELADO no valor
+// selecionado ao iniciar (loadLive não troca o mês com a apresentação aberta).
+let AP_REVENDA='vetta'; // acompanha o seletor #revenda (setRevenda atualiza)
+const AP_BASE=[
+  {id:'capa',    titulo:'Capa'},
+  {id:'kpis',    titulo:'Visão geral'},
+  {id:'leads',   titulo:'Cadastros por mês'},
+  {id:'criativos',titulo:'Criativos (Meta Ads)'},
+  {id:'google',  titulo:'Google Ads'},
+  {id:'gkw',     titulo:'Google Ads — Palavras-chave'},
+  {id:'gcmp',    titulo:'Google Ads — Conjuntos'},
+  {id:'igcmp',   titulo:'IG — Comparativo'},
+  {id:'igposts', titulo:'IG — Publicações do mês'},
+  {id:'igseg',   titulo:'IG — Seguidores'},
+  {id:'igdiario',titulo:'IG — Resultados diários'},
+];
+const AP={on:false,mes:null,idx:0,deck:[],home:new Map(),saveT:null,badgeT:null,editId:null,editImg:'',
+  noteSlide:null,notePos:'abaixo',
+  cfg:{v:1,order:null,hidden:[],custom:[],postOrder:{},notes:{},visibility:{}}};
+const AP_POS=[{k:'acima',label:'Acima'},{k:'abaixo',label:'Abaixo'},{k:'esquerda',label:'À esquerda'},{k:'direita',label:'À direita'}];
+const $ap=id=>document.getElementById(id);
+const apHidden=id=>AP.cfg.hidden.includes(id);
+
+// ---- config por revenda (D1) ----
+async function apLoadCfg(){
+  try{
+    const r=await fetch('/api/relatorios/apresentacao?revenda='+AP_REVENDA,{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok) return;
+    const res=await r.json();
+    const c=res&&res.ok&&res.config;
+    if(c&&typeof c==='object'){
+      AP.cfg={v:1,
+        order:Array.isArray(c.order)?c.order:null,
+        hidden:Array.isArray(c.hidden)?c.hidden:[],
+        custom:Array.isArray(c.custom)?c.custom:[],
+        postOrder:(c.postOrder&&typeof c.postOrder==='object'&&!Array.isArray(c.postOrder))?c.postOrder:{},
+        notes:(c.notes&&typeof c.notes==='object'&&!Array.isArray(c.notes))?c.notes:{},
+        visibility:(c.visibility&&typeof c.visibility==='object'&&!Array.isArray(c.visibility))?c.visibility:{}};
+    }
+  }catch(e){/* sem config salva → deck padrão */}
+  // A config chega depois do 1º render: reaplica a visibilidade recém-carregada.
+  if(selMes.value) renderAll(); else applyVisibility();
+  if(EDIT.open) renderEditTree();
+}
+function apBadge(txt,cls){
+  const el=$ap('apSave');el.textContent=txt;el.className='ap-save'+(cls?' '+cls:'');
+  clearTimeout(AP.badgeT);
+  if(!cls)AP.badgeT=setTimeout(()=>{el.textContent='';},2600);
+}
+function apPersist(){
+  apBadge('Salvando…','andamento');
+  clearTimeout(AP.saveT);
+  AP.saveT=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/relatorios/apresentacao?revenda='+AP_REVENDA,{
+        method:'PUT',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({config:AP.cfg})});
+      const res=r.ok?await r.json():null;
+      if(res&&res.ok)apBadge('Salvo ✓');
+      else apBadge('Não salvo — alterações valem só nesta sessão','erro');
+    }catch(e){apBadge('Não salvo — alterações valem só nesta sessão','erro');}
+  },700);
+}
+
+// ---- deck: ordem salva + slides-base novos na posição natural + customs ----
+function apBuildDeck(){
+  const customs=AP.cfg.custom.map(c=>({id:'c:'+c.id,titulo:(c.title&&c.title.trim())||'Slide do analista',custom:c}));
+  const all=new Map();AP_BASE.forEach(s=>all.set(s.id,s));customs.forEach(s=>all.set(s.id,s));
+  const ord=(AP.cfg.order||AP_BASE.map(s=>s.id)).filter(id=>all.has(id));
+  AP_BASE.forEach((s,i)=>{ // base ausente (elemento novo) entra após o antecessor mais próximo
+    if(ord.includes(s.id))return;
+    let at=-1;
+    for(let j=i-1;j>=0;j--){const k=ord.indexOf(AP_BASE[j].id);if(k>=0){at=k;break;}}
+    ord.splice(at+1,0,s.id);
+  });
+  customs.forEach(c=>{if(!ord.includes(c.id))ord.push(c.id);});
+  AP.cfg.order=ord;
+  // Módulo de Edição: blocos ocultados somem da apresentação (a ordem salva
+  // permanece intacta — reexibir devolve o slide à posição original).
+  AP.deck=ord.map(id=>all.get(id)).filter(s=>s&&(s.custom||s.id==='capa'||blockVisible(s.id)));
+}
+function apVisIdx(){return AP.deck.map((s,i)=>i).filter(i=>!apHidden(AP.deck[i].id));}
+function apNear(dir){for(let i=AP.idx+dir;i>=0&&i<AP.deck.length;i+=dir){if(!apHidden(AP.deck[i].id))return i;}return -1;}
+
+// ---- palco: adota/devolve os blocos reais ----
+function apRestoreHome(){AP.home.forEach(h=>{h.parent.insertBefore(h.node,h.next);});AP.home.clear();}
+function apCapaHTML(){
+  const rev=revNome(currentRevenda);
+  return '<div class="ap-capa"><img src="logo-vetor.png" alt="Vetor" onerror="this.style.display=\'none\'">'+
+    '<div class="k">Relatório de Marketing</div><h1>'+esc(rev)+'</h1><div class="m">'+mLong(AP.mes)+'</div></div>';
+}
+function apLivreHTML(c){
+  const txt=(c.title?'<h2>'+esc(c.title)+'</h2>':'')+(c.body?'<p>'+esc(c.body)+'</p>':'');
+  if(c.image&&txt)return '<div class="ap-livre duo"><div><img src="'+c.image+'" alt=""></div><div>'+txt+'</div></div>';
+  if(c.image)return '<div class="ap-livre soimg"><img src="'+c.image+'" alt=""></div>';
+  return '<div class="ap-livre">'+txt+'</div>';
+}
+function apUpdateChrome(){
+  const vis=apVisIdx(),pos=vis.indexOf(AP.idx);
+  $ap('apCount').textContent=vis.length?(pos>=0?(pos+1)+' / '+vis.length:'oculto'):'—';
+  $ap('apPrev').disabled=apNear(-1)<0;
+  $ap('apNext').disabled=apNear(1)<0;
+  const s=AP.deck[AP.idx];
+  // "Texto": em slides personalizados edita o próprio slide; nos demais, marca
+  // quando já há uma anotação salva.
+  const an=$ap('apAnotar');
+  if(an){
+    if(s&&s.custom){an.classList.remove('on');an.title='Editar este slide';}
+    else{const has=s&&AP.cfg.notes[s.id]&&AP.cfg.notes[s.id].text;an.classList.toggle('on',!!has);an.title=has?'Editar o texto deste slide':'Escrever um texto neste slide';}
+  }
+  document.querySelectorAll('#apStrip .ap-it').forEach(el=>el.classList.toggle('cur',+el.getAttribute('data-i')===AP.idx));
+}
+function apShow(i){
+  if(i<0||i>=AP.deck.length)return;
+  AP.idx=i;
+  const s=AP.deck[i],holder=$ap('apSlide');
+  apRestoreHome();
+  holder.innerHTML='';
+  if(s.custom){holder.innerHTML=apLivreHTML(s.custom);}
+  else{
+    // Slide de Elemento ou Capa: monta o conteúdo dentro de .ap-holder e, se
+    // houver anotação do analista, insere o texto na posição escolhida.
+    const w=document.createElement('div');w.className='ap-holder';
+    let content=null;
+    if(s.id==='capa'){const d=document.createElement('div');d.innerHTML=apCapaHTML();content=d.firstElementChild;}
+    else{
+      const node=document.querySelector('.bloco[data-el="'+s.id+'"]');
+      if(node){AP.home.set(s.id,{node,parent:node.parentNode,next:node.nextSibling});content=node;}
+    }
+    const note=AP.cfg.notes[s.id];
+    if(note&&note.text){
+      const pos=note.pos||'abaixo';
+      w.classList.add('with-nota','pos-'+pos);
+      const nd=document.createElement('div');nd.className='ap-nota';nd.textContent=note.text;
+      const antes=(pos==='acima'||pos==='esquerda');
+      if(antes)w.appendChild(nd);
+      if(content)w.appendChild(content);else w.insertAdjacentHTML('beforeend','<div class="ap-livre"><p>Bloco indisponível.</p></div>');
+      if(!antes)w.appendChild(nd);
+    }else if(content)w.appendChild(content);
+    else w.innerHTML='<div class="ap-livre"><p>Bloco indisponível.</p></div>';
+    holder.appendChild(w);
+  }
+  apUpdateChrome();
+  setTimeout(()=>{Object.values(charts).forEach(c=>{try{c.resize();}catch(e){}});},60);
+  if(s.id==='igposts')apPostsDraggable();
+}
+function apStep(dir){const i=apNear(dir);if(i>=0)apShow(i);}
+
+function apOpen(){
+  AP.on=true;AP.mes=selMes.value; // mês congelado no início da apresentação
+  apBuildDeck();
+  $ap('apRevenda').textContent=revNome(currentRevenda);
+  const clogo=CLIENT_LOGOS[currentRevenda], cl=$ap('apClientLogo');
+  if(cl){ if(clogo){cl.src=clogo;cl.style.display='';} else cl.style.display='none'; }
+  $ap('apMesTxt').textContent=mLong(AP.mes);
+  document.getElementById('apres').hidden=false;
+  document.body.style.overflow='hidden';
+  const vis=apVisIdx();
+  apShow(vis.length?vis[0]:0);
+  renderPosts(AP.mes); // aplica a ordem salva dos posts + habilita o arraste
+  const el=document.getElementById('apres');
+  if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});
+}
+function apClose(){
+  AP.on=false;
+  apRestoreHome();
+  $ap('apSlide').innerHTML='';
+  $ap('apEditor').hidden=true;$ap('apNota').hidden=true;$ap('apStrip').hidden=true;$ap('apOrg').classList.remove('on');
+  document.getElementById('apres').classList.remove('bar-off');
+  document.getElementById('apres').hidden=true;
+  document.body.style.overflow='';
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  renderPosts(selMes.value); // dashboard volta à ordem padrão (por data)
+  setTimeout(()=>{Object.values(charts).forEach(c=>{try{c.resize();}catch(e){}});},60);
+}
+
+// ===== EXPORTAR A APRESENTAÇÃO EM PDF ======================================
+// PDF é formato de página fixa: a interatividade (arrastar o carrossel, tooltips
+// de hover, chips de filtro, navegação por slide) NÃO sobrevive dentro do arquivo
+// — e o pouco de JS que o padrão PDF permite os leitores bloqueiam. O que
+// preservamos: (1) LINKS clicáveis — cada post continua um link para a publicação;
+// (2) TODO o conteúdo — o carrossel é achatado em grade (todos os posts), tabelas
+// longas quebram em páginas e os gráficos viram imagem estática (com os rótulos
+// já visíveis). Montamos um documento de impressão (#apPrint), 1 slide por página,
+// espelhando o deck atual, e disparamos window.print() → "Salvar como PDF".
+function apChartsToImg(clone,orig){
+  // <canvas> não é clonável (vem em branco): troca cada um pela imagem do gráfico
+  // vivo correspondente (casado por ordem — 1 canvas por bloco).
+  const oc=orig.querySelectorAll('canvas'), cc=clone.querySelectorAll('canvas');
+  oc.forEach((o,i)=>{
+    const dst=cc[i]; if(!dst) return;
+    let url=''; const ch=charts[o.id];
+    try{ if(ch) url=ch.toBase64Image('image/png',1); }catch(e){}
+    if(!url){ try{ url=o.toDataURL('image/png'); }catch(e){} }
+    if(url){ const img=document.createElement('img'); img.className='print-chart'; img.src=url; img.alt=''; dst.replaceWith(img); }
+    else dst.remove();
+  });
+}
+// Grades de cards (posts/criativos): no papel não há rolagem, então PAGINAMOS —
+// no máx. PRINT_CARDS_PER_PAGE cards por página; ao exceder, abre uma página nova
+// (com o mesmo gradiente + logo do cliente). A última página centraliza o resto.
+const PRINT_CARDS_PER_PAGE=4;
+// Cria uma "casca" de página: <section.print-slide> com corpo + rodapé (logo do
+// cliente). Toda página do PDF passa por aqui → gradiente e logo em TODAS.
+function apSlideShell(){
+  const sec=document.createElement('section'); sec.className='print-slide';
+  const body=document.createElement('div'); body.className='print-body';
+  sec.appendChild(body);
+  const clogo=CLIENT_LOGOS[currentRevenda];
+  if(clogo){
+    const f=document.createElement('div'); f.className='print-foot';
+    f.innerHTML='<img class="print-client-logo" src="'+clogo+'" alt="" onerror="this.parentNode.style.display=\'none\'">';
+    sec.appendChild(f);
+  }
+  return {sec,body};
+}
+// Texto/anotação do analista (AP.cfg.notes[id]) do slide, ou null. Slides
+// personalizados não têm nota separada (o próprio corpo já é o texto).
+function apPrintNote(s){
+  if(!s||s.custom) return null;
+  const note=AP.cfg.notes[s.id];
+  return (note&&note.text) ? note : null;
+}
+// Um slide do deck pode virar VÁRIAS páginas (grades de cards paginadas).
+function apPrintSlides(s){
+  const note=apPrintNote(s);
+  const antes=note&&(note.pos==='acima'||note.pos==='esquerda');
+  // ---- grades de cards paginadas (posts/criativos) ----
+  if(s.id==='igposts'||s.id==='criativos'){
+    const orig=document.querySelector('.bloco[data-el="'+s.id+'"]');
+    const isPosts=s.id==='igposts';
+    const cards=orig?[...orig.querySelectorAll(isPosts?'.post-card':'.crv')]:[];
+    if(cards.length){
+      const secao=orig.querySelector('.secao');
+      const out=[];
+      for(let i=0;i<cards.length;i+=PRINT_CARDS_PER_PAGE){
+        const chunk=cards.slice(i,i+PRINT_CARDS_PER_PAGE);
+        const {sec,body}=apSlideShell();
+        if(secao) body.appendChild(secao.cloneNode(true));     // título do bloco em cada página
+        const grid=document.createElement('div'); grid.className=isPosts?'post-track':'creatives';
+        chunk.forEach(c=>grid.appendChild(c.cloneNode(true)));
+        if(isPosts){
+          const caro=document.createElement('div'); caro.className='post-carousel'; caro.appendChild(grid);
+          const card=document.createElement('div'); card.className='card'; card.appendChild(caro);
+          body.appendChild(card);
+        } else { const wrap=document.createElement('div'); wrap.appendChild(grid); body.appendChild(wrap); }
+        out.push(sec);
+      }
+      // Texto do analista: nas grades os cards já ocupam a página inteira, então
+      // o texto ganha uma PÁGINA PRÓPRIA (antes p/ acima/esquerda; depois p/
+      // abaixo/direita). Assim não estoura a altura nem divide o slide em duas.
+      if(note){
+        const {sec:ns,body:nb}=apSlideShell();
+        const nd=document.createElement('div'); nd.className='print-nota'; nd.textContent=note.text;
+        nb.appendChild(nd);
+        if(antes) out.unshift(ns); else out.push(ns);
+      }
+      return out;
+    }
+    // sem cards → cai no fluxo normal abaixo (mostra a mensagem de "vazio" do bloco)
+  }
+  // ---- slide normal (1 página) ----
+  const {sec,body}=apSlideShell();
+  if(s.custom){ body.innerHTML=apLivreHTML(s.custom); return [sec]; }
+  // Capa ou Elemento: monta o conteúdo e, havendo texto do analista, envolve na
+  // posição escolhida (espelha o comportamento do palco em apShow).
+  let content;
+  if(s.id==='capa'){ const d=document.createElement('div'); d.innerHTML=apCapaHTML(); content=d.firstElementChild; }
+  else{
+    const orig=document.querySelector('.bloco[data-el="'+s.id+'"]');
+    if(orig){ content=orig.cloneNode(true); content.style.display=''; apChartsToImg(content,orig); }
+    else{ content=document.createElement('p'); content.textContent='Bloco indisponível.'; }
+  }
+  if(note){
+    const wrap=document.createElement('div'); wrap.className='print-nota-wrap pos-'+(note.pos||'abaixo');
+    const nd=document.createElement('div'); nd.className='print-nota'; nd.textContent=note.text;
+    if(antes)wrap.appendChild(nd);
+    wrap.appendChild(content);
+    if(!antes)wrap.appendChild(nd);
+    body.appendChild(wrap);
+  } else { body.appendChild(content); }
+  return [sec];
+}
+function apBuildPrint(){
+  const root=$ap('apPrint'); root.innerHTML='';
+  // percorre o deck na ordem apresentada, pulando os slides ocultados no organizador
+  AP.deck.forEach(s=>{ if(!apHidden(s.id)) apPrintSlides(s).forEach(sec=>root.appendChild(sec)); });
+}
+async function apExportPDF(){
+  if(!AP.on) return;
+  const btn=$ap('apPdf'); if(btn){ btn.disabled=true; }
+  const prevFiltro=postFiltro;
+  try{
+    // força "Todos" p/ o carrossel sair completo no PDF; re-render antes de clonar
+    postFiltro='Todos'; renderPosts(AP.mes);
+    await new Promise(r=>setTimeout(r,140)); // deixa layout/render assentarem
+    apBuildPrint();
+    // sai do fullscreen p/ o diálogo de impressão abrir de forma previsível
+    if(document.fullscreenElement){ try{ await document.exitFullscreen(); }catch(e){} }
+    await new Promise(r=>setTimeout(r,60));
+    document.body.classList.add('printing');
+    window.print();
+  }catch(e){ alert('Não foi possível gerar o PDF: '+e); }
+  finally{ postFiltro=prevFiltro; if(btn){ btn.disabled=false; } }
+}
+window.addEventListener('afterprint',()=>{
+  document.body.classList.remove('printing');
+  const root=document.getElementById('apPrint'); if(root) root.innerHTML='';
+  if(AP.on) renderPosts(AP.mes); // devolve o carrossel ao estado da apresentação
+});
+$ap('apPdf').addEventListener('click',apExportPDF);
+
+// ---- organizador (faixa inferior) ----
+const AP_EYE='<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>';
+const AP_EYEOFF=AP_EYE.replace('</svg>','<line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2"/></svg>');
+function apStripRender(){
+  $ap('apStrip').innerHTML=AP.deck.map((s,i)=>{
+    const hid=apHidden(s.id);
+    return '<div class="ap-it'+(i===AP.idx?' cur':'')+(hid?' off':'')+'" draggable="true" data-sid="'+esc(s.id)+'" data-i="'+i+'">'+
+      '<span class="t">'+(i+1)+'. '+esc(s.titulo)+'</span>'+
+      '<button type="button" class="ap-ib" data-act="eye" title="'+(hid?'Exibir na apresentação':'Ocultar da apresentação')+'">'+(hid?AP_EYEOFF:AP_EYE)+'</button>'+
+      (s.custom?'<button type="button" class="ap-ib" data-act="edit" title="Editar slide">✎</button>'+
+                '<button type="button" class="ap-ib del" data-act="del" title="Excluir slide">🗑</button>':'')+
+      '</div>';
+  }).join('')+'<button type="button" class="ap-add" id="apAdd" title="Novo slide">＋</button>';
+}
+$ap('apStrip').addEventListener('click',e=>{
+  if(e.target.closest('#apAdd')){apEditorOpen(null);return;}
+  const it=e.target.closest('.ap-it');if(!it)return;
+  const sid=it.getAttribute('data-sid'),btn=e.target.closest('.ap-ib');
+  if(!btn){apShow(+it.getAttribute('data-i'));return;}
+  const act=btn.getAttribute('data-act');
+  if(act==='eye'){
+    const h=AP.cfg.hidden,k=h.indexOf(sid);
+    if(k>=0)h.splice(k,1);else h.push(sid);
+    apPersist();apStripRender();apUpdateChrome();
+  }else if(act==='edit'){apEditorOpen(sid);}
+  else if(act==='del'){
+    const s=AP.deck.find(x=>x.id===sid);if(!s||!s.custom)return; // só slides criados pelo analista
+    if(!confirm('Excluir o slide "'+(s.custom.title||'sem título')+'"?'))return;
+    const curId=AP.deck[AP.idx]&&AP.deck[AP.idx].id;
+    AP.cfg.custom=AP.cfg.custom.filter(x=>'c:'+x.id!==sid);
+    AP.cfg.order=AP.cfg.order.filter(x=>x!==sid);
+    AP.cfg.hidden=AP.cfg.hidden.filter(x=>x!==sid);
+    apBuildDeck();apPersist();apStripRender();
+    if(curId===sid){const vis=apVisIdx();apShow(vis.length?vis[0]:0);}
+    else{AP.idx=Math.max(0,AP.deck.findIndex(x=>x.id===curId));apUpdateChrome();}
+  }
+});
+// reordenação dos slides por drag-and-drop na faixa
+(function(){
+  const strip=$ap('apStrip');let drag=null,moved=false;
+  strip.addEventListener('dragstart',e=>{
+    const it=e.target.closest('.ap-it');if(!it)return;
+    drag=it;moved=false;it.classList.add('arrastando');
+    e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','slide');}catch(err){}
+  });
+  strip.addEventListener('dragover',e=>{
+    if(!drag)return;e.preventDefault();
+    const it=e.target.closest('.ap-it');if(!it||it===drag)return;
+    const r=it.getBoundingClientRect();
+    strip.insertBefore(drag,(e.clientX<r.left+r.width/2)?it:it.nextSibling);
+    moved=true;
+  });
+  strip.addEventListener('drop',e=>{if(drag)e.preventDefault();});
+  strip.addEventListener('dragend',()=>{
+    if(!drag)return;drag.classList.remove('arrastando');
+    if(moved){
+      const curId=AP.deck[AP.idx]&&AP.deck[AP.idx].id;
+      AP.cfg.order=[...strip.querySelectorAll('.ap-it')].map(el=>el.getAttribute('data-sid'));
+      apBuildDeck();apPersist();apStripRender();
+      AP.idx=Math.max(0,AP.deck.findIndex(s=>s.id===curId));
+      apUpdateChrome();
+    }
+    drag=null;
+  });
+})();
+
+// ---- editor de slide personalizado (título/texto/imagem) ----
+function apEditorOpen(sid){
+  AP.editId=sid; // 'c:<id>' p/ editar; null p/ novo
+  const c=sid?AP.cfg.custom.find(x=>'c:'+x.id===sid):null;
+  $ap('apEdHead').textContent=c?'Editar slide':'Novo slide';
+  $ap('apEdTitulo').value=c?(c.title||''):'';
+  $ap('apEdTexto').value=c?(c.body||''):'';
+  AP.editImg=c?(c.image||''):'';
+  apEdImgSync();$ap('apEdErr').textContent='';
+  $ap('apEditor').hidden=false;
+  $ap('apEdTitulo').focus();
+}
+function apEdImgSync(){
+  const img=$ap('apEdPrev');
+  if(AP.editImg){img.src=AP.editImg;img.hidden=false;$ap('apEdImgRm').hidden=false;$ap('apEdImgAdd').textContent='Trocar imagem';}
+  else{img.removeAttribute('src');img.hidden=true;$ap('apEdImgRm').hidden=true;$ap('apEdImgAdd').textContent='Adicionar imagem';}
+}
+// Reduz a imagem no navegador antes de salvar (base64 leve no D1 — mesma técnica do OKR).
+function apReduzImagem(file,maxDim,quality){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Falha ao ler o arquivo.'));
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('Arquivo de imagem inválido.'));
+      img.onload=()=>{
+        const sc=Math.min(1,(maxDim||1280)/Math.max(img.width,img.height));
+        const w=Math.max(1,Math.round(img.width*sc)),h=Math.max(1,Math.round(img.height*sc));
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/jpeg',quality||0.82));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+$ap('apEdImgAdd').addEventListener('click',()=>$ap('apEdFile').click());
+$ap('apEdFile').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';
+  if(!f)return;
+  try{AP.editImg=await apReduzImagem(f,1280,0.82);apEdImgSync();$ap('apEdErr').textContent='';}
+  catch(err){$ap('apEdErr').textContent=String(err.message||err);}
+});
+$ap('apEdImgRm').addEventListener('click',()=>{AP.editImg='';apEdImgSync();});
+$ap('apEdCancelar').addEventListener('click',()=>{$ap('apEditor').hidden=true;});
+$ap('apEdSalvar').addEventListener('click',()=>{
+  const title=$ap('apEdTitulo').value.trim(),body=$ap('apEdTexto').value.trim(),image=AP.editImg;
+  if(!title&&!body&&!image){$ap('apEdErr').textContent='Slide vazio — escreva um título/texto ou inclua uma imagem.';return;}
+  let showId=AP.editId;
+  if(AP.editId){
+    const c=AP.cfg.custom.find(x=>'c:'+x.id===AP.editId);
+    if(c){c.title=title;c.body=body;c.image=image;}
+  }else{
+    const id=(crypto.randomUUID?crypto.randomUUID():'s'+Date.now()+Math.random().toString(36).slice(2,7));
+    AP.cfg.custom.push({id,title,body,image});
+    AP.cfg.order.splice(AP.idx+1,0,'c:'+id); // novo slide entra logo após o atual
+    showId='c:'+id;
+  }
+  apBuildDeck();apPersist();apStripRender();
+  $ap('apEditor').hidden=true;AP.editId=null;
+  apShow(Math.max(0,AP.deck.findIndex(s=>s.id===showId)));
+});
+
+// ---- anotação de texto por slide (Elemento/Capa) com posição ----
+function apNtPosRender(){
+  $ap('apNtPos').innerHTML=AP_POS.map(p=>'<button type="button" class="pc-chip'+(AP.notePos===p.k?' on':'')+'" data-pos="'+p.k+'">'+p.label+'</button>').join('');
+}
+function apNotaOpen(){
+  const s=AP.deck[AP.idx];if(!s)return;
+  if(s.custom){apEditorOpen(s.id);return;} // slide do analista: edita o próprio conteúdo
+  AP.noteSlide=s.id;
+  const cur=AP.cfg.notes[s.id]||{text:'',pos:'abaixo'};
+  $ap('apNtTexto').value=cur.text||'';
+  AP.notePos=cur.pos||'abaixo';apNtPosRender();
+  $ap('apNtErr').textContent='';
+  $ap('apNtRemover').style.display=AP.cfg.notes[s.id]?'':'none';
+  $ap('apNota').hidden=false;$ap('apNtTexto').focus();
+}
+$ap('apNtPos').addEventListener('click',e=>{const b=e.target.closest('[data-pos]');if(!b)return;AP.notePos=b.getAttribute('data-pos');apNtPosRender();});
+$ap('apNtCancelar').addEventListener('click',()=>{$ap('apNota').hidden=true;});
+$ap('apNtRemover').addEventListener('click',()=>{
+  if(AP.noteSlide){delete AP.cfg.notes[AP.noteSlide];apPersist();}
+  $ap('apNota').hidden=true;apShow(AP.idx);
+});
+$ap('apNtSalvar').addEventListener('click',()=>{
+  const text=$ap('apNtTexto').value.trim();
+  if(!text){$ap('apNtErr').textContent='Escreva um texto ou use Remover.';return;}
+  AP.cfg.notes[AP.noteSlide]={text,pos:AP.notePos};
+  apPersist();$ap('apNota').hidden=true;apShow(AP.idx);
+});
+$ap('apAnotar').addEventListener('click',apNotaOpen);
+
+// ---- ocultar / mostrar a barra superior ----
+function apToggleBar(force){
+  const el=document.getElementById('apres');
+  const off=(force===undefined)?!el.classList.contains('bar-off'):force;
+  el.classList.toggle('bar-off',off);
+  if(!off)el.classList.remove('near-top'); // ao restaurar, exige nova aproximação
+}
+$ap('apHideBar').addEventListener('click',()=>apToggleBar(true));
+$ap('apShowBar').addEventListener('click',()=>apToggleBar(false));
+// Com a barra oculta, o botão de expandir só surge quando o mouse chega ao topo.
+document.getElementById('apres').addEventListener('mousemove',e=>{
+  const el=document.getElementById('apres');
+  if(!el.classList.contains('bar-off'))return;
+  el.classList.toggle('near-top',e.clientY<64);
+});
+
+// ---- drag-and-drop dos posts (Publicações do mês) — dashboard E apresentação ----
+function apPostsDraggable(){
+  document.querySelectorAll('#postTrack .post-card').forEach(c=>c.setAttribute('draggable','true'));
+}
+(function(){
+  const track=document.getElementById('postTrack');
+  let drag=null,moved=false,lastDragAt=0;
+  track.addEventListener('dragstart',e=>{
+    if(postFiltro!=='Todos'){e.preventDefault();return;} // reordena só vendo todos os posts
+    const c=e.target.closest('.post-card');if(!c)return;
+    drag=c;moved=false;c.classList.add('arrastando');
+    e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','post');}catch(err){}
+  });
+  track.addEventListener('dragover',e=>{
+    if(!drag)return;e.preventDefault();
+    const c=e.target.closest('.post-card');if(!c||c===drag)return;
+    const r=c.getBoundingClientRect();
+    track.insertBefore(drag,(e.clientX<r.left+r.width/2)?c:c.nextSibling);
+    moved=true;
+  });
+  track.addEventListener('drop',e=>{if(drag)e.preventDefault();});
+  track.addEventListener('dragend',()=>{
+    if(!drag)return;drag.classList.remove('arrastando');
+    if(moved){
+      lastDragAt=Date.now();
+      const mes=AP.on?AP.mes:selMes.value; // mês exibido (congelado na apresentação)
+      const ids=[...track.querySelectorAll('.post-card')].map(el=>el.getAttribute('data-pid')).filter(Boolean);
+      (AP.cfg.postOrder||(AP.cfg.postOrder={}))[mes]=ids; // ordem por revenda+mês
+      apPersist();
+    }
+    drag=null;moved=false;
+  });
+  // o soltar do arraste não deve abrir o permalink do post (vale nos dois modos)
+  track.addEventListener('click',e=>{if(Date.now()-lastDragAt<350){e.preventDefault();e.stopPropagation();}},true);
+})();
+
+// ---- controles da apresentação ----
+document.getElementById('btnApres').addEventListener('click',apOpen);
+$ap('apSair').addEventListener('click',apClose);
+$ap('apPrev').addEventListener('click',()=>apStep(-1));
+$ap('apNext').addEventListener('click',()=>apStep(1));
+$ap('apNovo').addEventListener('click',()=>apEditorOpen(null));
+$ap('apOrg').addEventListener('click',()=>{
+  const st=$ap('apStrip');st.hidden=!st.hidden;
+  $ap('apOrg').classList.toggle('on',!st.hidden);
+  if(!st.hidden)apStripRender();
+});
+$ap('apFs').addEventListener('click',()=>{
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  else{const el=document.getElementById('apres');if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});}
+});
+document.addEventListener('keydown',e=>{
+  if(!AP.on)return;
+  const ed=!$ap('apEditor').hidden, nt=!$ap('apNota').hidden;
+  if(ed||nt){if(e.key==='Escape'){$ap('apEditor').hidden=true;$ap('apNota').hidden=true;}return;}
+  const tag=(e.target&&e.target.tagName)||'';
+  if(/INPUT|TEXTAREA|SELECT/.test(tag)){if(e.key==='Escape')e.target.blur();return;}
+  if(e.key==='Escape')apClose();
+  else if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){e.preventDefault();apStep(1);}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();apStep(-1);}
+  else if(e.key==='Home'){const v=apVisIdx();if(v.length)apShow(v[0]);}
+  else if(e.key==='End'){const v=apVisIdx();if(v.length)apShow(v[v.length-1]);}
+  else if(e.key==='t'||e.key==='T')apToggleBar();
+});
+
+// ===========================================================================
+//  MÓDULO DE EDIÇÃO — gaveta de clientes + exibir/ocultar por revenda
+// ---------------------------------------------------------------------------
+//  A visibilidade mora no MESMO JSON por revenda do Modo Apresentação
+//  (AP.cfg.visibility, salvo em /api/relatorios/apresentacao). Chave = id do
+//  alvo; valor false = OCULTO (ausência/true = visível). Três granularidades:
+//    area:<visao|midia|redes>          → área inteira (.areawrap[data-area])
+//    block:<kpis|leads|ads|…>          → bloco inteiro ([data-el])
+//    kpis:<meta|google|ig> / leads:<meta|google> → sub-partes (fiadas no render)
+//  Vale para o dashboard E para o Modo Apresentação (apBuildDeck filtra blocos).
+// ===========================================================================
+const isHidden=id=>((AP.cfg&&AP.cfg.visibility)||{})[id]===false;
+// A que área pertence cada bloco (p/ o filtro da apresentação e o cascateamento).
+const AP_AREA={kpis:'visao',leads:'midia',ads:'midia',criativos:'midia',google:'midia',gkw:'midia',gcmp:'midia',
+  igcmp:'redes',igposts:'redes',igseg:'redes',igdiario:'redes'};
+function blockVisible(id){
+  if(isHidden('block:'+id)) return false;
+  const a=AP_AREA[id]; if(a&&isHidden('area:'+a)) return false;
+  return true;
+}
+// Aplica a visibilidade ESTRUTURAL (áreas e blocos inteiros) ao DOM do dashboard.
+// As sub-partes (subgrupos de KPI, linhas do gráfico de leads) são resolvidas
+// dentro de renderKPIs/renderLeads, que consultam isHidden() ao desenhar.
+function applyVisibility(){
+  document.querySelectorAll('.areawrap[data-area]').forEach(el=>{
+    el.style.display=isHidden('area:'+el.getAttribute('data-area'))?'none':'';
+  });
+  document.querySelectorAll('[data-el]').forEach(el=>{
+    el.style.display=isHidden('block:'+el.getAttribute('data-el'))?'none':'';
+  });
+}
+
+// ---- Gaveta de clientes (esquerda) ----------------------------------------
+// ---- Logo + título do cliente (header do analista) ------------------------
+// Demo: clientes fictícios não têm logo próprio — o header cai no onerror.
+const CLIENT_LOGOS={};
+function revNome(key){const r=(REV_INDEX||[]).find(x=>x.key===key);return (r&&r.nome)||key;}
+function updateHeaderClient(){
+  const nome=revNome(currentRevenda);
+  const h1=document.getElementById('hTitulo'); if(h1) h1.textContent='Relatório '+nome;
+  document.title='Relatório '+nome+' | Vetor';
+  const r=(REV_INDEX||[]).find(x=>x.key===currentRevenda);
+  const sub=document.getElementById('sub');
+  if(sub) sub.textContent=nome+((r&&r.username)?(' · Instagram @'+r.username):'');
+  const logo=CLIENT_LOGOS[currentRevenda], el=document.getElementById('clientLogo');
+  if(el){ if(logo){el.src=logo;el.alt=nome;el.style.display='';} else {el.removeAttribute('src');el.style.display='none';} }
+}
+
+// ---- Status Ativo/Inativo dos clientes (global, salvo no D1) ---------------
+let INACTIVE=new Set();
+let STATUS_SAVE_T=null;
+async function loadStatus(){
+  try{
+    const r=await fetch('/api/relatorios/status',{headers:{Accept:'application/json'},credentials:'same-origin'});
+    if(!r.ok) return;
+    const res=await r.json();
+    if(res&&res.ok&&Array.isArray(res.inactive)){INACTIVE=new Set(res.inactive);renderClientList();}
+  }catch(e){/* sem status salvo → todos ativos */}
+}
+function saveStatus(){
+  clearTimeout(STATUS_SAVE_T);
+  STATUS_SAVE_T=setTimeout(async()=>{
+    try{ await fetch('/api/relatorios/status',{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({inactive:[...INACTIVE]})}); }catch(e){}
+  },400);
+}
+function setActive(key,active){
+  if(active) INACTIVE.delete(key); else INACTIVE.add(key);
+  saveStatus(); renderClientList();
+}
+
+// ---- Gaveta de clientes (esquerda) ----------------------------------------
+const PENCIL='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+function clientRow(r){
+  const inact=INACTIVE.has(r.key);
+  return '<div class="nav-item'+(r.key===currentRevenda?' cur':'')+(inact?' inativo':'')+'" data-key="'+esc(r.key)+'">'+
+    '<button type="button" class="nav-pick" data-key="'+esc(r.key)+'">'+esc(r.nome)+'</button>'+
+    '<button type="button" class="nav-edit" data-key="'+esc(r.key)+'" title="Editar exibição de '+esc(r.nome)+'" aria-label="Editar exibição de '+esc(r.nome)+'">'+PENCIL+'</button>'+
+    '<label class="nav-sw" title="'+(inact?'Inativo — clique para ativar':'Ativo — clique para inativar')+'"><input type="checkbox" class="nav-active" data-key="'+esc(r.key)+'"'+(inact?'':' checked')+'><span class="tr"></span><span class="kn"></span></label>'+
+  '</div>';
+}
+function renderClientList(){
+  const list=document.getElementById('navList'); if(!list) return;
+  const items=(REV_INDEX&&REV_INDEX.length)?REV_INDEX:[{key:currentRevenda,nome:currentRevenda}];
+  const ativos=items.filter(r=>!INACTIVE.has(r.key));
+  const inativos=items.filter(r=>INACTIVE.has(r.key));
+  let html=ativos.map(clientRow).join('');
+  if(inativos.length) html+='<div class="nav-div">Inativos</div>'+inativos.map(clientRow).join('');
+  list.innerHTML=html;
+}
+function openNav(){renderClientList();document.getElementById('navOv').hidden=false;document.getElementById('navDrawer').hidden=false;}
+function closeNav(){document.getElementById('navOv').hidden=true;document.getElementById('navDrawer').hidden=true;}
+
+// ---- Painel de edição (direita) -------------------------------------------
+const EDIT={open:false};
+// Catálogo do que dá para ocultar (áreas → blocos → sub-partes). Os ids batem
+// com data-area / data-el e com os ids consultados por renderKPIs/renderLeads.
+const EDIT_CATALOG=[
+  {id:'area:visao', label:'Visão Geral', blocks:[
+    {id:'block:kpis', label:'Cartões de visão geral', parts:[
+      {id:'kpis:meta',   label:'Anúncios · Meta Ads'},
+      {id:'kpis:google', label:'Anúncios · Google Ads'},
+      {id:'kpis:ig',     label:'Redes Sociais · Instagram'},
+    ]},
+  ]},
+  {id:'area:midia', label:'Mídia Paga', blocks:[
+    {id:'block:leads', label:'Cadastros (leads) por mês', parts:[
+      {id:'leads:meta',   label:'Linha Meta Ads'},
+      {id:'leads:google', label:'Linha Google Ads'},
+    ]},
+    {id:'block:ads',       label:'Meta Ads — Principais anúncios'},
+    {id:'block:criativos', label:'Meta Ads — Criativos utilizados'},
+    {id:'block:google',    label:'Google Ads'},
+    {id:'block:gkw',       label:'Google Ads — Palavras-chave'},
+    {id:'block:gcmp',      label:'Google Ads — Conjuntos'},
+  ]},
+  {id:'area:redes', label:'Redes Sociais', blocks:[
+    {id:'block:igcmp',    label:'Instagram — Comparativo'},
+    {id:'block:igposts',  label:'Instagram — Publicações do mês'},
+    {id:'block:igseg',    label:'Instagram — Seguidores'},
+    {id:'block:igdiario', label:'Instagram — Resultados diários'},
+  ]},
+];
+function syncEditorClient(){
+  const el=document.getElementById('edClient'); if(el) el.textContent=revNome(currentRevenda);
+}
+function edSw(id,checked,disabled){
+  return '<label class="ed-sw"><input type="checkbox" data-vis="'+esc(id)+'"'+(checked?' checked':'')+(disabled?' disabled':'')+'><span class="tr"></span><span class="kn"></span></label>';
+}
+function edRow(lvl,label,id,on,disabled){
+  return '<div class="ed-row lvl-'+lvl+(on?'':' off')+(disabled?' disabled':'')+'">'+
+    '<span class="ed-lbl">'+esc(label)+'</span>'+edSw(id,on,disabled)+'</div>';
+}
+function renderEditTree(){
+  const tree=document.getElementById('edTree'); if(!tree) return;
+  let html='';
+  EDIT_CATALOG.forEach(area=>{
+    const areaOn=!isHidden(area.id);
+    html+='<div class="ed-area">'+edRow('area',area.label,area.id,areaOn,false);
+    (area.blocks||[]).forEach(block=>{
+      const blockOn=!isHidden(block.id);
+      html+=edRow('block',block.label,block.id,blockOn,!areaOn);
+      (block.parts||[]).forEach(part=>{
+        html+=edRow('part',part.label,part.id,!isHidden(part.id),!areaOn||!blockOn);
+      });
+    });
+    html+='</div>';
+  });
+  tree.innerHTML=html;
+}
+function openEditor(key){
+  if(key&&key!==currentRevenda) setRevenda(key);
+  closeNav();
+  EDIT.open=true;
+  syncEditorClient();
+  renderEditTree();
+  edBadge('');
+  document.getElementById('edOv').hidden=false;
+  document.getElementById('edPanel').hidden=false;
+}
+function closeEditor(){EDIT.open=false;document.getElementById('edOv').hidden=true;document.getElementById('edPanel').hidden=true;}
+
+// ---- salvar (reusa o endpoint do config por revenda) + badge próprio -------
+let ED_SAVE_T=null;
+function edBadge(txt,cls){const el=document.getElementById('edSave');if(!el)return;el.textContent=txt||'';el.className='ed-save'+(cls?' '+cls:'');}
+function saveConfig(){
+  edBadge('Salvando…');
+  clearTimeout(ED_SAVE_T);
+  ED_SAVE_T=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/relatorios/apresentacao?revenda='+AP_REVENDA,{
+        method:'PUT',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({config:AP.cfg})});
+      const res=r.ok?await r.json():null;
+      edBadge(res&&res.ok?'Salvo ✓':'Não salvo — vale só nesta sessão',res&&res.ok?'ok':'err');
+    }catch(e){edBadge('Não salvo — vale só nesta sessão','err');}
+  },600);
+}
+function setVis(id,visible){
+  const v=AP.cfg.visibility||(AP.cfg.visibility={});
+  if(visible) delete v[id]; else v[id]=false;
+  saveConfig();
+  if(selMes.value) renderAll(); else applyVisibility();
+  if(AP.on){apBuildDeck();apStripRender();apShow(Math.min(AP.idx,AP.deck.length-1));}
+  renderEditTree(); // reflete o cascateamento (pai oculto desabilita filhos)
+}
+
+// ---- fios dos eventos ------------------------------------------------------
+document.getElementById('navBtn').addEventListener('click',openNav);
+document.getElementById('navClose').addEventListener('click',closeNav);
+document.getElementById('navOv').addEventListener('click',closeNav);
+document.getElementById('navList').addEventListener('click',e=>{
+  const ed=e.target.closest('.nav-edit'); if(ed){openEditor(ed.getAttribute('data-key'));return;}
+  if(e.target.closest('.nav-sw')) return; // toggle de status é tratado no 'change'
+  const pk=e.target.closest('.nav-pick'); if(pk){setRevenda(pk.getAttribute('data-key'));closeNav();}
+});
+document.getElementById('navList').addEventListener('change',e=>{
+  const cb=e.target.closest('input.nav-active'); if(!cb) return;
+  setActive(cb.getAttribute('data-key'),cb.checked);
+});
+document.getElementById('edClose').addEventListener('click',closeEditor);
+document.getElementById('edOv').addEventListener('click',closeEditor);
+document.getElementById('edTree').addEventListener('change',e=>{
+  const cb=e.target.closest('input[data-vis]'); if(!cb) return;
+  setVis(cb.getAttribute('data-vis'),cb.checked);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'||AP.on) return;                       // Esc dentro da apresentação é do próprio AP
+  if(EDIT.open){closeEditor();}
+  else if(!document.getElementById('navDrawer').hidden){closeNav();}
+});
+
+function boot(){renderAll();setTimeout(renderAll,150);loadLive();loadFollowers();loadSeries();apLoadCfg();loadStatus();renderClientList();}
+if(document.readyState==='complete')setTimeout(boot,0);else window.addEventListener('load',boot);
+</script>
+</body>
+</html>

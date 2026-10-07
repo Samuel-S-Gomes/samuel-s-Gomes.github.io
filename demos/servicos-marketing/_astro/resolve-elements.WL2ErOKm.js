@@ -1,0 +1,1 @@
+function f(r,t,a){var o;if(r instanceof Element)return[r];if(typeof r=="string"){let s=document;const n=(o=void 0)!==null&&o!==void 0?o:s.querySelectorAll(r);return n?Array.from(n):[]}return Array.from(r)}export{f as r};

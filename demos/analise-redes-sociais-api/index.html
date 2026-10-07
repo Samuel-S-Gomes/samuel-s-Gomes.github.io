@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intelidata · Análise de Redes Sociais (demo)</title>
+<meta name="description" content="Dashboard de performance de posts e stories do Instagram, com quebra orgânico/patrocinado — demonstração com dados fictícios.">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="favicon.png">
+
+<!-- Demo: dados fictícios em memória no lugar da API do Instagram (rota /api/relatorios/*) -->
+<script src="mock-api.js"></script>
+
+<!-- Tailwind (utilitários usados no layout) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- React + libs (UMD via CDN). A ordem importa: Recharts depende de
+     React, PropTypes e ReactDOM já estarem no escopo global. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<style>
+  html, body, #root { margin: 0; min-height: 100%; }
+  /* Identidade Intelidata: fonte de sistema (sans), igual às telas do hub. */
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useRef, useEffect } = React;
+const {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line
+} = Recharts;
+
+// ---------- Ícones (SVG inline, no estilo do lucide) ----------
+const Svg = ({ size = 24, style, children }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    style={style}>
+    {children}
+  </svg>
+);
+const Upload = (p) => <Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></Svg>;
+const Eye = (p) => <Svg {...p}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></Svg>;
+const Heart = (p) => <Svg {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></Svg>;
+const TrendingUp = (p) => <Svg {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></Svg>;
+const Layers = (p) => <Svg {...p}><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></Svg>;
+const BarChart3 = (p) => <Svg {...p}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></Svg>;
+const Sparkles = (p) => <Svg {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></Svg>;
+const Bookmark = (p) => <Svg {...p}><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></Svg>;
+const Repeat2 = (p) => <Svg {...p}><path d="m2 9 3-3 3 3"/><path d="M13 18H7a2 2 0 0 1-2-2V6"/><path d="m22 15-3 3-3-3"/><path d="M11 6h6a2 2 0 0 1 2 2v10"/></Svg>;
+const Award = (p) => <Svg {...p}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></Svg>;
+
+// Paleta de marca — editorial / sóbrio com sotaques quentes
+// Paleta oficial Intelidata (mesma de src/pages.js: azul/âmbar/cinza/branco).
+const PALETTE = {
+  ink:        '#1f2933', // texto
+  paper:      '#eef2f7', // fundo
+  paperDark:  '#e3e8ef', // linhas / barras de fundo
+  rule:       '#e3e8ef', // bordas
+  accent:     '#0072ce', // azul primário
+  accent2:    '#de8d13', // âmbar
+  accent3:    '#005ba6', // azul escuro
+  accent4:    '#1a8d5f', // verde
+  accent5:    '#6b7280', // cinza
+  muted:      '#6b7280',
+};
+
+const FORMAT_COLORS = {
+  'Reels':       PALETTE.accent,  // azul
+  'Carrossel':   PALETTE.accent2, // âmbar
+  'Post Único':  PALETTE.accent4, // verde
+  'Outros':      PALETTE.accent5, // cinza
+};
+
+const MONTHS_PT = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+];
+
+// ---------- Helpers ----------
+const parseExcelDate = (val) => {
+  if (val == null) return null;
+  if (val instanceof Date) return val;
+  if (typeof val === 'number') {
+    // Serial date do Excel
+    const utc_days = Math.floor(val - 25569);
+    const utc_value = utc_days * 86400;
+    const date_info = new Date(utc_value * 1000);
+    return date_info;
+  }
+  if (typeof val === 'string') {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
+
+const toNum = (v) => {
+  if (v == null || v === '') return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
+
+const fmtNum = (n) => {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.', ',') + 'k';
+  return n.toLocaleString('pt-BR');
+};
+
+const fmtNumFull = (n) => (n ?? 0).toLocaleString('pt-BR');
+
+const fmtPct = (n) => `${(n ?? 0).toFixed(2).replace('.', ',')}%`;
+
+/** Participação de `parte` no `total`, com 1 decimal (0% se o total for zero). */
+const pctDe = (parte, total) =>
+  `${(total ? (parte / total) * 100 : 0).toFixed(1).replace('.', ',')}%`;
+
+const fmtDate = (d) => {
+  if (!d) return '';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+// Métricas que existem em versão orgânica E patrocinada. Convenção do payload: o
+// campo SEM sufixo é o TOTAL (org + pago); `...Org` e `...Paid` são os componentes.
+// `republicar` e `mencoes` não têm equivalente pago — ficam de fora.
+const CAMPOS_PAGOS = ['visualizacoes', 'curtidas', 'comentarios', 'salvos', 'envios'];
+
+/** Garante `<campo>Org`/`<campo>Paid` em posts que não trazem a quebra (planilha,
+ *  revenda sem conta de anúncio): o total é todo orgânico. */
+const normalizarQuebra = (p) => {
+  const out = { ...p, impulsionado: !!p.impulsionado };
+  for (const c of CAMPOS_PAGOS) {
+    out[`${c}Org`] = p[`${c}Org`] != null ? p[`${c}Org`] : (p[c] || 0);
+    out[`${c}Paid`] = p[`${c}Paid`] || 0;
+  }
+  return out;
+};
+
+// ---------- Parser da planilha ----------
+const parseSheet = (workbook) => {
+  // Procura qualquer aba que comece com "Insights Posts" (case-insensitive),
+  // permitindo "Insights Posts Uniplus", "Insights Posts Outra Marca", etc.
+  const sheetName = workbook.SheetNames.find(n =>
+    n.trim().toLowerCase().startsWith('insights posts')
+  );
+  if (!sheetName) {
+    throw new Error('Nenhuma aba iniciando com "Insights Posts" foi encontrada na planilha.');
+  }
+  const ws = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  // Cabeçalho fica na linha 6 (índice 6). Dados começam em 7.
+  // Colunas (a partir do índice 1): Data | Assunto | Formato | Rede social |
+  // Visualizações | Curtidas | Comentários/Respostas | Envios | Republicar |
+  // Salvos e Cliques | Menções | Visitas ao perfil | Toques |
+  // Seguidores Ganhos | Seguidores Perdidos | Patrocinado
+  const posts = [];
+  for (let i = 7; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const date = parseExcelDate(r[1]);
+    const assunto = r[2];
+    if (!date || !assunto) continue;
+    // A planilha não separa orgânico de patrocinado -> normalizarQuebra trata tudo
+    // como orgânico (e o dashboard não marca ⚡ nenhum post).
+    posts.push(normalizarQuebra({
+      date,
+      assunto: String(assunto).trim(),
+      formato: r[3] ? String(r[3]).trim() : 'Outros',
+      rede: r[4] ? String(r[4]).trim() : '',
+      visualizacoes: toNum(r[5]),
+      curtidas: toNum(r[6]),
+      comentarios: toNum(r[7]),
+      envios: toNum(r[8]),
+      republicar: toNum(r[9]),
+      salvos: toNum(r[10]),
+      mencoes: toNum(r[11]),
+      visitasPerfil: toNum(r[12]),
+      toques: toNum(r[13]),
+      seguidoresGanhos: toNum(r[14]),
+      seguidoresPerdidos: toNum(r[15]),
+      patrocinado: r[16] ? String(r[16]).trim() : '',
+    }));
+  }
+  return { posts, sheetName };
+};
+
+// Engajamento = soma das métricas de interação (sem visualizações). Os campos sem
+// sufixo já são o MONTANTE (orgânico + patrocinado); `republicar` e `mencoes` não
+// têm equivalente pago, então entram iguais nas duas contas.
+const engagementOf = (p) =>
+  p.curtidas + p.comentarios + p.envios + p.republicar + p.salvos + p.mencoes;
+
+const engagementOrgOf = (p) =>
+  p.curtidasOrg + p.comentariosOrg + p.enviosOrg + p.republicar + p.salvosOrg + p.mencoes;
+
+const engagementPaidOf = (p) =>
+  p.curtidasPaid + p.comentariosPaid + p.enviosPaid + p.salvosPaid;
+
+// Mês do post no formato YYYY-MM (chave usada nos filtros e nos agrupamentos).
+const monthKeyOf = (p) =>
+  `${p.date.getFullYear()}-${String(p.date.getMonth() + 1).padStart(2, '0')}`;
+
+/**
+ * Mês que o dashboard abre selecionado: o CORRENTE se houver post nele, senão o
+ * mês mais recente com dados. 'all' só quando não há post algum. Evita abrir com
+ * o histórico inteiro somado (o número de "todos os meses" não é acionável).
+ */
+const defaultMonthOf = (posts) => {
+  const meses = new Set(posts.map(monthKeyOf));
+  if (!meses.size) return 'all';
+  const agora = new Date();
+  const atual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+  return meses.has(atual) ? atual : [...meses].sort().pop();
+};
+
+// ---------- Componente principal ----------
+function Dashboard() {
+  // 'feed' = tela atual (posts/reels/carrosséis). 'stories' = nova aba — ainda
+  // com dados FICTÍCIOS (StoriesMock), aguardando o webhook story_insights
+  // confirmar o formato real do payload antes de trocar por dado de verdade
+  // (ver docs/relatorios.md, seção "webhook story_insights").
+  const [view, setView] = useState('feed');
+  const [posts, setPosts] = useState([]);
+  const [fileName, setFileName] = useState('');
+  const [sheetName, setSheetName] = useState('');
+  const [monthFilter, setMonthFilter] = useState('all'); // 'all' ou 'YYYY-MM'
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
+  const [source, setSource] = useState(null); // { revenda, updated, cached, notes }
+  const [revenda, setRevenda] = useState('');  // key da revenda ativa
+  const [revendas, setRevendas] = useState([]); // [{ key, nome, username }]
+  const [preview, setPreview] = useState(null); // { src, x, y } — miniatura no hover
+  const fileInputRef = useRef(null);
+
+  // Handlers para o título do post:
+  //  - preview da imagem ao passar o mouse (se o post tiver `thumb`); a imagem é
+  //    renderizada fixa no root (segue o cursor) p/ não ser cortada pela tabela.
+  //  - clique abre a publicação no Instagram em nova aba (se houver `permalink`).
+  // Posts vindos de planilha não têm `thumb`/`permalink` -> sem hover nem clique.
+  const thumbHandlers = (post) => {
+    const h = {};
+    if (post && post.thumb) {
+      h.onMouseEnter = (e) => setPreview({ src: post.thumb, x: e.clientX, y: e.clientY });
+      h.onMouseMove = (e) => setPreview((pv) => pv ? { ...pv, x: e.clientX, y: e.clientY } : pv);
+      h.onMouseLeave = () => setPreview(null);
+    }
+    if (post && post.permalink) {
+      h.onClick = () => window.open(post.permalink, '_blank', 'noopener,noreferrer');
+      h.title = 'Abrir publicação no Instagram';
+      h.style = { cursor: 'pointer' };
+    } else if (post && post.thumb) {
+      h.style = { cursor: 'help' };
+    }
+    return h;
+  };
+
+  // ----- Carga via API (/api/relatorios/social) -----
+  const mapApiPosts = (raw) =>
+    (raw || [])
+      .map((p) => normalizarQuebra({ ...p, date: new Date(p.date) }))
+      .filter((p) => !isNaN(p.date.getTime()));
+
+  const loadFromApi = async ({ fresh = false, revenda: revKey } = {}) => {
+    setLoading(true);
+    setApiError('');
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      if (fresh) params.set('fresh', '1');
+      if (revKey) params.set('revenda', revKey);
+      const qs = params.toString();
+      const res = await fetch('/api/relatorios/social' + (qs ? `?${qs}` : ''), {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || `Falha ao buscar dados (HTTP ${res.status}).`);
+      }
+      const parsed = mapApiPosts(data.posts);
+      setPosts(parsed);
+      setRevenda(data.revenda || '');
+      if (Array.isArray(data.revendas) && data.revendas.length) setRevendas(data.revendas);
+      setSource({
+        revenda: data.revenda,
+        revendaNome: data.revendaNome || data.revenda,
+        updated: data.updated,
+        cached: !!data.cached,
+        notes: data.notes || [],
+      });
+      setSheetName(data.revendaNome ? `Insights Posts ${data.revendaNome}` : '');
+      setFileName('');
+      setMonthFilter(defaultMonthOf(parsed));
+      setDateRange({ from: '', to: '' });
+    } catch (err) {
+      setApiError(err.message || 'Erro ao buscar dados da API.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadFromApi(); }, []);
+
+  const handleFile = async (e) => {
+    setError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+      const { posts: parsed, sheetName: foundSheet } = parseSheet(wb);
+      if (parsed.length === 0) {
+        setError(`Nenhum post válido encontrado na aba "${foundSheet}".`);
+        return;
+      }
+      setPosts(parsed);
+      setSource(null); // veio de planilha, não da API
+      setApiError('');
+      setFileName(file.name);
+      setSheetName(foundSheet);
+      setMonthFilter(defaultMonthOf(parsed));
+      setDateRange({ from: '', to: '' });
+    } catch (err) {
+      setError(err.message || 'Erro ao processar o arquivo.');
+    }
+  };
+
+  // Nome da marca extraído do nome da aba (tudo depois de "Insights Posts ")
+  const brandName = useMemo(() => {
+    if (!sheetName) return '';
+    const m = sheetName.trim().match(/^insights posts\s*(.*)$/i);
+    return (m && m[1].trim()) || '';
+  }, [sheetName]);
+
+  // Lista de meses disponíveis nos dados
+  const availableMonths = useMemo(() => {
+    return Array.from(new Set(posts.map(monthKeyOf))).sort();
+  }, [posts]);
+
+  // Posts filtrados
+  const filtered = useMemo(() => {
+    let res = posts;
+    if (monthFilter !== 'all') {
+      res = res.filter(p => monthKeyOf(p) === monthFilter);
+    }
+    if (dateRange.from) {
+      const from = new Date(dateRange.from);
+      res = res.filter(p => p.date >= from);
+    }
+    if (dateRange.to) {
+      const to = new Date(dateRange.to);
+      to.setHours(23, 59, 59, 999);
+      res = res.filter(p => p.date <= to);
+    }
+    return res;
+  }, [posts, monthFilter, dateRange]);
+
+  // KPIs
+  const kpis = useMemo(() => {
+    // `visualizacoes` já vem ORGÂNICO + PATROCINADO da API; os componentes ficam
+    // separados para a quebra exibida nos cards.
+    const totalVisualizacoes = filtered.reduce((s, p) => s + p.visualizacoes, 0);
+    const totalViewsOrg      = filtered.reduce((s, p) => s + (p.visualizacoesOrg || 0), 0);
+    const totalViewsPaid     = filtered.reduce((s, p) => s + (p.visualizacoesPaid || 0), 0);
+    const postsImpulsionados = filtered.filter((p) => p.impulsionado).length;
+    const totalEngajamento   = filtered.reduce((s, p) => s + engagementOf(p), 0);
+    const totalEngajOrg      = filtered.reduce((s, p) => s + engagementOrgOf(p), 0);
+    const totalEngajPaid     = filtered.reduce((s, p) => s + engagementPaidOf(p), 0);
+    const totalCurtidas      = filtered.reduce((s, p) => s + p.curtidas, 0);
+    const totalSalvos        = filtered.reduce((s, p) => s + p.salvos, 0);
+    const totalComentarios   = filtered.reduce((s, p) => s + p.comentarios, 0);
+    const totalEnvios        = filtered.reduce((s, p) => s + p.envios, 0);
+    const totalPosts         = filtered.length;
+    const mediaVisualizacoes = totalPosts ? totalVisualizacoes / totalPosts : 0;
+    // Duas taxas COERENTES: cada uma divide interações e visualizações da MESMA
+    // origem. A orgânica é a comparável com o histórico pré-patrocinado; a do
+    // montante mede o engajamento de tudo o que foi entregue.
+    const taxaEngajamentoOrg = totalViewsOrg
+      ? (totalEngajOrg / totalViewsOrg) * 100
+      : 0;
+    const taxaEngajamentoTotal = totalVisualizacoes
+      ? (totalEngajamento / totalVisualizacoes) * 100
+      : 0;
+
+    // Formato vencedor (mais visualizações totais)
+    const byFormat = {};
+    filtered.forEach(p => {
+      byFormat[p.formato] = (byFormat[p.formato] || 0) + p.visualizacoes;
+    });
+    let bestFormat = '—';
+    let bestFormatViews = 0;
+    Object.entries(byFormat).forEach(([f, v]) => {
+      if (v > bestFormatViews) { bestFormatViews = v; bestFormat = f; }
+    });
+
+    return {
+      totalVisualizacoes, totalViewsOrg, totalViewsPaid, postsImpulsionados,
+      totalEngajamento, totalEngajOrg, totalEngajPaid, totalCurtidas, totalSalvos,
+      totalComentarios, totalEnvios, totalPosts, mediaVisualizacoes,
+      taxaEngajamentoOrg, taxaEngajamentoTotal, bestFormat, bestFormatViews,
+    };
+  }, [filtered]);
+
+  // Distribuição por formato (pizza)
+  const formatData = useMemo(() => {
+    const acc = {};
+    filtered.forEach(p => {
+      if (!acc[p.formato]) acc[p.formato] = { name: p.formato, value: 0, posts: 0 };
+      acc[p.formato].value += p.visualizacoes;
+      acc[p.formato].posts += 1;
+    });
+    return Object.values(acc).sort((a, b) => b.value - a.value);
+  }, [filtered]);
+
+  // Visualizações por mês (barra)
+  const monthlyData = useMemo(() => {
+    const acc = {};
+    filtered.forEach(p => {
+      const key = monthKeyOf(p);
+      const label = `${MONTHS_PT[p.date.getMonth()]}/${String(p.date.getFullYear()).slice(2)}`;
+      if (!acc[key]) acc[key] = { key, label, Reels: 0, Carrossel: 0, 'Post Único': 0, Outros: 0, total: 0 };
+      const bucket = ['Reels', 'Carrossel', 'Post Único'].includes(p.formato) ? p.formato : 'Outros';
+      acc[key][bucket] += p.visualizacoes;
+      acc[key].total += p.visualizacoes;
+    });
+    return Object.values(acc).sort((a, b) => a.key.localeCompare(b.key));
+  }, [filtered]);
+
+  // Top conteúdos por engajamento
+  const topEngagement = useMemo(() => {
+    return [...filtered]
+      .map(p => ({ ...p, engajamento: engagementOf(p) }))
+      .sort((a, b) => b.engajamento - a.engajamento)
+      .slice(0, 8);
+  }, [filtered]);
+
+  // Top salvamentos e republicações
+  const topSaves = useMemo(() => {
+    return [...filtered]
+      .filter(p => p.salvos > 0)
+      .sort((a, b) => b.salvos - a.salvos)
+      .slice(0, 5);
+  }, [filtered]);
+
+  const topReposts = useMemo(() => {
+    return [...filtered]
+      .filter(p => p.republicar > 0)
+      .sort((a, b) => b.republicar - a.republicar)
+      .slice(0, 5);
+  }, [filtered]);
+
+  // Engajamento por tipo de métrica (barra horizontal)
+  const engagementByType = useMemo(() => {
+    return [
+      { name: 'Curtidas',     value: kpis.totalCurtidas,    color: PALETTE.accent },
+      { name: 'Comentários',  value: kpis.totalComentarios, color: PALETTE.accent3 },
+      { name: 'Envios',       value: kpis.totalEnvios,      color: PALETTE.accent2 },
+      { name: 'Republicações', value: filtered.reduce((s, p) => s + p.republicar, 0), color: PALETTE.accent4 },
+      { name: 'Salvos / Cliques', value: kpis.totalSalvos, color: PALETTE.accent5 },
+      { name: 'Menções',      value: filtered.reduce((s, p) => s + p.mencoes, 0), color: PALETTE.muted },
+    ].sort((a, b) => b.value - a.value);
+  }, [filtered, kpis]);
+
+  // ---------- TELA DE CARREGAMENTO ----------
+  if (loading && posts.length === 0) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center p-8"
+        style={{
+          background: `radial-gradient(ellipse at top, ${PALETTE.paperDark} 0%, ${PALETTE.paper} 60%)`,
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+        }}
+      >
+        <div className="text-center">
+          <div
+            className="text-xs tracking-[0.3em] uppercase mb-4"
+            style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+          >
+            ━━ Buscando posts via API do Instagram
+          </div>
+          <div
+            className="text-3xl"
+            style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 700, color: PALETTE.ink }}
+          >
+            Carregando dados ao vivo…
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- TELA SEM DADOS ----------
+  if (posts.length === 0) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center p-8"
+        style={{
+          background: `radial-gradient(ellipse at top, ${PALETTE.paperDark} 0%, ${PALETTE.paper} 60%)`,
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+        }}
+      >
+        <div className="max-w-2xl w-full">
+          <div
+            className="text-xs tracking-[0.3em] uppercase mb-3"
+            style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+          >
+            ━━ Insights de Posts · Redes Sociais
+          </div>
+          <h1
+            className="text-6xl md:text-7xl leading-[0.95] mb-6"
+            style={{
+              fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+              fontWeight: 900,
+              color: PALETTE.ink,
+              letterSpacing: '-0.02em'
+            }}
+          >
+            Dashboard de<br/>
+            <em style={{ color: PALETTE.accent, fontStyle: 'italic', fontWeight: 500 }}>
+              performance
+            </em>{' '}
+            editorial.
+          </h1>
+          <p
+            className="text-lg mb-8 max-w-xl"
+            style={{ color: PALETTE.muted, lineHeight: 1.6 }}
+          >
+            Os dados vêm <strong style={{ color: PALETTE.ink }}>ao vivo da API do Instagram</strong> — sem planilha. Se preferir, ainda é possível importar um <span style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: '0.9em', color: PALETTE.ink }}>.xlsx</span> como alternativa.
+          </p>
+
+          <div className="mb-8 flex flex-wrap gap-3">
+            <button
+              onClick={() => loadFromApi({ fresh: true })}
+              disabled={loading}
+              className="inline-flex items-center gap-3 px-8 py-4 transition-all hover:scale-[1.02]"
+              style={{
+                background: PALETTE.accent,
+                color: '#fff',
+                fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                fontSize: '0.85rem',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              <TrendingUp size={16} />
+              {loading ? 'Buscando…' : 'Buscar via API'}
+            </button>
+          </div>
+
+          {apiError && (
+            <div
+              className="mb-8 p-4 border-l-4"
+              style={{ borderColor: PALETTE.accent, background: '#fff', color: PALETTE.accent }}
+            >
+              {apiError}
+            </div>
+          )}
+
+          <div
+            className="border-2 border-dashed p-12 text-center transition-all hover:bg-white/40"
+            style={{ borderColor: PALETTE.rule }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFile}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-3 px-8 py-4 transition-all hover:scale-[1.02]"
+              style={{
+                background: PALETTE.ink,
+                color: PALETTE.paper,
+                fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                fontSize: '0.85rem',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase'
+              }}
+            >
+              <Upload size={16} />
+              Importar planilha
+            </button>
+            <div
+              className="mt-5 text-sm"
+              style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontStyle: 'italic' }}
+            >
+              aceita .xlsx · lê qualquer aba que comece com "Insights Posts"
+            </div>
+          </div>
+
+          {error && (
+            <div
+              className="mt-6 p-4 border-l-4"
+              style={{ borderColor: PALETTE.accent, background: '#fff', color: PALETTE.accent }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div
+            className="mt-12 grid grid-cols-3 gap-6 pt-8"
+            style={{ borderTop: `1px solid ${PALETTE.rule}` }}
+          >
+            {[
+              { icon: BarChart3, label: 'Visualizações por formato' },
+              { icon: TrendingUp, label: 'Tendência mensal' },
+              { icon: Award, label: 'Top conteúdos' },
+            ].map((it, i) => (
+              <div key={i} className="flex items-center gap-2" style={{ color: PALETTE.muted }}>
+                <it.icon size={14} />
+                <span className="text-xs" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+                  {it.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- DASHBOARD COM DADOS ----------
+  return (
+    <div
+      className="min-h-screen w-full"
+      style={{
+        background: PALETTE.paper,
+        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+        color: PALETTE.ink
+      }}
+    >
+      {preview && (
+        <div
+          style={{
+            position: 'fixed',
+            left: Math.min(preview.x + 16, (typeof window !== 'undefined' ? window.innerWidth : 1280) - 192),
+            top: Math.min(preview.y + 16, (typeof window !== 'undefined' ? window.innerHeight : 800) - 192),
+            zIndex: 1000,
+            pointerEvents: 'none',
+          }}
+        >
+          <img
+            src={preview.src}
+            alt=""
+            style={{
+              width: 172,
+              height: 172,
+              objectFit: 'cover',
+              borderRadius: 12,
+              border: `1px solid ${PALETTE.rule}`,
+              boxShadow: '0 12px 34px rgba(15,40,80,.28)',
+              background: '#fff',
+            }}
+          />
+        </div>
+      )}
+
+      <style>{`
+        .recharts-cartesian-axis-tick-value { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: ${PALETTE.muted}; }
+        .recharts-legend-item-text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important; font-size: 11px !important; }
+      `}</style>
+
+      {/* CABEÇALHO */}
+      <header
+        className="px-8 md:px-12 py-6 sticky top-0 z-10 backdrop-blur-sm"
+        style={{
+          background: `${PALETTE.paper}ee`,
+          borderBottom: `1px solid ${PALETTE.rule}`
+        }}
+      >
+        <div className="max-w-[1400px] mx-auto flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <div
+              className="text-[10px] tracking-[0.3em] uppercase"
+              style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+            >
+              ━ {brandName ? `${brandName} · Insights` : 'Insights de Posts'}
+            </div>
+            <h1
+              className="text-3xl mt-1"
+              style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 700, letterSpacing: '-0.01em' }}
+            >
+              {view === 'feed' ? 'Performance de Posts' : 'Performance de Stories'}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 p-1" style={{ background: PALETTE.paperDark, borderRadius: 8 }}>
+              {[['feed', 'Feed'], ['stories', 'Stories']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  className="px-4 py-2 text-xs font-semibold transition-all"
+                  style={{
+                    borderRadius: 6,
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                    background: view === key ? '#fff' : 'transparent',
+                    color: view === key ? PALETTE.ink : PALETTE.muted,
+                    boxShadow: view === key ? '0 1px 3px rgba(15,40,80,.12)' : 'none',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {revendas.length > 1 && (
+              <select
+                value={revenda}
+                onChange={(e) => loadFromApi({ revenda: e.target.value })}
+                disabled={loading}
+                className="px-3 py-2 text-xs"
+                style={{
+                  border: `1px solid ${PALETTE.rule}`,
+                  background: PALETTE.paper,
+                  color: PALETTE.ink,
+                  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  opacity: loading ? 0.6 : 1
+                }}
+                title="Trocar revenda"
+              >
+                {revendas.map((r) => (
+                  <option key={r.key} value={r.key}>{r.nome}</option>
+                ))}
+              </select>
+            )}
+            {view === 'feed' && (
+            <span
+              className="text-xs hidden md:inline"
+              style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+            >
+              {source ? (
+                <>
+                  via API · {source.revenda}
+                  {source.updated && (
+                    <span style={{ color: PALETTE.ink, marginLeft: 8 }}>
+                      › {new Date(source.updated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {source.cached ? ' (cache)' : ''}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {fileName}
+                  {sheetName && (
+                    <span style={{ color: PALETTE.ink, marginLeft: 8 }}>› {sheetName}</span>
+                  )}
+                </>
+              )}
+            </span>
+            )}
+            {view === 'feed' && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFile}
+              className="hidden"
+            />
+            )}
+            {view === 'feed' && (
+            <button
+              onClick={() => loadFromApi({ fresh: true })}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs transition-all hover:opacity-80"
+              style={{
+                background: PALETTE.ink,
+                color: PALETTE.paper,
+                fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              <TrendingUp size={12} />
+              {loading ? 'Atualizando…' : 'Atualizar'}
+            </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-[1400px] mx-auto px-8 md:px-12 py-10">
+      {view === 'stories' ? (
+        <StoriesView revendas={revendas} revendaKey={revenda} />
+      ) : (
+      <>
+        {/* FILTROS */}
+        <section
+          className="p-6 mb-10"
+          style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)' }}
+        >
+          <div className="flex flex-wrap items-end gap-6">
+            <div className="flex-1 min-w-[200px]">
+              <label
+                className="block text-[10px] tracking-[0.2em] uppercase mb-2"
+                style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+              >
+                Mês
+              </label>
+              <select
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm"
+                style={{
+                  border: `1px solid ${PALETTE.rule}`,
+                  background: PALETTE.paper,
+                  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  color: PALETTE.ink
+                }}
+              >
+                <option value="all">Todos os meses</option>
+                {availableMonths.map(m => {
+                  const [y, mm] = m.split('-');
+                  return (
+                    <option key={m} value={m}>
+                      {MONTHS_PT[parseInt(mm) - 1]} / {y}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <label
+                className="block text-[10px] tracking-[0.2em] uppercase mb-2"
+                style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+              >
+                Data inicial
+              </label>
+              <input
+                type="date"
+                value={dateRange.from}
+                onChange={(e) => setDateRange(r => ({ ...r, from: e.target.value }))}
+                className="w-full px-3 py-2 text-sm"
+                style={{
+                  border: `1px solid ${PALETTE.rule}`,
+                  background: PALETTE.paper,
+                  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  color: PALETTE.ink
+                }}
+              />
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <label
+                className="block text-[10px] tracking-[0.2em] uppercase mb-2"
+                style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+              >
+                Data final
+              </label>
+              <input
+                type="date"
+                value={dateRange.to}
+                onChange={(e) => setDateRange(r => ({ ...r, to: e.target.value }))}
+                className="w-full px-3 py-2 text-sm"
+                style={{
+                  border: `1px solid ${PALETTE.rule}`,
+                  background: PALETTE.paper,
+                  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  color: PALETTE.ink
+                }}
+              />
+            </div>
+            <button
+              onClick={() => { setMonthFilter('all'); setDateRange({ from: '', to: '' }); }}
+              className="px-4 py-2 text-xs transition-all hover:opacity-70"
+              style={{
+                border: `1px solid ${PALETTE.ink}`,
+                fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: PALETTE.ink,
+                background: 'transparent'
+              }}
+            >
+              Limpar
+            </button>
+          </div>
+          <div
+            className="mt-4 pt-4 text-xs"
+            style={{ borderTop: `1px solid ${PALETTE.rule}`, color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles size={12} />
+              Mostrando <strong style={{ color: PALETTE.ink }}>{filtered.length}</strong> de {posts.length} posts
+            </div>
+            {source && source.notes && source.notes.length > 0 && (
+              <div className="mt-2 leading-relaxed" style={{ color: PALETTE.muted }}>
+                {source.notes.map((n, i) => (
+                  <div key={i}>• {n}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* KPIs PRINCIPAIS */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+          <KpiCard
+            icon={Eye}
+            label="Visualizações"
+            value={fmtNum(kpis.totalVisualizacoes)}
+            sub={`Média ${fmtNum(Math.round(kpis.mediaVisualizacoes))}/post`}
+            sub2={
+              kpis.totalViewsPaid > 0
+                ? `${fmtNum(kpis.totalViewsOrg)} orgânicas · ${fmtNum(kpis.totalViewsPaid)} patrocinadas (${pctDe(kpis.totalViewsPaid, kpis.totalVisualizacoes)})`
+                : '100% orgânicas'
+            }
+            accent={PALETTE.accent}
+          />
+          <KpiCard
+            icon={Heart}
+            label="Engajamento total"
+            value={fmtNum(kpis.totalEngajamento)}
+            sub={
+              kpis.totalEngajPaid > 0 || kpis.totalViewsPaid > 0
+                ? `Taxa ${fmtPct(kpis.taxaEngajamentoOrg)} orgânica · ${fmtPct(kpis.taxaEngajamentoTotal)} no montante`
+                : `Taxa ${fmtPct(kpis.taxaEngajamentoOrg)}`
+            }
+            sub2={
+              kpis.totalEngajPaid > 0
+                ? `${fmtNum(kpis.totalEngajOrg)} orgânicas · ${fmtNum(kpis.totalEngajPaid)} patrocinadas (${pctDe(kpis.totalEngajPaid, kpis.totalEngajamento)})`
+                : null
+            }
+            accent={PALETTE.accent3}
+          />
+          <KpiCard
+            icon={Award}
+            label="Formato vencedor"
+            value={kpis.bestFormat}
+            sub={`${fmtNum(kpis.bestFormatViews)} visualizações`}
+            accent={PALETTE.accent2}
+            isText
+          />
+          <KpiCard
+            icon={Layers}
+            label="Posts publicados"
+            value={kpis.totalPosts}
+            sub={monthFilter === 'all' ? `em ${availableMonths.length} meses analisados` : 'no período selecionado'}
+            sub2={kpis.postsImpulsionados > 0 ? `⚡ ${kpis.postsImpulsionados} impulsionado${kpis.postsImpulsionados !== 1 ? 's' : ''}` : null}
+            accent={PALETTE.accent4}
+          />
+        </section>
+
+        {/* Gráfico de pizza + Distribuição numérica */}
+        <section className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-10">
+          <ChartFrame
+            title="Visualizações por formato"
+            subtitle="Qual formato traz mais visualização? (orgânico + patrocinado)"
+            className="lg:col-span-2"
+          >
+            <ResponsiveContainer width="100%" height={320}>
+              <PieChart>
+                <Pie
+                  data={formatData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={110}
+                  stroke={PALETTE.paper}
+                  strokeWidth={3}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  labelLine={false}
+                  style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: 11 }}
+                >
+                  {formatData.map((entry, i) => (
+                    <Cell key={i} fill={FORMAT_COLORS[entry.name] || PALETTE.muted} />
+                  ))}
+                </Pie>
+                {/* ★ itemStyle é OBRIGATÓRIO junto do contentStyle escuro: o Recharts
+                    escreve `color` INLINE em cada linha do tooltip (usa entry.color,
+                    que no Pie vem vazio e cai no PRETO padrão), e esse inline vence a
+                    herança do contentStyle. Sem itemStyle o texto fica preto sobre
+                    #1f2933 — contraste 1,4:1, ilegível. Vale para os 4 tooltips. */}
+                <Tooltip
+                  formatter={(v, _n, e) => [
+                    `${fmtNumFull(v)} visualizações · ${e.payload.posts} post(s)`,
+                    e.payload.name
+                  ]}
+                  contentStyle={{
+                    background: PALETTE.ink,
+                    border: 'none',
+                    color: PALETTE.paper,
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                    fontSize: 12
+                  }}
+                  itemStyle={{ color: PALETTE.paper }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+
+          <ChartFrame
+            title="Contribuição por formato"
+            subtitle="Quanto cada formato pesa no total"
+            className="lg:col-span-3"
+          >
+            <div className="space-y-4 pt-2">
+              {formatData.map(f => {
+                const pct = kpis.totalVisualizacoes
+                  ? (f.value / kpis.totalVisualizacoes) * 100
+                  : 0;
+                const color = FORMAT_COLORS[f.name] || PALETTE.muted;
+                return (
+                  <div key={f.name}>
+                    <div className="flex justify-between items-baseline mb-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-block w-2 h-2"
+                          style={{ background: color }}
+                        />
+                        <span
+                          style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 600, fontSize: 16 }}
+                        >
+                          {f.name}
+                        </span>
+                        <span
+                          className="text-xs"
+                          style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+                        >
+                          {f.posts} post{f.posts !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div
+                        style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: 13 }}
+                      >
+                        <strong>{fmtNumFull(f.value)}</strong>
+                        <span style={{ color: PALETTE.muted, marginLeft: 8 }}>
+                          {pct.toFixed(1).replace('.', ',')}%
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className="h-2 w-full"
+                      style={{ background: PALETTE.paperDark }}
+                    >
+                      <div
+                        className="h-full transition-all"
+                        style={{ width: `${pct}%`, background: color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ChartFrame>
+        </section>
+
+        {/* Visualizações por mês */}
+        <section className="mb-10">
+          <ChartFrame
+            title="Visualizações por mês"
+            subtitle="Tendência mensal segmentada por formato (orgânico + patrocinado)"
+          >
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart data={monthlyData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={PALETTE.rule} strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="label" stroke={PALETTE.muted} tickLine={false} />
+                <YAxis stroke={PALETTE.muted} tickLine={false} tickFormatter={fmtNum} />
+                <Tooltip
+                  formatter={(v) => fmtNumFull(v)}
+                  contentStyle={{
+                    background: PALETTE.ink,
+                    border: 'none',
+                    color: PALETTE.paper,
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                    fontSize: 12
+                  }}
+                  itemStyle={{ color: PALETTE.paper }}
+                  cursor={{ fill: PALETTE.paperDark, opacity: 0.4 }}
+                />
+                <Legend />
+                <Bar dataKey="Reels"      stackId="a" fill={FORMAT_COLORS['Reels']} />
+                <Bar dataKey="Carrossel"  stackId="a" fill={FORMAT_COLORS['Carrossel']} />
+                <Bar dataKey="Post Único" stackId="a" fill={FORMAT_COLORS['Post Único']} />
+                <Bar dataKey="Outros"     stackId="a" fill={FORMAT_COLORS['Outros']} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </section>
+
+        {/* Top engajamento + engajamento por tipo */}
+        <section className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-10">
+          <ChartFrame
+            title="Top conteúdos por engajamento"
+            subtitle="Curtidas + comentários + envios + republicações + salvos + menções (orgânico + patrocinado)"
+            className="lg:col-span-3"
+          >
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart
+                data={topEngagement.map(p => ({
+                  name: p.assunto.length > 35 ? p.assunto.slice(0, 33) + '…' : p.assunto,
+                  engajamento: p.engajamento,
+                  formato: p.formato
+                }))}
+                layout="vertical"
+                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid stroke={PALETTE.rule} strokeDasharray="2 4" horizontal={false} />
+                <XAxis type="number" stroke={PALETTE.muted} tickLine={false} tickFormatter={fmtNum} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke={PALETTE.muted}
+                  tickLine={false}
+                  width={180}
+                  style={{ fontSize: 11 }}
+                />
+                <Tooltip
+                  formatter={(v) => fmtNumFull(v)}
+                  contentStyle={{
+                    background: PALETTE.ink,
+                    border: 'none',
+                    color: PALETTE.paper,
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                    fontSize: 12
+                  }}
+                  itemStyle={{ color: PALETTE.paper }}
+                  cursor={{ fill: PALETTE.paperDark, opacity: 0.4 }}
+                />
+                <Bar dataKey="engajamento">
+                  {topEngagement.map((p, i) => (
+                    <Cell key={i} fill={FORMAT_COLORS[p.formato] || PALETTE.muted} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+
+          <ChartFrame
+            title="Engajamentos por métrica"
+            subtitle="Decomposição do montante (republicações e menções não têm equivalente pago)"
+            className="lg:col-span-2"
+          >
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart
+                data={engagementByType}
+                layout="vertical"
+                margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid stroke={PALETTE.rule} strokeDasharray="2 4" horizontal={false} />
+                <XAxis type="number" stroke={PALETTE.muted} tickLine={false} tickFormatter={fmtNum} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke={PALETTE.ink}
+                  tickLine={false}
+                  width={110}
+                  style={{ fontSize: 11 }}
+                />
+                <Tooltip
+                  formatter={(v) => fmtNumFull(v)}
+                  contentStyle={{
+                    background: PALETTE.ink,
+                    border: 'none',
+                    color: PALETTE.paper,
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                    fontSize: 12
+                  }}
+                  itemStyle={{ color: PALETTE.paper }}
+                  cursor={{ fill: PALETTE.paperDark, opacity: 0.4 }}
+                />
+                <Bar dataKey="value">
+                  {engagementByType.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </section>
+
+        {/* Top salvos + republicações */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+          <RankingFrame
+            title="Mais salvos"
+            icon={Bookmark}
+            metricLabel="salvos"
+            posts={topSaves}
+            metricKey="salvos"
+            color={PALETTE.accent3}
+            thumbHandlers={thumbHandlers}
+          />
+          <RankingFrame
+            title="Mais republicados"
+            icon={Repeat2}
+            metricLabel="republicações"
+            posts={topReposts}
+            metricKey="republicar"
+            color={PALETTE.accent4}
+            thumbHandlers={thumbHandlers}
+          />
+        </section>
+
+        {/* Tabela detalhada */}
+        <section
+          className="p-6"
+          style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)' }}
+        >
+          <div className="flex items-baseline justify-between mb-4">
+            <div>
+              <h3 style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 700, fontSize: 20 }}>
+                Detalhamento dos posts
+              </h3>
+              <p
+                className="text-xs mt-1"
+                style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+              >
+                {filtered.length} registros — clique nos cabeçalhos para entender as métricas
+              </p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+              <thead>
+                <tr
+                  className="text-left"
+                  style={{
+                    borderBottom: `2px solid ${PALETTE.ink}`,
+                    color: PALETTE.ink,
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                    fontSize: 10,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  <th className="py-2 pr-3">Data</th>
+                  <th className="py-2 pr-3">Assunto</th>
+                  <th className="py-2 pr-3">Formato</th>
+                  <th className="py-2 pr-3 text-right" title="Orgânico + patrocinado. ⚡ = post impulsionado (mostra a quebra abaixo do total)">Views</th>
+                  <th className="py-2 pr-3 text-right">Curt.</th>
+                  <th className="py-2 pr-3 text-right">Coment.</th>
+                  <th className="py-2 pr-3 text-right">Envios</th>
+                  <th className="py-2 pr-3 text-right">Republ.</th>
+                  <th className="py-2 pr-3 text-right">Salvos</th>
+                  <th className="py-2 text-right">Engaj.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...filtered].sort((a, b) => b.date - a.date).map((p, i) => (
+                  <tr
+                    key={i}
+                    style={{ borderBottom: `1px solid ${PALETTE.rule}` }}
+                    className="hover:bg-[#f4f9ff] transition-colors"
+                  >
+                    <td className="py-2.5 pr-3" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: 11, color: PALETTE.muted }}>
+                      {fmtDate(p.date)}
+                    </td>
+                    <td className="py-2.5 pr-3" style={{ maxWidth: 280 }}>
+                      <span {...thumbHandlers(p)}>{p.assunto}</span>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span
+                        className="inline-block px-2 py-0.5 text-[10px]"
+                        style={{
+                          background: (FORMAT_COLORS[p.formato] || PALETTE.muted) + '22',
+                          color: FORMAT_COLORS[p.formato] || PALETTE.muted,
+                          fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                          letterSpacing: '0.05em',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {p.formato}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+                      <strong>{fmtNumFull(p.visualizacoes)}</strong>
+                      {p.impulsionado && (
+                        <div
+                          className="text-[10px] whitespace-nowrap"
+                          style={{ color: PALETTE.accent2 }}
+                          title={`Orgânico ${fmtNumFull(p.visualizacoesOrg)} + patrocinado ${fmtNumFull(p.visualizacoesPaid)} (impressões do anúncio)`}
+                        >
+                          ⚡ {fmtNumFull(p.visualizacoesOrg)} + {fmtNumFull(p.visualizacoesPaid)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: PALETTE.muted }}>
+                      {fmtNumFull(p.curtidas)}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: PALETTE.muted }}>
+                      {p.comentarios}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: PALETTE.muted }}>
+                      {p.envios}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: PALETTE.muted }}>
+                      {p.republicar}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: PALETTE.muted }}>
+                      {p.salvos}
+                    </td>
+                    <td className="py-2.5 text-right" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+                      <strong style={{ color: PALETTE.accent }}>{fmtNumFull(engagementOf(p))}</strong>
+                      {p.impulsionado && engagementPaidOf(p) > 0 && (
+                        <div
+                          className="text-[10px] whitespace-nowrap"
+                          style={{ color: PALETTE.accent2 }}
+                          title={`Orgânico ${fmtNumFull(engagementOrgOf(p))} + patrocinado ${fmtNumFull(engagementPaidOf(p))} (interações do anúncio no Instagram)`}
+                        >
+                          ⚡ {fmtNumFull(engagementOrgOf(p))} + {fmtNumFull(engagementPaidOf(p))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <div className="text-center py-10" style={{ color: PALETTE.muted, fontStyle: 'italic' }}>
+                Nenhum post encontrado com os filtros atuais.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <footer
+          className="mt-12 pt-6 text-xs flex justify-between"
+          style={{
+            borderTop: `1px solid ${PALETTE.rule}`,
+            color: PALETTE.muted,
+            fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+          }}
+        >
+          <span>{brandName ? `${brandName} · ` : ''}Insights Dashboard</span>
+          <span>{filtered.length} posts · gerado dinamicamente</span>
+        </footer>
+      </>
+      )}
+      </main>
+    </div>
+  );
+}
+
+// ---------- Sub-componentes ----------
+function KpiCard({ icon: Icon, label, value, sub, sub2, accent, isText }) {
+  return (
+    <div
+      className="p-5 relative overflow-hidden transition-all hover:translate-y-[-2px]"
+      style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)' }}
+    >
+      <div
+        className="absolute top-0 left-0 w-full h-[3px]"
+        style={{ background: accent }}
+      />
+      <div className="flex items-center justify-between mb-3">
+        <span
+          className="text-[10px] tracking-[0.2em] uppercase"
+          style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+        >
+          {label}
+        </span>
+        <Icon size={16} style={{ color: accent }} />
+      </div>
+      <div
+        style={{
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+          fontWeight: isText ? 600 : 700,
+          fontSize: isText ? 28 : 36,
+          lineHeight: 1.05,
+          letterSpacing: '-0.02em',
+          color: PALETTE.ink
+        }}
+      >
+        {value}
+      </div>
+      <div
+        className="mt-2 text-xs"
+        style={{ color: PALETTE.muted, fontStyle: 'italic' }}
+      >
+        {sub}
+      </div>
+      {/* Segunda linha: quebra orgânico/patrocinado (ou a taxa alternativa). */}
+      {sub2 && (
+        <div
+          className="mt-1 text-[11px]"
+          style={{ color: accent, fontWeight: 600 }}
+        >
+          {sub2}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChartFrame({ title, subtitle, children, className = '' }) {
+  return (
+    <div
+      className={`p-6 ${className}`}
+      style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)' }}
+    >
+      <div className="mb-4">
+        <h3 style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.01em' }}>
+          {title}
+        </h3>
+        {subtitle && (
+          <p
+            className="text-xs mt-1"
+            style={{ color: PALETTE.muted, fontStyle: 'italic' }}
+          >
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RankingFrame({ title, icon: Icon, metricLabel, posts, metricKey, color, thumbHandlers }) {
+  return (
+    <div
+      className="p-6"
+      style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)' }}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <Icon size={18} style={{ color }} />
+        <h3 style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 700, fontSize: 18 }}>
+          {title}
+        </h3>
+      </div>
+      {posts.length === 0 ? (
+        <div
+          className="text-sm text-center py-6"
+          style={{ color: PALETTE.muted, fontStyle: 'italic' }}
+        >
+          Sem dados para o período selecionado.
+        </div>
+      ) : (
+        <ol className="space-y-3">
+          {posts.map((p, i) => {
+            const maxVal = posts[0][metricKey];
+            const pct = maxVal ? (p[metricKey] / maxVal) * 100 : 0;
+            return (
+              <li key={i}>
+                <div className="flex justify-between items-baseline mb-1">
+                  <div className="flex items-baseline gap-2 min-w-0 flex-1">
+                    <span
+                      style={{
+                        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                        color: PALETTE.muted,
+                        fontSize: 11
+                      }}
+                    >
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span
+                      className="truncate"
+                      title={p.permalink ? 'Abrir publicação no Instagram' : p.assunto}
+                      {...(thumbHandlers ? thumbHandlers(p) : {})}
+                      style={{
+                        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                        fontSize: 14,
+                        cursor: p.permalink ? 'pointer' : ((thumbHandlers && p.thumb) ? 'help' : undefined),
+                      }}
+                    >
+                      {p.assunto}
+                    </span>
+                  </div>
+                  <strong
+                    className="ml-3 whitespace-nowrap"
+                    style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: 13, color }}
+                  >
+                    {fmtNumFull(p[metricKey])} {metricLabel}
+                  </strong>
+                </div>
+                <div
+                  className="h-1 w-full"
+                  style={{ background: PALETTE.paperDark }}
+                >
+                  <div
+                    className="h-full"
+                    style={{ width: `${pct}%`, background: color }}
+                  />
+                </div>
+                <div
+                  className="text-[10px] mt-1"
+                  style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+                >
+                  {fmtDate(p.date)} · {p.formato}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ---------- Aba Stories ----------
+ * Consome `GET /api/relatorios/stories?revenda=` (D1, tabela `story_metrics`
+ * — migrations/0035), gravada pelo webhook `story_insights` quando um story
+ * expira (Instagram só dá métrica de story nas 24h ativas; não há via
+ * retroativa — ver docs/relatorios.md). ⚠️ Só mostra os campos que o webhook
+ * REALMENTE grava (impressions/reach/taps_forward/taps_back/exits/replies) —
+ * nada de curtidas/seguidores/formato inventados, esses não existem no
+ * schema ainda. Fica vazia até o primeiro story expirar com o webhook no ar.
+ *
+ * Unidade é a LINHA da tabela, não um card por story (decisão do usuário,
+ * 2026-09-09) — escala para dezenas de stories/dia sem rolar por cards.
+ */
+
+/**
+ * Um story vira "nulo" nas contagens de navegação quando não há nenhum toque
+ * registrado (taps_forward+taps_back+exits = 0) — a Meta zera métricas com
+ * contagem baixa (regra de privacidade, ver docs/relatorios.md), então dividir
+ * por zero aqui é esperado, não bug.
+ *
+ * ★ Contagem < 5 volta como `-1` (piso de privacidade documentado da Meta) —
+ * NUNCA some/derive em cima do valor cru. `clampMetrica` piso em 0 pras
+ * contas (o real está em algum ponto entre 0 e 4); `fmtMetrica` mostra
+ * "< 5" pro analista em vez do -1 cru, que pareceria erro nosso.
+ */
+function clampMetrica(v) {
+  return Math.max(0, v || 0);
+}
+function fmtMetrica(v) {
+  if (v == null) return '—';
+  if (v < 0) return '< 5';
+  return fmtNumFull(v);
+}
+function saidaPct(s) {
+  const nav = clampMetrica(s.taps_forward) + clampMetrica(s.taps_back) + clampMetrica(s.exits);
+  return nav > 0 ? Math.round((clampMetrica(s.exits) / nav) * 100) : null;
+}
+
+function StoriesView({ revendas, revendaKey }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
+  // Período: preset (7/30/mes) OU data personalizada — mesmo padrão do Feed
+  // (Mês + Data inicial/final, que se combinam por AND). Preencher a data
+  // personalizada substitui o preset (evita os dois brigarem pelo mesmo eixo).
+  const [periodo, setPeriodo] = useState('30');
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+
+  const revendaNome = useMemo(
+    () => (revendas || []).find((r) => r.key === revendaKey)?.nome || '',
+    [revendas, revendaKey]
+  );
+
+  // Fonte real: GET /api/relatorios/stories (D1, gravado pelo webhook
+  // story_insights quando um story expira). Sem dado mock — enquanto nenhum
+  // story tiver expirado com o webhook no ar, a lista vem vazia mesmo.
+  useEffect(() => {
+    if (!revendaKey) return;
+    let cancelado = false;
+    setLoading(true);
+    setApiError('');
+    fetch(`/api/relatorios/stories?revenda=${encodeURIComponent(revendaKey)}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelado) return;
+        if (!data.ok) throw new Error(data.error || 'Falha ao buscar stories.');
+        setRows((data.rows || []).map((r) => ({ ...r, date: new Date(r.expirado_em) })));
+      })
+      .catch((err) => { if (!cancelado) setApiError(err.message || 'Erro ao buscar stories.'); })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
+  }, [revendaKey]);
+
+  const filtered = useMemo(() => {
+    let res = rows;
+    const usaPersonalizada = dateRange.from || dateRange.to;
+    if (usaPersonalizada) {
+      if (dateRange.from) {
+        const from = new Date(dateRange.from);
+        res = res.filter((s) => s.date >= from);
+      }
+      if (dateRange.to) {
+        const to = new Date(dateRange.to);
+        to.setHours(23, 59, 59, 999);
+        res = res.filter((s) => s.date <= to);
+      }
+    } else if (periodo !== 'tudo') {
+      const agora = new Date();
+      const desde = periodo === 'mes'
+        ? new Date(agora.getFullYear(), agora.getMonth(), 1)
+        : new Date(agora.getTime() - Number(periodo) * 86400000);
+      res = res.filter((s) => s.date >= desde);
+    }
+    return res;
+  }, [rows, periodo, dateRange]);
+
+  const agg = useMemo(() => {
+    if (!filtered.length) return null;
+    // Soma com piso em 0 — o sentinela -1 ("< 5", privacidade da Meta) não pode
+    // ser somado como se fosse quantidade real (ver clampMetrica acima).
+    const sum = (k) => filtered.reduce((a, s) => a + clampMetrica(s[k]), 0);
+    const impressions = sum('impressions'), reach = sum('reach'), replies = sum('replies');
+    const forward = sum('taps_forward'), back = sum('taps_back'), exits = sum('exits');
+    const nav = forward + back + exits;
+    return {
+      impressions, reach, replies,
+      forwardPct: nav ? Math.round((forward / nav) * 100) : 0,
+      backPct: nav ? Math.round((back / nav) * 100) : 0,
+      exitsPct: nav ? Math.round((exits / nav) * 100) : 0,
+    };
+  }, [filtered]);
+
+  const piorSaida = useMemo(
+    () => filtered
+      .map((s) => ({ ...s, assunto: `${(revendas || []).find((r) => r.key === s.revenda)?.nome || s.revenda} · ${fmtDate(s.date)}`, saida: saidaPct(s) }))
+      .filter((s) => s.saida != null)
+      .sort((a, b) => b.saida - a.saida)
+      .slice(0, 5),
+    [filtered, revendas]
+  );
+
+  const selStyle = {
+    border: `1px solid ${PALETTE.rule}`,
+    background: PALETTE.paper,
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    color: PALETTE.ink,
+  };
+  const labelStyle = { color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" };
+
+  return (
+    <>
+      {apiError && (
+        <div
+          className="p-4 mb-8 text-xs"
+          style={{ background: '#b3261e14', border: '1px solid #b3261e55', borderRadius: 10, color: '#b3261e', fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+        >
+          {apiError}
+        </div>
+      )}
+
+      {/* FILTROS */}
+      <section
+        className="p-6 mb-10"
+        style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)' }}
+      >
+        <div className="flex flex-wrap items-end gap-6">
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[10px] tracking-[0.2em] uppercase mb-2" style={labelStyle}>Período</label>
+            <select
+              value={periodo}
+              onChange={(e) => setPeriodo(e.target.value)}
+              disabled={!!(dateRange.from || dateRange.to)}
+              className="w-full px-3 py-2 text-sm"
+              style={{ ...selStyle, opacity: (dateRange.from || dateRange.to) ? 0.5 : 1 }}
+              title={(dateRange.from || dateRange.to) ? 'Desativado enquanto houver data personalizada' : undefined}
+            >
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias</option>
+              <option value="mes">Este mês</option>
+              <option value="tudo">Tudo</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[10px] tracking-[0.2em] uppercase mb-2" style={labelStyle}>Data inicial</label>
+            <input
+              type="date"
+              value={dateRange.from}
+              onChange={(e) => setDateRange((r) => ({ ...r, from: e.target.value }))}
+              className="w-full px-3 py-2 text-sm"
+              style={selStyle}
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[10px] tracking-[0.2em] uppercase mb-2" style={labelStyle}>Data final</label>
+            <input
+              type="date"
+              value={dateRange.to}
+              onChange={(e) => setDateRange((r) => ({ ...r, to: e.target.value }))}
+              className="w-full px-3 py-2 text-sm"
+              style={selStyle}
+            />
+          </div>
+          <button
+            onClick={() => { setPeriodo('30'); setDateRange({ from: '', to: '' }); }}
+            className="px-4 py-2 text-xs transition-all hover:opacity-70"
+            style={{ border: `1px solid ${PALETTE.ink}`, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", letterSpacing: '0.1em', textTransform: 'uppercase', color: PALETTE.ink, background: 'transparent' }}
+          >
+            Limpar
+          </button>
+        </div>
+        <div className="mt-4 pt-4 text-xs flex items-center gap-2" style={{ borderTop: `1px solid ${PALETTE.rule}`, color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+          {loading ? 'Carregando…' : <>{filtered.length} stories no período{revendaNome ? <> · <strong style={{ color: PALETTE.ink }}>{revendaNome}</strong></> : null}</>}
+        </div>
+      </section>
+
+      {loading ? null : !rows.length ? (
+        <div className="text-center py-16" style={{ color: PALETTE.muted, fontStyle: 'italic' }}>
+          Nenhum story registrado ainda para {revendaNome || 'esta revenda'}. Assim que um story expirar com o
+          webhook <code>story_insights</code> no ar, ele aparece aqui automaticamente.
+        </div>
+      ) : !agg ? (
+        <div className="text-center py-16" style={{ color: PALETTE.muted, fontStyle: 'italic' }}>
+          Nenhum story encontrado com os filtros atuais.
+        </div>
+      ) : (
+      <>
+      {/* KPIs agregados do período — só os campos que o webhook de fato grava
+          (ver migrations/0035_story_metrics.sql); nada de curtidas/seguidores
+          inventados. */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        <KpiCard icon={Eye} label="Impressões" value={fmtNum(agg.impressions)} sub={`média ${fmtNumFull(Math.round(agg.impressions / filtered.length))}/story`} accent={PALETTE.accent} />
+        <KpiCard icon={TrendingUp} label="Alcance" value={fmtNum(agg.reach)} sub={agg.impressions ? `${Math.round((agg.reach / agg.impressions) * 100)}% das impressões` : ''} accent={PALETTE.accent3} />
+        <KpiCard icon={Heart} label="Respostas" value={fmtNumFull(agg.replies)} sub={`${filtered.length} stories no período`} accent={PALETTE.accent4} />
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+        {/* Funil de navegação agregado — campos reais do payload (taps_forward/
+            taps_back/exits), não a divisão toque/swipe usada no mockup. */}
+        <ChartFrame title="Navegação agregada do período" subtitle="taps_forward / taps_back / exits, somado por story">
+          {[
+            ['Avançou (toque)', agg.forwardPct, PALETTE.accent],
+            ['Voltou (toque)', agg.backPct, PALETTE.accent2],
+            ['Saiu do story', agg.exitsPct, '#b3261e'],
+          ].map(([label, pct, color]) => (
+            <div key={label} className="mb-3 last:mb-0">
+              <div className="flex justify-between text-xs mb-1" style={{ color: PALETTE.muted, fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+                <span>{label}</span><strong style={{ color: PALETTE.ink }}>{pct}%</strong>
+              </div>
+              <div className="h-2" style={{ background: PALETTE.paperDark, borderRadius: 4 }}>
+                <div style={{ width: `${pct}%`, background: color, height: '100%', borderRadius: 4 }} />
+              </div>
+            </div>
+          ))}
+        </ChartFrame>
+
+        {/* Ranking de maior saída — reaproveita RankingFrame do Feed */}
+        <RankingFrame
+          title="Maior taxa de saída"
+          icon={Repeat2}
+          metricLabel="% saiu"
+          posts={piorSaida}
+          metricKey="saida"
+          color="#b3261e"
+        />
+      </section>
+
+      {/* Tabela — 1 linha por story, sem card grande (decisão do usuário) */}
+      <section className="mb-10">
+        <h3 className="mb-3" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontWeight: 700, fontSize: 18 }}>
+          Todos os stories do período
+        </h3>
+        <div style={{ background: '#fff', border: `1px solid ${PALETTE.rule}`, borderRadius: 14, boxShadow: '0 4px 16px rgba(15,40,80,.06)', overflow: 'auto' }}>
+          <table className="w-full text-sm" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${PALETTE.ink}`, color: PALETTE.ink, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                <th className="py-2 pl-4 pr-3">Expirou em</th>
+                <th className="py-2 pr-3">Revenda</th>
+                <th className="py-2 pr-3 text-right">Impressões</th>
+                <th className="py-2 pr-3 text-right">Alcance</th>
+                <th className="py-2 pr-3 text-center">Navegação</th>
+                <th className="py-2 pr-4 text-right">Respostas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...filtered].sort((a, b) => b.date - a.date).map((s, i) => {
+                const saida = saidaPct(s);
+                const nav = clampMetrica(s.taps_forward) + clampMetrica(s.taps_back) + clampMetrica(s.exits);
+                return (
+                <tr key={i} style={{ borderBottom: `1px solid ${PALETTE.rule}` }} className="hover:bg-[#f4f9ff] transition-colors">
+                  <td className="py-2.5 pl-4 pr-3" style={{ fontSize: 11, color: PALETTE.muted, whiteSpace: 'nowrap' }}>
+                    {s.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} {s.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="py-2.5 pr-3" style={{ whiteSpace: 'nowrap' }}>{(revendas || []).find((r) => r.key === s.revenda)?.nome || s.revenda}</td>
+                  <td className="py-2.5 pr-3 text-right"><strong>{fmtMetrica(s.impressions)}</strong></td>
+                  <td className="py-2.5 pr-3 text-right" style={{ color: PALETTE.muted }}>{fmtMetrica(s.reach)}</td>
+                  <td className="py-2.5 pr-3 text-center" style={{ whiteSpace: 'nowrap' }}>
+                    {nav > 0 ? (
+                      <span className="inline-flex items-center justify-center gap-2">
+                        <span style={{ width: 72, height: 9, borderRadius: 4, overflow: 'hidden', display: 'flex', background: PALETTE.paperDark }}>
+                          <span style={{ width: `${clampMetrica(s.taps_forward) / nav * 100}%`, background: PALETTE.accent, height: '100%' }} />
+                          <span style={{ width: `${clampMetrica(s.taps_back) / nav * 100}%`, background: PALETTE.accent2, height: '100%' }} />
+                          <span style={{ width: `${clampMetrica(s.exits) / nav * 100}%`, background: '#b3261e', height: '100%' }} />
+                        </span>
+                        <span style={{ fontSize: 11, color: saida > 25 ? '#b3261e' : PALETTE.muted }}>{saida}% saiu</span>
+                      </span>
+                    ) : <span style={{ color: PALETTE.muted }}>—</span>}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right" style={{ color: PALETTE.muted }}>{fmtMetrica(s.replies)}</td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </>
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Dashboard />);
+</script>
+</body>
+</html>
